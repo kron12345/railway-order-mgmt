@@ -124,7 +124,7 @@ public class PurchaseCalendarGrid extends Div {
 
         String bg;
         String color;
-        if (weekend) {
+        if (weekend && status == null) {
             bg = "rgba(148,163,184,0.02)";
             color = "rgba(148,163,184,0.15)";
         } else if (status == null) {
@@ -158,8 +158,8 @@ public class PurchaseCalendarGrid extends Div {
             cell.getStyle().set("border-left", "2px solid var(--rom-accent)");
         }
 
-        String tip = String.format("%02d.%02d %s", day, date.getMonthValue(),
-                weekend ? "WE" : (status != null ? status.name() : "—"));
+        String statusText = status != null ? status.name() : (weekend ? "WE" : "—");
+        String tip = String.format("%02d.%02d %s", day, date.getMonthValue(), statusText);
         cell.getElement().setAttribute("title", tip);
 
         return cell;
@@ -212,13 +212,40 @@ public class PurchaseCalendarGrid extends Div {
     }
 
     private Map<LocalDate, PurchaseStatus> mapByDate(List<PurchasePosition> purchases) {
-        // For now, use orderedAt date or generate from validity JSON
-        // Simplified: return empty map, will be populated when real data exists
-        return purchases.stream()
-                .filter(p -> p.getOrderedAt() != null)
-                .collect(Collectors.toMap(
-                        p -> p.getOrderedAt().atZone(java.time.ZoneId.systemDefault()).toLocalDate(),
-                        PurchasePosition::getPurchaseStatus,
-                        (a, b) -> a));
+        Map<LocalDate, PurchaseStatus> map = new java.util.HashMap<>();
+        for (PurchasePosition p : purchases) {
+            for (LocalDate date : extractDates(p)) {
+                map.put(date, p.getPurchaseStatus());
+            }
+        }
+        return map;
+    }
+
+    private List<LocalDate> extractDates(PurchasePosition p) {
+        List<LocalDate> dates = new java.util.ArrayList<>();
+        String validity = p.getValidity();
+        if (validity != null && !validity.isBlank()) {
+            try {
+                var array = new com.fasterxml.jackson.databind.ObjectMapper()
+                        .readTree(validity);
+                if (array.isArray()) {
+                    for (var segment : array) {
+                        LocalDate start = LocalDate.parse(segment.get("startDate").asText());
+                        LocalDate end = LocalDate.parse(segment.get("endDate").asText());
+                        for (LocalDate d = start; !d.isAfter(end); d = d.plusDays(1)) {
+                            dates.add(d);
+                        }
+                    }
+                }
+            } catch (Exception ignored) {
+                // Malformed JSON — skip
+            }
+        }
+        // Fallback: use orderedAt if no validity segments
+        if (dates.isEmpty() && p.getOrderedAt() != null) {
+            dates.add(p.getOrderedAt()
+                    .atZone(java.time.ZoneId.systemDefault()).toLocalDate());
+        }
+        return dates;
     }
 }

@@ -25,6 +25,7 @@ import com.ordermgmt.railway.ui.component.StatusBadge;
 public class OrderPositionRow extends Div {
 
     private final OrderPosition position;
+    private final BiFunction<String, Object[], String> translator;
     private final Div calendarSlot = new Div();
     private boolean calendarOpen = false;
 
@@ -34,6 +35,7 @@ public class OrderPositionRow extends Div {
             Consumer<OrderPosition> onEdit,
             Consumer<OrderPosition> onDelete) {
         this.position = position;
+        this.translator = translator;
 
         getStyle()
                 .set("border-bottom", "1px solid var(--rom-border)")
@@ -73,7 +75,8 @@ public class OrderPositionRow extends Div {
         // Purchase calendar toggle — prominent button
         long purchaseCount = position.getPurchasePositions() != null
                 ? position.getPurchasePositions().size() : 0;
-        String calLabel = purchaseCount > 0 ? purchaseCount + " Bestell." : "Bestell.";
+        String btnText = translator.apply("purchase.calendar.btn", new Object[0]);
+        String calLabel = purchaseCount > 0 ? purchaseCount + " " + btnText : btnText;
         Button calBtn = new Button(calLabel, VaadinIcon.CALENDAR.create());
         calBtn.addThemeVariants(ButtonVariant.LUMO_SMALL);
         calBtn.getStyle()
@@ -127,7 +130,7 @@ public class OrderPositionRow extends Div {
             List<PurchasePosition> purchases = position.getPurchasePositions() != null
                     ? new ArrayList<>(position.getPurchasePositions())
                     : List.of();
-            calendarSlot.add(new PurchaseCalendarPanel(position, purchases));
+            calendarSlot.add(new PurchaseCalendarPanel(position, purchases, translator));
         }
     }
 
