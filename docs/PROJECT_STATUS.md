@@ -3,16 +3,17 @@
 > Dieses Dokument wird von Claude bei jeder Aenderung automatisch aktualisiert.
 
 ## Letzte Aktualisierung
-**2026-03-30** — Keycloak SSO Login Fix + Playwright E2E Tests
+**2026-03-30** — Erweitertes Datenmodell + Konzept C Accordion-Views
 
-## Projektstatus: Setup + Quality Gates abgeschlossen
+## Projektstatus: Domain Model + Order CRUD Views
 
 ## Module / Bounded Contexts
 
 | Modul | Status | Entities | Views | Bemerkung |
 |---|---|---|---|---|
-| **Order** | Skeleton | `Order`, `OrderStatus` | — | Entity + Repository, Envers Audit aktiv |
-| **Customer** | Leer | — | — | Package-Struktur vorhanden |
+| **Order** | CRUD aktiv | `Order`, `OrderPosition`, `ResourceNeed`, `PurchasePosition` + 7 Enums | OrderListView (Accordion+Heatmap), OrderDetailView, Dialoge | Konzept C: Accordion mit Status-Heatmap und responsive Kacheln |
+| **Customer** | Entity | `Customer`, `CustomerStatus` | — | Repository vorhanden |
+| **Business** | Entity | `Business`, `BusinessStatus` | — | Repository vorhanden, eigene Seite geplant |
 | **Railcar** | Leer | — | — | Package-Struktur vorhanden |
 | **Route** | Leer | — | — | Package-Struktur vorhanden |
 
@@ -24,7 +25,7 @@
 | **i18n** | Grundstruktur | TranslationProvider + 4 Sprachen (de/en/it/fr) |
 | **Push / Live Updates** | Skeleton | BroadcastService implementiert, @Push aktiv |
 | **Audit Trail** | Konfiguriert | Hibernate Envers, Order Entity @Audited |
-| **Datenbank** | Konfiguriert | Flyway V1 Migration (orders + audit tables) |
+| **Datenbank** | Konfiguriert | Flyway V1+V2 Migration (orders, customers, order_positions, resource_needs, purchase_positions, businesses + audit tables) |
 | **Docker** | Bereit | PostgreSQL 16 + Keycloak 26, docker-compose.yml |
 | **Frontend Theme** | Grundstruktur | Tailwind CSS via styles.css |
 | **.env Konfiguration** | Bereit | .env (gitignored) + .env.example als Vorlage |
@@ -71,22 +72,26 @@
 | **MainLayout** | Implementiert | — |
 | **LoginView** | Implementiert | `/login` |
 | **DashboardView** | Implementiert | `/` |
-| **OrderListView** | Noch nicht | `/orders` |
+| **OrderListView** | Implementiert | `/orders` | Konzept C: Accordion + Heatmap + responsive Kacheln |
+| **OrderDetailView** | Implementiert | `/orders/{id}` | Formular + Positionsliste + Dialog |
 
 ## Datenbank-Migrationen
 
 | Version | Datei | Inhalt |
 |---|---|---|
 | V1 | `V1__create_schema.sql` | orders, orders_audit, revinfo |
+| V2 | `V2__expand_domain_model.sql` | customers, order_positions, resource_needs, purchase_positions, businesses + audit + Umbau orders |
 
 ## Offene TODOs
 - [x] ~~Dashboard View implementieren~~
-- [ ] Order CRUD Views (Liste, Detail, Formular)
-- [ ] Customer Entity + Views
+- [x] ~~Order CRUD Views (Liste, Detail, Formular)~~
+- [ ] Customer Views
+- [ ] Business/Geschaeft Views (eigene Seite, verlinkt mit Auftragspositionen)
+- [ ] Fahrplanbuilder-Komponente (OSM-basiert)
 - [ ] Railcar Entity + Views
 - [ ] Route Entity + Views
 - [x] ~~GitHub Wiki befuellen~~ (9 Seiten erstellt)
-- [ ] Weitere Flyway Migrationen (customer, railcar, route)
+- [x] ~~Flyway V2 Migration (customer, order_positions, etc.)~~
 
 ## Bekannte Issues
 - Tailwind CSS Feature Flag in Vaadin 24.6 nicht unterstuetzt (direkt via CSS integriert)
@@ -103,6 +108,7 @@
 ## Changelog
 | Datum | Aenderung |
 |---|---|
+| 2026-03-30 | Erweitertes Datenmodell (6 Entities, 8 Enums, V2 Migration), Konzept C Accordion OrderListView mit Status-Heatmap und responsive Kacheln, OrderDetailView mit Positionsdialog |
 | 2026-03-30 | Fix: schwarze Seite nach Keycloak-Login (doppelte OAuth2-Config entfernt), Playwright E2E Test fuer Login-Flow |
 | 2026-03-30 | Lokale PostgreSQL + Keycloak eingerichtet, sebastian als Admin, MCP Server konfiguriert |
 | 2026-03-30 | GitHub Wiki: 9 Seiten (Home, Getting Started, Architecture, Auth, i18n, DB, Push, Quality, Deployment) |
