@@ -4,13 +4,30 @@
   "displayName": "Railway Order Management",
   "defaultLocale": "de",
   "internationalizationEnabled": true,
-  "supportedLocales": ["de", "en", "it", "fr"],
+  "supportedLocales": [
+    "de",
+    "en",
+    "it",
+    "fr"
+  ],
   "roles": {
     "realm": [
-      { "name": "admin", "description": "Full system access — manage users, settings, all data" },
-      { "name": "dispatcher", "description": "Manage orders, routes, and railcar assignments" },
-      { "name": "customer-manager", "description": "Manage customer data and contracts" },
-      { "name": "viewer", "description": "Read-only access to all data" }
+      {
+        "name": "admin",
+        "description": "Full system access \u2014 manage users, settings, all data"
+      },
+      {
+        "name": "dispatcher",
+        "description": "Manage orders, routes, and railcar assignments"
+      },
+      {
+        "name": "customer-manager",
+        "description": "Manage customer data and contracts"
+      },
+      {
+        "name": "viewer",
+        "description": "Read-only access to all data"
+      }
     ]
   },
   "clients": [
@@ -20,12 +37,24 @@
       "enabled": true,
       "publicClient": false,
       "secret": "dev-secret-change-in-production",
-      "redirectUris": ["http://localhost:8080/*", "https://railway-order-mgmt.hub.animeland.de/*"],
-      "webOrigins": ["http://localhost:8080", "https://railway-order-mgmt.hub.animeland.de"],
+      "redirectUris": [
+        "http://localhost:8080/*",
+        "https://railway-order-mgmt.hub.animeland.de/*",
+        "http://localhost:8085/*"
+      ],
+      "webOrigins": [
+        "http://localhost:8080",
+        "https://railway-order-mgmt.hub.animeland.de"
+      ],
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": false,
       "protocol": "openid-connect",
-      "defaultClientScopes": ["openid", "profile", "email", "roles"]
+      "defaultClientScopes": [
+        "openid",
+        "profile",
+        "email",
+        "roles"
+      ]
     }
   ],
   "users": [
@@ -42,7 +71,11 @@
           "temporary": false
         }
       ],
-      "realmRoles": ["admin", "dispatcher", "customer-manager"]
+      "realmRoles": [
+        "admin",
+        "dispatcher",
+        "customer-manager"
+      ]
     },
     {
       "username": "dispatcher",
@@ -57,7 +90,9 @@
           "temporary": false
         }
       ],
-      "realmRoles": ["dispatcher"]
+      "realmRoles": [
+        "dispatcher"
+      ]
     },
     {
       "username": "viewer",
@@ -72,7 +107,9 @@
           "temporary": false
         }
       ],
-      "realmRoles": ["viewer"]
+      "realmRoles": [
+        "viewer"
+      ]
     }
   ]
 }

@@ -24,9 +24,6 @@ public class SecurityConfig extends VaadinWebSecurity {
     @Override
     protected void configure(HttpSecurity http) throws Exception {
         super.configure(http);
-
-        http.oauth2Login(oauth2 -> oauth2.loginPage("/login"));
-
         setOAuth2LoginPage(http, "/login");
     }
 
