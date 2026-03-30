@@ -53,9 +53,7 @@ public class Customer {
     @Column(updatable = false)
     private String createdBy;
 
-    @LastModifiedBy
-    private String updatedBy;
+    @LastModifiedBy private String updatedBy;
 
-    @Version
-    private Long version;
+    @Version private Long version;
 }

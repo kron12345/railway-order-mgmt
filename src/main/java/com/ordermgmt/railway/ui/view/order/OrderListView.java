@@ -65,7 +65,8 @@ public class OrderListView extends VerticalLayout {
                 .set("margin", "0");
 
         countLabel = new Span();
-        countLabel.getStyle()
+        countLabel
+                .getStyle()
                 .set("color", "var(--rom-text-muted)")
                 .set("font-size", "var(--lumo-font-size-s)")
                 .set("margin-left", "var(--lumo-space-s)");
@@ -178,7 +179,8 @@ public class OrderListView extends VerticalLayout {
                 .set("min-width", "110px");
 
         Span orderName = new Span(order.getName());
-        orderName.getStyle()
+        orderName
+                .getStyle()
                 .set("font-weight", "600")
                 .set("font-size", "14px")
                 .set("color", "var(--rom-text-primary)")
@@ -188,8 +190,7 @@ public class OrderListView extends VerticalLayout {
                 .set("text-overflow", "ellipsis")
                 .set("white-space", "nowrap");
 
-        Span customer = new Span(
-                order.getCustomer() != null ? order.getCustomer().getName() : "—");
+        Span customer = new Span(order.getCustomer() != null ? order.getCustomer().getName() : "—");
         customer.getStyle()
                 .set("color", "var(--rom-text-muted)")
                 .set("font-size", "13px")
@@ -205,14 +206,14 @@ public class OrderListView extends VerticalLayout {
         Button editBtn = new Button(VaadinIcon.EDIT.create());
         editBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
         editBtn.getStyle().set("color", "var(--rom-text-muted)");
-        editBtn.addClickListener(
-                e -> UI.getCurrent().navigate("orders/" + order.getId()));
+        editBtn.addClickListener(e -> UI.getCurrent().navigate("orders/" + order.getId()));
 
         summary.add(orderNum, orderName, customer, heatmap, processBadge, editBtn);
 
         // --- Expandable content (position tiles) ---
         Div tilesContainer = new Div();
-        tilesContainer.getStyle()
+        tilesContainer
+                .getStyle()
                 .set("display", "grid")
                 .set("grid-template-columns", "repeat(auto-fill, minmax(300px, 1fr))")
                 .set("gap", "10px")
@@ -220,8 +221,7 @@ public class OrderListView extends VerticalLayout {
 
         for (var pos : order.getPositions()) {
             var tile = new com.ordermgmt.railway.ui.component.PositionTile(pos);
-            tile.addClickListener(
-                    e -> UI.getCurrent().navigate("orders/" + order.getId()));
+            tile.addClickListener(e -> UI.getCurrent().navigate("orders/" + order.getId()));
             tilesContainer.add(tile);
         }
 
@@ -250,13 +250,14 @@ public class OrderListView extends VerticalLayout {
             return new StatusBadge("—", StatusBadge.StatusType.NEUTRAL);
         }
         String label = getTranslation("process." + status.name());
-        StatusBadge.StatusType type = switch (status) {
-            case AUFTRAG -> StatusBadge.StatusType.INFO;
-            case PLANUNG -> StatusBadge.StatusType.WARNING;
-            case PRODUKT_LEISTUNG -> StatusBadge.StatusType.INFO;
-            case PRODUKTION -> StatusBadge.StatusType.SUCCESS;
-            case ABRECHNUNG_NACHBEREITUNG -> StatusBadge.StatusType.NEUTRAL;
-        };
+        StatusBadge.StatusType type =
+                switch (status) {
+                    case AUFTRAG -> StatusBadge.StatusType.INFO;
+                    case PLANUNG -> StatusBadge.StatusType.WARNING;
+                    case PRODUKT_LEISTUNG -> StatusBadge.StatusType.INFO;
+                    case PRODUKTION -> StatusBadge.StatusType.SUCCESS;
+                    case ABRECHNUNG_NACHBEREITUNG -> StatusBadge.StatusType.NEUTRAL;
+                };
         return new StatusBadge(label, type);
     }
 }

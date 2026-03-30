@@ -93,8 +93,7 @@ public class OrderPositionDialog extends Dialog {
 
         FormLayout form = new FormLayout();
         form.setResponsiveSteps(
-                new FormLayout.ResponsiveStep("0", 1),
-                new FormLayout.ResponsiveStep("500px", 2));
+                new FormLayout.ResponsiveStep("0", 1), new FormLayout.ResponsiveStep("500px", 2));
 
         form.add(name, type);
         form.add(fromLocation, toLocation);

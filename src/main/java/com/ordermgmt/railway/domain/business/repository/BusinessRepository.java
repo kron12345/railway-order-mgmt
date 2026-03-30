@@ -8,5 +8,4 @@ import org.springframework.stereotype.Repository;
 import com.ordermgmt.railway.domain.business.model.Business;
 
 @Repository
-public interface BusinessRepository extends JpaRepository<Business, UUID> {
-}
+public interface BusinessRepository extends JpaRepository<Business, UUID> {}

@@ -29,7 +29,8 @@ import lombok.RequiredArgsConstructor;
 public class RinfImportService {
 
     private static final Logger log = LoggerFactory.getLogger(RinfImportService.class);
-    private static final Pattern WKT_POINT = Pattern.compile("POINT\\(([\\d.\\-]+)\\s+([\\d.\\-]+)\\)");
+    private static final Pattern WKT_POINT =
+            Pattern.compile("POINT\\(([\\d.\\-]+)\\s+([\\d.\\-]+)\\)");
     private static final int BATCH_SIZE = 500;
 
     private final OperationalPointRepository opRepo;
@@ -155,8 +156,8 @@ public class RinfImportService {
 
     private List<String[]> parseCsv(InputStream is) throws Exception {
         List<String[]> rows = new ArrayList<>();
-        try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(is, StandardCharsets.UTF_8))) {
+        try (BufferedReader reader =
+                new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
             String header = reader.readLine(); // skip header
             String line;
             while ((line = reader.readLine()) != null) {

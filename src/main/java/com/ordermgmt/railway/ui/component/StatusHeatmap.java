@@ -9,8 +9,8 @@ import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.order.model.PositionStatus;
 
 /**
- * Compact colored cells showing the status of each position in an order.
- * Each cell represents one position — color and icon indicate its status.
+ * Compact colored cells showing the status of each position in an order. Each cell represents one
+ * position — color and icon indicate its status.
  */
 public class StatusHeatmap extends Div {
 
@@ -60,20 +60,19 @@ public class StatusHeatmap extends Div {
 
     private CellStyle cellStyle(PositionStatus status) {
         if (status == null) {
-            return new CellStyle(
-                    "rgba(148,163,184,0.08)", "var(--rom-text-muted)", "–");
+            return new CellStyle("rgba(148,163,184,0.08)", "var(--rom-text-muted)", "–");
         }
         return switch (status) {
-            case FREIGEGEBEN, ABGESCHLOSSEN -> new CellStyle(
-                    "rgba(52,211,153,0.15)", "var(--rom-status-active)", "✓");
-            case IN_BEARBEITUNG -> new CellStyle(
-                    "rgba(96,165,250,0.15)", "var(--rom-status-info)", "●");
-            case UEBERARBEITEN, BEANTRAGT -> new CellStyle(
-                    "rgba(251,191,36,0.15)", "var(--rom-status-warning)", "!");
-            case UEBERMITTELT -> new CellStyle(
-                    "rgba(96,165,250,0.15)", "var(--rom-status-info)", "→");
-            case ANNULLIERT -> new CellStyle(
-                    "rgba(248,113,113,0.15)", "var(--rom-status-danger)", "✗");
+            case FREIGEGEBEN, ABGESCHLOSSEN ->
+                    new CellStyle("rgba(52,211,153,0.15)", "var(--rom-status-active)", "✓");
+            case IN_BEARBEITUNG ->
+                    new CellStyle("rgba(96,165,250,0.15)", "var(--rom-status-info)", "●");
+            case UEBERARBEITEN, BEANTRAGT ->
+                    new CellStyle("rgba(251,191,36,0.15)", "var(--rom-status-warning)", "!");
+            case UEBERMITTELT ->
+                    new CellStyle("rgba(96,165,250,0.15)", "var(--rom-status-info)", "→");
+            case ANNULLIERT ->
+                    new CellStyle("rgba(248,113,113,0.15)", "var(--rom-status-danger)", "✗");
         };
     }
 

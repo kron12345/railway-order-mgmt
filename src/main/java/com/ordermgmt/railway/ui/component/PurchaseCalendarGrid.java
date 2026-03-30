@@ -1,13 +1,11 @@
 package com.ordermgmt.railway.ui.component;
 
-import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.format.TextStyle;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.Span;
@@ -16,8 +14,8 @@ import com.ordermgmt.railway.domain.order.model.PurchasePosition;
 import com.ordermgmt.railway.domain.order.model.PurchaseStatus;
 
 /**
- * Compact calendar grid: one row per month, columns = weekday positions (Mo-So × weeks).
- * Each cell shows the day number, colored by purchase status.
+ * Compact calendar grid: one row per month, columns = weekday positions (Mo-So × weeks). Each cell
+ * shows the day number, colored by purchase status.
  */
 public class PurchaseCalendarGrid extends Div {
 
@@ -33,9 +31,7 @@ public class PurchaseCalendarGrid extends Div {
 
         Map<LocalDate, PurchaseStatus> statusByDate = mapByDate(purchases);
         List<YearMonth> months = buildMonthList(from, to);
-        int maxWeeks = months.stream()
-                .mapToInt(this::weeksNeeded)
-                .max().orElse(5);
+        int maxWeeks = months.stream().mapToInt(this::weeksNeeded).max().orElse(5);
 
         Div table = new Div();
         int cols = maxWeeks * 7 + maxWeeks - 1;
@@ -60,7 +56,9 @@ public class PurchaseCalendarGrid extends Div {
         corner.getStyle()
                 .set("background", "var(--rom-bg-secondary)")
                 .set("border-bottom", "1px solid var(--rom-border)")
-                .set("position", "sticky").set("left", "0").set("z-index", "2");
+                .set("position", "sticky")
+                .set("left", "0")
+                .set("z-index", "2");
         table.add(corner);
 
         for (int w = 0; w < maxWeeks; w++) {
@@ -73,8 +71,8 @@ public class PurchaseCalendarGrid extends Div {
         }
     }
 
-    private void addMonthRow(Div table, YearMonth ym, int maxWeeks,
-                             Map<LocalDate, PurchaseStatus> statusByDate) {
+    private void addMonthRow(
+            Div table, YearMonth ym, int maxWeeks, Map<LocalDate, PurchaseStatus> statusByDate) {
         LocalDate first = ym.atDay(1);
         int startCol = first.getDayOfWeek().getValue() - 1; // Mo=0
         int daysInMonth = ym.lengthOfMonth();
@@ -87,11 +85,21 @@ public class PurchaseCalendarGrid extends Div {
                 .set("padding", "6px 8px")
                 .set("border-bottom", "1px solid var(--rom-border)")
                 .set("border-right", "1px solid var(--rom-border)")
-                .set("position", "sticky").set("left", "0").set("z-index", "2")
-                .set("display", "flex").set("flex-direction", "column").set("justify-content", "center");
-        Span mName = new Span(ym.getMonth().getDisplayName(TextStyle.SHORT, Locale.GERMAN)
-                + " " + ym.getYear());
-        mName.getStyle().set("font-weight", "600").set("font-size", "10px").set("color", "var(--rom-text-secondary)");
+                .set("position", "sticky")
+                .set("left", "0")
+                .set("z-index", "2")
+                .set("display", "flex")
+                .set("flex-direction", "column")
+                .set("justify-content", "center");
+        Span mName =
+                new Span(
+                        ym.getMonth().getDisplayName(TextStyle.SHORT, Locale.GERMAN)
+                                + " "
+                                + ym.getYear());
+        mName.getStyle()
+                .set("font-weight", "600")
+                .set("font-size", "10px")
+                .set("color", "var(--rom-text-secondary)");
         Span fpjTag = new Span(fpj);
         fpjTag.getStyle().set("font-size", "8px").set("color", "var(--rom-accent)");
         label.add(mName, fpjTag);
@@ -119,8 +127,8 @@ public class PurchaseCalendarGrid extends Div {
         }
     }
 
-    private Div dayCell(int day, PurchaseStatus status, boolean weekend,
-                        boolean fpjLine, LocalDate date) {
+    private Div dayCell(
+            int day, PurchaseStatus status, boolean weekend, boolean fpjLine, LocalDate date) {
         Div cell = new Div();
         cell.setText(String.valueOf(day));
 
@@ -133,26 +141,32 @@ public class PurchaseCalendarGrid extends Div {
             bg = "rgba(148,163,184,0.06)";
             color = "var(--rom-text-muted)";
         } else {
-            bg = switch (status) {
-                case BESTAETIGT -> "rgba(52,211,153,0.2)";
-                case BESTELLT -> "rgba(96,165,250,0.2)";
-                case OFFEN -> "rgba(148,163,184,0.06)";
-                case ABGELEHNT -> "rgba(248,113,113,0.2)";
-                case STORNIERT -> "rgba(107,114,128,0.1)";
-            };
-            color = switch (status) {
-                case BESTAETIGT -> "var(--rom-status-active)";
-                case BESTELLT -> "var(--rom-status-info)";
-                case OFFEN -> "var(--rom-text-muted)";
-                case ABGELEHNT -> "var(--rom-status-danger)";
-                case STORNIERT -> "var(--rom-text-muted)";
-            };
+            bg =
+                    switch (status) {
+                        case BESTAETIGT -> "rgba(52,211,153,0.2)";
+                        case BESTELLT -> "rgba(96,165,250,0.2)";
+                        case OFFEN -> "rgba(148,163,184,0.06)";
+                        case ABGELEHNT -> "rgba(248,113,113,0.2)";
+                        case STORNIERT -> "rgba(107,114,128,0.1)";
+                    };
+            color =
+                    switch (status) {
+                        case BESTAETIGT -> "var(--rom-status-active)";
+                        case BESTELLT -> "var(--rom-status-info)";
+                        case OFFEN -> "var(--rom-text-muted)";
+                        case ABGELEHNT -> "var(--rom-status-danger)";
+                        case STORNIERT -> "var(--rom-text-muted)";
+                    };
         }
 
         cell.getStyle()
-                .set("display", "flex").set("align-items", "center").set("justify-content", "center")
-                .set("min-height", "28px").set("font-weight", "600")
-                .set("background", bg).set("color", color)
+                .set("display", "flex")
+                .set("align-items", "center")
+                .set("justify-content", "center")
+                .set("min-height", "28px")
+                .set("font-weight", "600")
+                .set("background", bg)
+                .set("color", color)
                 .set("border-bottom", "1px solid var(--rom-border)")
                 .set("cursor", "default");
 
@@ -179,8 +193,10 @@ public class PurchaseCalendarGrid extends Div {
         Div h = new Div();
         h.setText(text);
         h.getStyle()
-                .set("text-align", "center").set("padding", "4px 2px")
-                .set("font-size", "9px").set("font-weight", "600")
+                .set("text-align", "center")
+                .set("padding", "4px 2px")
+                .set("font-size", "9px")
+                .set("font-weight", "600")
                 .set("color", "var(--rom-text-muted)")
                 .set("background", "var(--rom-bg-secondary)")
                 .set("border-bottom", "1px solid var(--rom-border)")
@@ -191,7 +207,8 @@ public class PurchaseCalendarGrid extends Div {
     private Div weekSep(boolean isHeader) {
         Div sep = new Div();
         sep.getStyle()
-                .set("width", "3px").set("min-height", "28px")
+                .set("width", "3px")
+                .set("min-height", "28px")
                 .set("background", isHeader ? "var(--rom-bg-secondary)" : "var(--rom-bg-primary)")
                 .set("border-bottom", "1px solid var(--rom-border)");
         return sep;
@@ -228,25 +245,32 @@ public class PurchaseCalendarGrid extends Div {
         String validity = p.getValidity();
         if (validity != null && !validity.isBlank()) {
             try {
-                var array = new com.fasterxml.jackson.databind.ObjectMapper()
-                        .readTree(validity);
+                var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                mapper.configure(
+                        com.fasterxml.jackson.databind.DeserializationFeature
+                                .FAIL_ON_UNKNOWN_PROPERTIES,
+                        false);
+                var array = mapper.readTree(validity);
                 if (array.isArray()) {
                     for (var segment : array) {
-                        LocalDate start = LocalDate.parse(segment.get("startDate").asText());
-                        LocalDate end = LocalDate.parse(segment.get("endDate").asText());
+                        var startNode = segment.get("startDate");
+                        var endNode = segment.get("endDate");
+                        if (startNode == null || endNode == null) continue;
+                        LocalDate start = LocalDate.parse(startNode.asText());
+                        LocalDate end = LocalDate.parse(endNode.asText());
+                        if (end.isBefore(start) || start.until(end).getDays() > 366) continue;
                         for (LocalDate d = start; !d.isAfter(end); d = d.plusDays(1)) {
                             dates.add(d);
                         }
                     }
                 }
             } catch (Exception ignored) {
-                // Malformed JSON — skip
+                // Malformed JSON — skip silently
             }
         }
         // Fallback: use orderedAt if no validity segments
         if (dates.isEmpty() && p.getOrderedAt() != null) {
-            dates.add(p.getOrderedAt()
-                    .atZone(java.time.ZoneId.systemDefault()).toLocalDate());
+            dates.add(p.getOrderedAt().atZone(java.time.ZoneId.systemDefault()).toLocalDate());
         }
         return dates;
     }

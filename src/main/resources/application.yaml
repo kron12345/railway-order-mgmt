@@ -37,9 +37,17 @@ spring:
           keycloak:
             issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/railway}
 
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+
 server:
   port: ${SERVER_PORT:8085}
   forward-headers-strategy: native
+  error:
+    include-stacktrace: never
+    include-message: never
 
 vaadin:
   launch-browser: true

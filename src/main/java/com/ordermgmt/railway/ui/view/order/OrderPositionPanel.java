@@ -87,10 +87,12 @@ public class OrderPositionPanel extends Div {
         }
 
         for (OrderPosition pos : positions) {
-            rowContainer.add(new OrderPositionRow(
-                    pos, translator,
-                    this::openPositionDialog,
-                    this::confirmDeletePosition));
+            rowContainer.add(
+                    new OrderPositionRow(
+                            pos,
+                            translator,
+                            this::openPositionDialog,
+                            this::confirmDeletePosition));
         }
     }
 
@@ -108,10 +110,11 @@ public class OrderPositionPanel extends Div {
         dialog.setCancelText(t("common.cancel"));
         dialog.setConfirmText(t("common.delete"));
         dialog.setConfirmButtonTheme("error primary");
-        dialog.addConfirmListener(e -> {
-            orderService.deletePosition(pos.getId());
-            refreshPositions();
-        });
+        dialog.addConfirmListener(
+                e -> {
+                    orderService.deletePosition(pos.getId());
+                    refreshPositions();
+                });
         dialog.open();
     }
 

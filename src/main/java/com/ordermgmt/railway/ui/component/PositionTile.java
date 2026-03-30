@@ -9,13 +9,12 @@ import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.order.model.PositionStatus;
 
 /**
- * Card-style tile for displaying an order position inside the accordion.
- * Shows name, type badge, route, time, resources, and status.
+ * Card-style tile for displaying an order position inside the accordion. Shows name, type badge,
+ * route, time, resources, and status.
  */
 public class PositionTile extends Div {
 
-    private static final DateTimeFormatter DT_FMT =
-            DateTimeFormatter.ofPattern("dd.MM. HH:mm");
+    private static final DateTimeFormatter DT_FMT = DateTimeFormatter.ofPattern("dd.MM. HH:mm");
 
     public PositionTile(OrderPosition pos) {
         getStyle()
@@ -29,10 +28,11 @@ public class PositionTile extends Div {
                 .set("cursor", "pointer")
                 .set("transition", "border-color 0.15s, transform 0.15s");
 
-        getElement().addEventListener("mouseover", e -> {})
-                .addEventData("element.style.borderColor='var(--rom-accent)'");
-        getElement().addEventListener("mouseout", e -> {})
-                .addEventData("element.style.borderColor='var(--rom-border-subtle, var(--rom-border))'");
+        // Hover effect via CSS class instead of inline JS
+        getElement()
+                .executeJs(
+                        "this.addEventListener('mouseover', function(){this.style.borderColor='var(--rom-accent)'});"
+                                + "this.addEventListener('mouseout', function(){this.style.borderColor=''});");
 
         add(createHeader(pos));
         add(createRoute(pos));
@@ -78,9 +78,7 @@ public class PositionTile extends Div {
 
         if (pos.getStart() != null) {
             Span time = new Span(" · " + pos.getStart().format(DT_FMT));
-            time.getStyle()
-                    .set("color", "var(--rom-text-muted)")
-                    .set("font-size", "11px");
+            time.getStyle().set("color", "var(--rom-text-muted)").set("font-size", "11px");
             route.add(time);
         }
 
@@ -100,7 +98,8 @@ public class PositionTile extends Div {
         Div resources = new Div();
         resources.getStyle().set("display", "flex").set("gap", "4px");
         resources.add(createResourceIcon("V", "rgba(96,165,250,0.12)", "var(--rom-status-info)"));
-        resources.add(createResourceIcon("P", "rgba(251,191,36,0.12)", "var(--rom-status-warning)"));
+        resources.add(
+                createResourceIcon("P", "rgba(251,191,36,0.12)", "var(--rom-status-warning)"));
         resources.add(createResourceIcon("C", "rgba(52,211,153,0.12)", "var(--rom-status-active)"));
 
         Span statusBadge = createStatusBadge(pos.getInternalStatus());
@@ -154,21 +153,23 @@ public class PositionTile extends Div {
             label = "—";
             color = "var(--rom-text-muted)";
         } else {
-            label = switch (status) {
-                case IN_BEARBEITUNG -> "In Bearbeitung";
-                case FREIGEGEBEN -> "Freigegeben";
-                case UEBERARBEITEN -> "Überarbeiten";
-                case UEBERMITTELT -> "Übermittelt";
-                case BEANTRAGT -> "Beantragt";
-                case ABGESCHLOSSEN -> "Abgeschlossen";
-                case ANNULLIERT -> "Annulliert";
-            };
-            color = switch (status) {
-                case FREIGEGEBEN, ABGESCHLOSSEN -> "var(--rom-status-active)";
-                case IN_BEARBEITUNG, UEBERMITTELT -> "var(--rom-status-info)";
-                case UEBERARBEITEN, BEANTRAGT -> "var(--rom-status-warning)";
-                case ANNULLIERT -> "var(--rom-status-danger)";
-            };
+            label =
+                    switch (status) {
+                        case IN_BEARBEITUNG -> "In Bearbeitung";
+                        case FREIGEGEBEN -> "Freigegeben";
+                        case UEBERARBEITEN -> "Überarbeiten";
+                        case UEBERMITTELT -> "Übermittelt";
+                        case BEANTRAGT -> "Beantragt";
+                        case ABGESCHLOSSEN -> "Abgeschlossen";
+                        case ANNULLIERT -> "Annulliert";
+                    };
+            color =
+                    switch (status) {
+                        case FREIGEGEBEN, ABGESCHLOSSEN -> "var(--rom-status-active)";
+                        case IN_BEARBEITUNG, UEBERMITTELT -> "var(--rom-status-info)";
+                        case UEBERARBEITEN, BEANTRAGT -> "var(--rom-status-warning)";
+                        case ANNULLIERT -> "var(--rom-status-danger)";
+                    };
         }
 
         Span badge = new Span(label);

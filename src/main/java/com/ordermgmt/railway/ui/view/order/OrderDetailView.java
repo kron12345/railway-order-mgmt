@@ -96,14 +96,15 @@ public class OrderDetailView extends VerticalLayout implements BeforeEnterObserv
                 .set("font-weight", "600")
                 .set("align-self", "flex-end")
                 .set("margin-top", "var(--lumo-space-s)");
-        save.addClickListener(e -> {
-            if (!form.validate()) return;
-            form.writeTo(order);
-            order = orderService.save(order);
-            Notification.show("✓", 2000, Notification.Position.BOTTOM_END)
-                    .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
-            UI.getCurrent().navigate("orders/" + order.getId());
-        });
+        save.addClickListener(
+                e -> {
+                    if (!form.validate()) return;
+                    form.writeTo(order);
+                    order = orderService.save(order);
+                    Notification.show("✓", 2000, Notification.Position.BOTTOM_END)
+                            .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+                    UI.getCurrent().navigate("orders/" + order.getId());
+                });
         add(save);
     }
 
@@ -166,7 +167,8 @@ public class OrderDetailView extends VerticalLayout implements BeforeEnterObserv
 
         // Order name
         Span orderName = new Span(order.getName());
-        orderName.getStyle()
+        orderName
+                .getStyle()
                 .set("font-weight", "600")
                 .set("font-size", "14px")
                 .set("color", "var(--rom-text-primary)");
@@ -174,9 +176,7 @@ public class OrderDetailView extends VerticalLayout implements BeforeEnterObserv
         // Customer
         String custName = order.getCustomer() != null ? order.getCustomer().getName() : "—";
         Span customer = new Span(custName);
-        customer.getStyle()
-                .set("color", "var(--rom-text-muted)")
-                .set("font-size", "12px");
+        customer.getStyle().set("color", "var(--rom-text-muted)").set("font-size", "12px");
 
         // Process status badge
         StatusBadge processBadge = createProcessBadge(order.getProcessStatus());
@@ -207,7 +207,8 @@ public class OrderDetailView extends VerticalLayout implements BeforeEnterObserv
         delBtn.getStyle().set("color", "var(--rom-status-danger)");
         delBtn.addClickListener(e -> confirmDelete());
 
-        header.add(back, orderNum, orderName, customer, processBadge, dates, spacer, editBtn, delBtn);
+        header.add(
+                back, orderNum, orderName, customer, processBadge, dates, spacer, editBtn, delBtn);
         return header;
     }
 
@@ -227,15 +228,16 @@ public class OrderDetailView extends VerticalLayout implements BeforeEnterObserv
         save.getStyle()
                 .set("background", "var(--rom-accent)")
                 .set("color", "var(--rom-bg-primary)");
-        save.addClickListener(e -> {
-            if (!form.validate()) return;
-            form.writeTo(order);
-            order = orderService.save(order);
-            Notification.show("✓", 2000, Notification.Position.BOTTOM_END)
-                    .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
-            dialog.close();
-            buildDetailView();
-        });
+        save.addClickListener(
+                e -> {
+                    if (!form.validate()) return;
+                    form.writeTo(order);
+                    order = orderService.save(order);
+                    Notification.show("✓", 2000, Notification.Position.BOTTOM_END)
+                            .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+                    dialog.close();
+                    buildDetailView();
+                });
 
         dialog.getFooter().add(cancel, save);
         dialog.open();
@@ -248,10 +250,11 @@ public class OrderDetailView extends VerticalLayout implements BeforeEnterObserv
         dialog.setCancelText(getTranslation("common.cancel"));
         dialog.setConfirmText(getTranslation("common.delete"));
         dialog.setConfirmButtonTheme("error primary");
-        dialog.addConfirmListener(e -> {
-            orderService.delete(order.getId());
-            UI.getCurrent().navigate("orders");
-        });
+        dialog.addConfirmListener(
+                e -> {
+                    orderService.delete(order.getId());
+                    UI.getCurrent().navigate("orders");
+                });
         dialog.open();
     }
 

@@ -5,8 +5,6 @@ import java.util.List;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 
-import com.ordermgmt.railway.domain.order.model.PurchasePosition;
-
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.html.Div;
@@ -16,12 +14,11 @@ import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
+import com.ordermgmt.railway.domain.order.model.PurchasePosition;
 import com.ordermgmt.railway.ui.component.PurchaseCalendarPanel;
 import com.ordermgmt.railway.ui.component.StatusBadge;
 
-/**
- * Single position row with summary info and toggleable purchase calendar.
- */
+/** Single position row with summary info and toggleable purchase calendar. */
 public class OrderPositionRow extends Div {
 
     private final OrderPosition position;
@@ -46,7 +43,8 @@ public class OrderPositionRow extends Div {
         add(createSummary(translator, onEdit, onDelete));
 
         calendarSlot.setWidthFull();
-        calendarSlot.getStyle()
+        calendarSlot
+                .getStyle()
                 .set("padding", "0 12px 12px 12px")
                 .set("overflow-x", "auto")
                 .set("box-sizing", "border-box");
@@ -78,8 +76,10 @@ public class OrderPositionRow extends Div {
         StatusBadge statusBadge = createStatusBadge(t);
 
         // Purchase calendar toggle — prominent button
-        long purchaseCount = position.getPurchasePositions() != null
-                ? position.getPurchasePositions().size() : 0;
+        long purchaseCount =
+                position.getPurchasePositions() != null
+                        ? position.getPurchasePositions().size()
+                        : 0;
         String btnText = translator.apply("purchase.calendar.btn", new Object[0]);
         String calLabel = purchaseCount > 0 ? purchaseCount + " " + btnText : btnText;
         Button calBtn = new Button(calLabel, VaadinIcon.CALENDAR.create());
@@ -114,14 +114,11 @@ public class OrderPositionRow extends Div {
         delBtn.getStyle().set("color", "var(--rom-status-danger)");
         delBtn.addClickListener(e -> onDelete.accept(position));
 
-        HorizontalLayout row = new HorizontalLayout(
-                name, typeBadge, route, statusBadge, calBtn, editBtn, delBtn);
+        HorizontalLayout row =
+                new HorizontalLayout(name, typeBadge, route, statusBadge, calBtn, editBtn, delBtn);
         row.setWidthFull();
         row.setAlignItems(FlexComponent.Alignment.CENTER);
-        row.getStyle()
-                .set("padding", "10px 12px")
-                .set("gap", "12px")
-                .set("cursor", "default");
+        row.getStyle().set("padding", "10px 12px").set("gap", "12px").set("cursor", "default");
         row.expand(route);
 
         return row;
@@ -132,9 +129,10 @@ public class OrderPositionRow extends Div {
         calendarSlot.setVisible(calendarOpen);
 
         if (calendarOpen && calendarSlot.getComponentCount() == 0) {
-            List<PurchasePosition> purchases = position.getPurchasePositions() != null
-                    ? new ArrayList<>(position.getPurchasePositions())
-                    : List.of();
+            List<PurchasePosition> purchases =
+                    position.getPurchasePositions() != null
+                            ? new ArrayList<>(position.getPurchasePositions())
+                            : List.of();
             calendarSlot.add(new PurchaseCalendarPanel(position, purchases, translator));
         }
     }
@@ -154,10 +152,13 @@ public class OrderPositionRow extends Div {
         if (position.getInternalStatus() == null) {
             return new StatusBadge("—", StatusBadge.StatusType.NEUTRAL);
         }
-        String label = t.apply("position.status." + position.getInternalStatus().name(), new Object[0]);
+        String label =
+                t.apply("position.status." + position.getInternalStatus().name(), new Object[0]);
         return switch (position.getInternalStatus()) {
-            case IN_BEARBEITUNG, UEBERMITTELT -> new StatusBadge(label, StatusBadge.StatusType.INFO);
-            case FREIGEGEBEN, ABGESCHLOSSEN -> new StatusBadge(label, StatusBadge.StatusType.SUCCESS);
+            case IN_BEARBEITUNG, UEBERMITTELT ->
+                    new StatusBadge(label, StatusBadge.StatusType.INFO);
+            case FREIGEGEBEN, ABGESCHLOSSEN ->
+                    new StatusBadge(label, StatusBadge.StatusType.SUCCESS);
             case UEBERARBEITEN, BEANTRAGT -> new StatusBadge(label, StatusBadge.StatusType.WARNING);
             case ANNULLIERT -> new StatusBadge(label, StatusBadge.StatusType.DANGER);
         };

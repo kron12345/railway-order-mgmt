@@ -4,10 +4,9 @@ import java.io.InputStream;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 
-import jakarta.annotation.security.PermitAll;
+import jakarta.annotation.security.RolesAllowed;
 
 import com.vaadin.flow.component.button.Button;
-import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.combobox.ComboBox;
 import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.grid.GridVariant;
@@ -32,7 +31,7 @@ import com.ordermgmt.railway.ui.layout.MainLayout;
 
 @Route(value = "settings", layout = MainLayout.class)
 @PageTitle("Settings")
-@PermitAll
+@RolesAllowed("ADMIN")
 public class SettingsView extends VerticalLayout {
 
     private final RinfImportService importService;
@@ -42,8 +41,8 @@ public class SettingsView extends VerticalLayout {
     private Span solsCountCh;
     private Span solsCountDe;
 
-    private static final DateTimeFormatter DT = DateTimeFormatter
-            .ofPattern("dd.MM.yyyy HH:mm:ss").withZone(ZoneId.systemDefault());
+    private static final DateTimeFormatter DT =
+            DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss").withZone(ZoneId.systemDefault());
 
     public SettingsView(RinfImportService importService) {
         this.importService = importService;
@@ -86,8 +85,11 @@ public class SettingsView extends VerticalLayout {
         solsCountCh = statBox("CH " + getTranslation("settings.stats.sols"), "0");
         solsCountDe = statBox("DE " + getTranslation("settings.stats.sols"), "0");
 
-        stats.add(opsCountCh.getParent().get(), opsCountDe.getParent().get(),
-                solsCountCh.getParent().get(), solsCountDe.getParent().get());
+        stats.add(
+                opsCountCh.getParent().get(),
+                opsCountDe.getParent().get(),
+                solsCountCh.getParent().get(),
+                solsCountDe.getParent().get());
         panel.add(stats);
         return panel;
     }
@@ -96,22 +98,28 @@ public class SettingsView extends VerticalLayout {
         Div panel = card();
         H3 title = sectionTitle(getTranslation("settings.infrastructure"));
         Span desc = new Span(getTranslation("settings.infrastructure.desc"));
-        desc.getStyle().set("color", "var(--rom-text-muted)").set("font-size", "12px")
-                .set("display", "block").set("margin-bottom", "var(--lumo-space-m)");
+        desc.getStyle()
+                .set("color", "var(--rom-text-muted)")
+                .set("font-size", "12px")
+                .set("display", "block")
+                .set("margin-bottom", "var(--lumo-space-m)");
         panel.add(title, desc);
 
         // Import row: Country + Type + Upload
         ComboBox<String> countrySelect = new ComboBox<>(getTranslation("settings.import.country"));
         countrySelect.setItems("CHE", "DEU");
-        countrySelect.setItemLabelGenerator(c -> "CHE".equals(c) ? "Schweiz (CH)" : "Deutschland (DE)");
+        countrySelect.setItemLabelGenerator(
+                c -> "CHE".equals(c) ? "Schweiz (CH)" : "Deutschland (DE)");
         countrySelect.setValue("CHE");
         countrySelect.setWidth("200px");
 
         ComboBox<String> typeSelect = new ComboBox<>("Typ");
         typeSelect.setItems("OP", "SOL");
-        typeSelect.setItemLabelGenerator(t -> "OP".equals(t)
-                ? getTranslation("settings.import.ops")
-                : getTranslation("settings.import.sols"));
+        typeSelect.setItemLabelGenerator(
+                t ->
+                        "OP".equals(t)
+                                ? getTranslation("settings.import.ops")
+                                : getTranslation("settings.import.sols"));
         typeSelect.setValue("OP");
         typeSelect.setWidth("200px");
 
@@ -119,36 +127,44 @@ public class SettingsView extends VerticalLayout {
         Upload upload = new Upload(buffer);
         upload.setAcceptedFileTypes(".csv");
         upload.setMaxFiles(1);
+        upload.setMaxFileSize(50 * 1024 * 1024); // 50 MB max
         upload.setDropLabel(new Span(getTranslation("settings.import.upload")));
         upload.setUploadButton(
                 new Button(getTranslation("settings.import.upload"), VaadinIcon.UPLOAD.create()));
 
-        upload.addSucceededListener(event -> {
-            String country = countrySelect.getValue();
-            String type = typeSelect.getValue();
-            InputStream is = buffer.getInputStream();
+        upload.addSucceededListener(
+                event -> {
+                    String country = countrySelect.getValue();
+                    String type = typeSelect.getValue();
+                    InputStream is = buffer.getInputStream();
 
-            ImportLog result;
-            if ("OP".equals(type)) {
-                result = importService.importOperationalPoints(is, country);
-            } else {
-                result = importService.importSectionsOfLine(is, country);
-            }
+                    ImportLog result;
+                    if ("OP".equals(type)) {
+                        result = importService.importOperationalPoints(is, country);
+                    } else {
+                        result = importService.importSectionsOfLine(is, country);
+                    }
 
-            if ("SUCCESS".equals(result.getStatus())) {
-                Notification.show(
-                        getTranslation("settings.import.success", String.valueOf(result.getRecordCount())),
-                        5000, Notification.Position.BOTTOM_END)
-                        .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
-            } else {
-                Notification.show(
-                        getTranslation("settings.import.error") + ": " + result.getMessage(),
-                        5000, Notification.Position.BOTTOM_END)
-                        .addThemeVariants(NotificationVariant.LUMO_ERROR);
-            }
-            refreshStats();
-            refreshHistory();
-        });
+                    if ("SUCCESS".equals(result.getStatus())) {
+                        Notification.show(
+                                        getTranslation(
+                                                "settings.import.success",
+                                                String.valueOf(result.getRecordCount())),
+                                        5000,
+                                        Notification.Position.BOTTOM_END)
+                                .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+                    } else {
+                        Notification.show(
+                                        getTranslation("settings.import.error")
+                                                + ": "
+                                                + result.getMessage(),
+                                        5000,
+                                        Notification.Position.BOTTOM_END)
+                                .addThemeVariants(NotificationVariant.LUMO_ERROR);
+                    }
+                    refreshStats();
+                    refreshHistory();
+                });
 
         HorizontalLayout importRow = new HorizontalLayout(countrySelect, typeSelect, upload);
         importRow.setAlignItems(FlexComponent.Alignment.END);
@@ -165,23 +181,34 @@ public class SettingsView extends VerticalLayout {
         historyGrid.addColumn(ImportLog::getSource).setHeader("Source").setWidth("100px");
         historyGrid.addColumn(ImportLog::getCountry).setHeader("Land").setWidth("60px");
         historyGrid.addColumn(ImportLog::getRecordCount).setHeader("Records").setWidth("80px");
-        historyGrid.addColumn(l -> l.getStartedAt() != null ? DT.format(l.getStartedAt()) : "—")
-                .setHeader("Gestartet").setWidth("160px");
-        historyGrid.addComponentColumn(l -> {
-            String color = switch (l.getStatus()) {
-                case "SUCCESS" -> "var(--rom-status-active)";
-                case "ERROR" -> "var(--rom-status-danger)";
-                default -> "var(--rom-status-info)";
-            };
-            Span badge = new Span(l.getStatus());
-            badge.getStyle()
-                    .set("font-family", "'JetBrains Mono', monospace")
-                    .set("font-size", "10px").set("font-weight", "600")
-                    .set("color", color)
-                    .set("background", "color-mix(in srgb, " + color + " 12%, transparent)")
-                    .set("padding", "2px 6px").set("border-radius", "3px");
-            return badge;
-        }).setHeader("Status").setWidth("100px");
+        historyGrid
+                .addColumn(l -> l.getStartedAt() != null ? DT.format(l.getStartedAt()) : "—")
+                .setHeader("Gestartet")
+                .setWidth("160px");
+        historyGrid
+                .addComponentColumn(
+                        l -> {
+                            String color =
+                                    switch (l.getStatus()) {
+                                        case "SUCCESS" -> "var(--rom-status-active)";
+                                        case "ERROR" -> "var(--rom-status-danger)";
+                                        default -> "var(--rom-status-info)";
+                                    };
+                            Span badge = new Span(l.getStatus());
+                            badge.getStyle()
+                                    .set("font-family", "'JetBrains Mono', monospace")
+                                    .set("font-size", "10px")
+                                    .set("font-weight", "600")
+                                    .set("color", color)
+                                    .set(
+                                            "background",
+                                            "color-mix(in srgb, " + color + " 12%, transparent)")
+                                    .set("padding", "2px 6px")
+                                    .set("border-radius", "3px");
+                            return badge;
+                        })
+                .setHeader("Status")
+                .setWidth("100px");
         historyGrid.addColumn(ImportLog::getMessage).setHeader("Details").setFlexGrow(1);
 
         historyGrid.addThemeVariants(GridVariant.LUMO_NO_BORDER, GridVariant.LUMO_COMPACT);

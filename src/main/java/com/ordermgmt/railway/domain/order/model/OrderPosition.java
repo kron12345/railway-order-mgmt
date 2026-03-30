@@ -89,6 +89,5 @@ public class OrderPosition {
     @Column(nullable = false)
     private Instant updatedAt;
 
-    @Version
-    private Long version;
+    @Version private Long version;
 }

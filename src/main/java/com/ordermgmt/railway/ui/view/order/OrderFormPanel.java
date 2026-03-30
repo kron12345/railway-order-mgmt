@@ -53,10 +53,13 @@ public class OrderFormPanel extends Div {
 
         orderNumber.setLabel(t("order.number"));
         orderNumber.setRequired(true);
+        orderNumber.setMaxLength(50);
+        orderNumber.setAllowedCharPattern("[A-Za-z0-9\\-_]");
         orderNumber.setWidthFull();
 
         name.setLabel(t("order.name"));
         name.setRequired(true);
+        name.setMaxLength(255);
         name.setWidthFull();
 
         customerCombo.setLabel(t("order.customer"));
