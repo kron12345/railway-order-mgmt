@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Order View Konzepte — Railway Order Management</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+    --bg-primary: #0B1120;
+    --bg-secondary: #111827;
+    --bg-card: #1A2332;
+    --bg-hover: #1E293B;
+    --bg-selected: #172A3A;
+    --border: #1E3A5F;
+    --border-subtle: #1C2D42;
+    --text-primary: #E2E8F0;
+    --text-secondary: #94A3B8;
+    --text-muted: #64748B;
+    --accent: #2DD4BF;
+    --accent-hover: #14B8A6;
+    --status-active: #34D399;
+    --status-warning: #FBBF24;
+    --status-danger: #F87171;
+    --status-info: #60A5FA;
+    --status-neutral: #94A3B8;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+}
+.concept-page {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 40px 24px;
+}
+.concept-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 8px;
+    letter-spacing: 0.05em;
+}
+.concept-subtitle {
+    color: var(--text-muted);
+    font-size: 15px;
+    margin-bottom: 48px;
+}
+.concept-section {
+    margin-bottom: 64px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+.concept-header {
+    padding: 20px 24px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.concept-header h2 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--accent);
+}
+.concept-header .tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+.tag-recommended { background: rgba(45, 212, 191, 0.15); color: var(--accent); border: 1px solid var(--accent); }
+.tag-alternative { background: rgba(96, 165, 250, 0.12); color: var(--status-info); border: 1px solid var(--status-info); }
+.tag-compact { background: rgba(251, 191, 36, 0.12); color: var(--status-warning); border: 1px solid var(--status-warning); }
+.concept-desc {
+    padding: 16px 24px;
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    font-size: 13px;
+    border-bottom: 1px solid var(--border-subtle);
+}
+.concept-body { padding: 0; background: var(--bg-primary); }
+
+/* ============================================================
+   SHARED GRID STYLES
+   ============================================================ */
+.grid-header {
+    display: grid;
+    padding: 0 20px;
+    height: 36px;
+    align-items: center;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+.grid-row {
+    display: grid;
+    padding: 0 20px;
+    min-height: 48px;
+    align-items: center;
+    border-bottom: 1px solid var(--border-subtle);
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.grid-row:hover { background: var(--bg-hover); }
+.grid-row.selected { background: var(--bg-selected); border-left: 3px solid var(--accent); padding-left: 17px; }
+.mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+.muted { color: var(--text-muted); }
+.cell-ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Status Badge */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    font-family: 'JetBrains Mono', monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.badge-info { color: var(--status-info); background: rgba(96, 165, 250, 0.12); border: 1px solid rgba(96, 165, 250, 0.3); }
+.badge-warning { color: var(--status-warning); background: rgba(251, 191, 36, 0.12); border: 1px solid rgba(251, 191, 36, 0.3); }
+.badge-success { color: var(--status-active); background: rgba(52, 211, 153, 0.12); border: 1px solid rgba(52, 211, 153, 0.3); }
+.badge-danger { color: var(--status-danger); background: rgba(248, 113, 113, 0.12); border: 1px solid rgba(248, 113, 113, 0.3); }
+.badge-neutral { color: var(--text-muted); background: rgba(148, 163, 184, 0.1); border: 1px solid rgba(148, 163, 184, 0.2); }
+
+/* ============================================================
+   KONZEPT A — Expandable Rows mit Status-Aggregation
+   ============================================================ */
+.concept-a .grid-header,
+.concept-a .grid-row { grid-template-columns: 120px 1.5fr 1fr 200px 100px 100px 130px 40px; gap: 12px; }
+
+/* Aggregated Status Bar */
+.status-bar {
+    display: flex;
+    height: 6px;
+    border-radius: 3px;
+    overflow: hidden;
+    gap: 2px;
+    width: 100%;
+}
+.status-bar .seg {
+    height: 100%;
+    border-radius: 2px;
+    transition: flex 0.3s;
+}
+.seg-done { background: var(--status-active); }
+.seg-progress { background: var(--status-info); }
+.seg-warn { background: var(--status-warning); }
+.seg-open { background: var(--text-muted); opacity: 0.3; }
+
+/* Status Dots */
+.status-dots {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+.status-dot-group {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+.status-dot-count {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+/* Expand chevron */
+.chevron {
+    color: var(--text-muted);
+    transition: transform 0.2s;
+    font-size: 16px;
+    text-align: center;
+}
+.grid-row.expanded .chevron { transform: rotate(90deg); color: var(--accent); }
+
+/* Expanded sub-rows */
+.sub-rows {
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+    overflow: hidden;
+    max-height: 0;
+    transition: max-height 0.3s ease-out;
+}
+.sub-rows.open { max-height: 500px; }
+.sub-row {
+    display: grid;
+    grid-template-columns: 40px 1.2fr 100px 1.5fr 120px 120px 100px;
+    gap: 12px;
+    padding: 0 20px 0 40px;
+    height: 40px;
+    align-items: center;
+    border-bottom: 1px solid var(--border-subtle);
+    font-size: 13px;
+}
+.sub-row:last-child { border-bottom: none; }
+.sub-row-indicator {
+    width: 2px;
+    height: 24px;
+    background: var(--border);
+    border-radius: 1px;
+    margin-left: 8px;
+}
+.route-arrow { color: var(--accent); font-family: 'JetBrains Mono', monospace; }
+
+/* ============================================================
+   KONZEPT B — Master-Detail Split View
+   ============================================================ */
+.split-container {
+    display: flex;
+    height: 480px;
+}
+.split-left {
+    flex: 1;
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+}
+.split-right {
+    width: 480px;
+    overflow-y: auto;
+    background: var(--bg-card);
+}
+.concept-b .grid-header,
+.concept-b .grid-row { grid-template-columns: 100px 1.2fr 160px 100px 100px; gap: 12px; }
+
+/* Detail Panel */
+.detail-panel { padding: 20px; }
+.detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border-subtle);
+}
+.detail-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+.detail-meta {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+.meta-item label {
+    display: block;
+    font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 2px;
+    letter-spacing: 0.06em;
+}
+.meta-item span {
+    font-size: 13px;
+    color: var(--text-primary);
+}
+.detail-positions-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 12px;
+}
+.detail-pos-card {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 8px;
+    transition: border-color 0.15s;
+}
+.detail-pos-card:hover { border-color: var(--accent); }
+.pos-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+.pos-card-name { font-weight: 600; font-size: 13px; }
+.pos-card-route {
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-family: 'JetBrains Mono', monospace;
+}
+.pos-card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-subtle);
+}
+.pos-card-resources {
+    display: flex;
+    gap: 6px;
+}
+.resource-chip {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-family: 'JetBrains Mono', monospace;
+    background: rgba(45, 212, 191, 0.08);
+    color: var(--accent);
+    border: 1px solid rgba(45, 212, 191, 0.2);
+}
+
+/* ============================================================
+   KONZEPT C — Accordion mit Status-Heatmap
+   ============================================================ */
+.concept-c .order-accordion {
+    border-bottom: 1px solid var(--border-subtle);
+}
+.accordion-header {
+    display: grid;
+    grid-template-columns: 40px 110px 1.2fr 1fr 220px 120px;
+    gap: 12px;
+    padding: 0 20px;
+    height: 56px;
+    align-items: center;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.accordion-header:hover { background: var(--bg-hover); }
+
+/* Heatmap Status Cells */
+.heatmap {
+    display: flex;
+    gap: 3px;
+}
+.heatmap-cell {
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 600;
+    position: relative;
+}
+.heatmap-cell[data-tooltip]:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    white-space: nowrap;
+    z-index: 10;
+}
+.hm-active { background: rgba(52, 211, 153, 0.15); color: var(--status-active); }
+.hm-progress { background: rgba(96, 165, 250, 0.15); color: var(--status-info); }
+.hm-warning { background: rgba(251, 191, 36, 0.15); color: var(--status-warning); }
+.hm-danger { background: rgba(248, 113, 113, 0.15); color: var(--status-danger); }
+.hm-neutral { background: rgba(148, 163, 184, 0.08); color: var(--text-muted); }
+
+.accordion-body {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.35s ease-out;
+    background: var(--bg-card);
+}
+.accordion-body.open { max-height: 600px; }
+.accordion-inner {
+    padding: 16px 20px 16px 72px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+.pos-tile {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: border-color 0.15s, transform 0.15s;
+    cursor: pointer;
+}
+.pos-tile:hover {
+    border-color: var(--accent);
+    transform: translateY(-1px);
+}
+.pos-tile-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.pos-tile-name { font-weight: 600; font-size: 13px; }
+.pos-tile-route {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+.pos-tile-bottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.pos-tile-resources {
+    display: flex;
+    gap: 4px;
+}
+.res-icon {
+    width: 22px;
+    height: 22px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+}
+.res-vehicle { background: rgba(96, 165, 250, 0.12); color: var(--status-info); }
+.res-personnel { background: rgba(251, 191, 36, 0.12); color: var(--status-warning); }
+.res-capacity { background: rgba(52, 211, 153, 0.12); color: var(--status-active); }
+
+/* ============================================================
+   COMPARISON TABLE
+   ============================================================ */
+.comparison {
+    margin-top: 48px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+.comparison table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.comparison th {
+    background: var(--bg-secondary);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    padding: 12px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+.comparison td {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border-subtle);
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+.comparison tr:last-child td { border-bottom: none; }
+.comparison .check { color: var(--status-active); }
+.comparison .partial { color: var(--status-warning); }
+.comparison .cross { color: var(--status-danger); }
+</style>
+</head>
+<body>
+<div class="concept-page">
+
+<h1 class="concept-title">ORDER VIEW KONZEPTE</h1>
+<p class="concept-subtitle">3 Design-Ansaetze fuer Status-Aggregation und Inline-Positionen — Railway Order Management</p>
+
+<!-- ============================================================
+     KONZEPT A — Expandable Rows
+     ============================================================ -->
+<div class="concept-section concept-a">
+    <div class="concept-header">
+        <h2>A — Expandable Rows + Status-Balken</h2>
+        <span class="tag tag-recommended">Empfohlen</span>
+    </div>
+    <div class="concept-desc">
+        <strong>Idee:</strong> Jede Auftragszeile hat einen farbigen Statusbalken der die Positionsstatus aggregiert zeigt.
+        Klick auf den Chevron klappt die Positionen als Sub-Rows inline auf.
+        Bloomberg-Terminal-Stil: kompakt, datengetrieben, schneller Ueberblick.<br>
+        <strong>Pro:</strong> Schnellster Ueberblick, keine Navigation noetig, skaliert gut bei vielen Auftraegen.<br>
+        <strong>Contra:</strong> Begrenzte Detailtiefe in den Sub-Rows.
+    </div>
+    <div class="concept-body">
+        <div class="grid-header">
+            <div>Nr.</div>
+            <div>Auftragsname</div>
+            <div>Kunde</div>
+            <div>Positionsstatus</div>
+            <div>Gueltig ab</div>
+            <div>Gueltig bis</div>
+            <div>Prozess</div>
+            <div></div>
+        </div>
+
+        <!-- Row 1 — collapsed -->
+        <div class="grid-row" onclick="this.classList.toggle('expanded'); this.nextElementSibling.classList.toggle('open')">
+            <div class="mono">ORD-2026-001</div>
+            <div class="cell-ellipsis">Qnamic Kohletransport Hamburg-Muenchen</div>
+            <div class="cell-ellipsis">Qnamic AG</div>
+            <div>
+                <div style="display:flex;align-items:center;gap:8px">
+                    <div class="status-bar" style="flex:1">
+                        <div class="seg seg-done" style="flex:2"></div>
+                        <div class="seg seg-progress" style="flex:1"></div>
+                        <div class="seg seg-warn" style="flex:1"></div>
+                    </div>
+                    <span class="mono muted" style="font-size:10px">2/1/1</span>
+                </div>
+            </div>
+            <div class="mono muted">01.04.2026</div>
+            <div class="mono muted">30.09.2026</div>
+            <div><span class="badge badge-warning">Planung</span></div>
+            <div class="chevron">&#9654;</div>
+        </div>
+        <div class="sub-rows">
+            <div class="sub-row">
+                <div class="sub-row-indicator"></div>
+                <div>Kohle HH-MUC Taeglich</div>
+                <div><span class="badge badge-info">Fahrplan</span></div>
+                <div class="route-arrow">Hamburg Hbf → Muenchen Hbf</div>
+                <div class="mono muted">06:00</div>
+                <div><span class="badge badge-success">Freigegeben</span></div>
+                <div>
+                    <div class="status-dots">
+                        <div class="status-dot-group"><div class="status-dot" style="background:var(--status-info)"></div><span class="status-dot-count">1V</span></div>
+                        <div class="status-dot-group"><div class="status-dot" style="background:var(--status-warning)"></div><span class="status-dot-count">1P</span></div>
+                        <div class="status-dot-group"><div class="status-dot" style="background:var(--status-active)"></div><span class="status-dot-count">1C</span></div>
+                    </div>
+                </div>
+            </div>
+            <div class="sub-row">
+                <div class="sub-row-indicator"></div>
+                <div>Kohle HH-MUC Express</div>
+                <div><span class="badge badge-info">Fahrplan</span></div>
+                <div class="route-arrow">Hamburg Hbf → Muenchen Ost</div>
+                <div class="mono muted">14:30</div>
+                <div><span class="badge badge-info">In Bearbeitung</span></div>
+                <div>
+                    <div class="status-dots">
+                        <div class="status-dot-group"><div class="status-dot" style="background:var(--status-info)"></div><span class="status-dot-count">1V</span></div>
+                    </div>
+                </div>
+            </div>
+            <div class="sub-row">
+                <div class="sub-row-indicator"></div>
+                <div>Rangierleistung MUC</div>
+                <div><span class="badge badge-warning">Leistung</span></div>
+                <div class="route-arrow">Muenchen Ost</div>
+                <div class="mono muted">—</div>
+                <div><span class="badge badge-warning">Ueberarbeiten</span></div>
+                <div>
+                    <div class="status-dots">
+                        <div class="status-dot-group"><div class="status-dot" style="background:var(--status-warning)"></div><span class="status-dot-count">1P</span></div>
+                    </div>
+                </div>
+            </div>
+            <div class="sub-row" style="background:transparent;border:none;height:32px;cursor:pointer;color:var(--accent);font-size:12px;font-weight:600">
+                <div></div>
+                <div>+ Neue Position</div>
+            </div>
+        </div>
+
+        <!-- Row 2 — collapsed -->
+        <div class="grid-row" onclick="this.classList.toggle('expanded'); this.nextElementSibling.classList.toggle('open')">
+            <div class="mono">ORD-2026-002</div>
+            <div class="cell-ellipsis">BLS Cargo Stahltransport Basel-Wien</div>
+            <div class="cell-ellipsis">BLS Cargo AG</div>
+            <div>
+                <div style="display:flex;align-items:center;gap:8px">
+                    <div class="status-bar" style="flex:1">
+                        <div class="seg seg-done" style="flex:3"></div>
+                        <div class="seg seg-open" style="flex:1"></div>
+                    </div>
+                    <span class="mono muted" style="font-size:10px">3/0/1</span>
+                </div>
+            </div>
+            <div class="mono muted">15.04.2026</div>
+            <div class="mono muted">31.12.2026</div>
+            <div><span class="badge badge-success">Produktion</span></div>
+            <div class="chevron">&#9654;</div>
+        </div>
+        <div class="sub-rows"></div>
+
+        <!-- Row 3 -->
+        <div class="grid-row" onclick="this.classList.toggle('expanded'); this.nextElementSibling.classList.toggle('open')">
+            <div class="mono">ORD-2026-003</div>
+            <div class="cell-ellipsis">SBB Personenverkehr Bern-Zuerich</div>
+            <div class="cell-ellipsis">SBB AG</div>
+            <div>
+                <div style="display:flex;align-items:center;gap:8px">
+                    <div class="status-bar" style="flex:1">
+                        <div class="seg seg-progress" style="flex:2"></div>
+                        <div class="seg seg-open" style="flex:3"></div>
+                    </div>
+                    <span class="mono muted" style="font-size:10px">0/2/3</span>
+                </div>
+            </div>
+            <div class="mono muted">01.06.2026</div>
+            <div class="mono muted">—</div>
+            <div><span class="badge badge-info">Auftrag</span></div>
+            <div class="chevron">&#9654;</div>
+        </div>
+        <div class="sub-rows"></div>
+    </div>
+</div>
+
+<!-- ============================================================
+     KONZEPT B — Master-Detail Split View
+     ============================================================ -->
+<div class="concept-section concept-b">
+    <div class="concept-header">
+        <h2>B — Master-Detail Split View</h2>
+        <span class="tag tag-alternative">Detailreich</span>
+    </div>
+    <div class="concept-desc">
+        <strong>Idee:</strong> Links die Auftragsliste (kompakt), rechts ein Detailpanel mit allen Positionskarten.
+        Klick auf einen Auftrag laed die Details im rechten Panel, ohne Navigation.<br>
+        <strong>Pro:</strong> Maximale Detailtiefe, Ressourcen-Chips sichtbar, Positionen als Karten gut strukturiert.<br>
+        <strong>Contra:</strong> Braucht Bildschirmbreite, weniger Auftraege gleichzeitig sichtbar.
+    </div>
+    <div class="concept-body">
+        <div class="split-container">
+            <div class="split-left">
+                <div class="grid-header">
+                    <div>Nr.</div>
+                    <div>Auftragsname</div>
+                    <div>Status</div>
+                    <div>Positionen</div>
+                    <div>Erstellt</div>
+                </div>
+                <div class="grid-row">
+                    <div class="mono">ORD-2026-001</div>
+                    <div class="cell-ellipsis">Qnamic Kohletransport</div>
+                    <div><span class="badge badge-warning">Planung</span></div>
+                    <div class="mono">4 Pos.</div>
+                    <div class="mono muted">30.03</div>
+                </div>
+                <div class="grid-row selected">
+                    <div class="mono">ORD-2026-002</div>
+                    <div class="cell-ellipsis">BLS Stahltransport</div>
+                    <div><span class="badge badge-success">Produktion</span></div>
+                    <div class="mono">2 Pos.</div>
+                    <div class="mono muted">28.03</div>
+                </div>
+                <div class="grid-row">
+                    <div class="mono">ORD-2026-003</div>
+                    <div class="cell-ellipsis">SBB Personenverkehr</div>
+                    <div><span class="badge badge-info">Auftrag</span></div>
+                    <div class="mono">5 Pos.</div>
+                    <div class="mono muted">25.03</div>
+                </div>
+                <div class="grid-row">
+                    <div class="mono">ORD-2026-004</div>
+                    <div class="cell-ellipsis">Railion Containerzug</div>
+                    <div><span class="badge badge-neutral">Abrechnung</span></div>
+                    <div class="mono">1 Pos.</div>
+                    <div class="mono muted">20.03</div>
+                </div>
+            </div>
+            <div class="split-right">
+                <div class="detail-panel">
+                    <div class="detail-header">
+                        <div>
+                            <div class="detail-title">BLS Stahltransport Basel-Wien</div>
+                            <div class="mono muted" style="font-size:12px">ORD-2026-002 · BLS Cargo AG</div>
+                        </div>
+                        <span class="badge badge-success">Produktion</span>
+                    </div>
+
+                    <div class="detail-meta">
+                        <div class="meta-item"><label>Gueltig ab</label><span>15.04.2026</span></div>
+                        <div class="meta-item"><label>Gueltig bis</label><span>31.12.2026</span></div>
+                        <div class="meta-item"><label>Fahrplanjahr</label><span>FPJ 2026</span></div>
+                        <div class="meta-item"><label>Erstellt von</label><span>sebastian</span></div>
+                    </div>
+
+                    <div class="detail-positions-title">2 Auftragspositionen</div>
+
+                    <div class="detail-pos-card">
+                        <div class="pos-card-header">
+                            <span class="pos-card-name">Stahl Basel-Wien Nacht</span>
+                            <span class="badge badge-info">Fahrplan</span>
+                        </div>
+                        <div class="pos-card-route">Basel SBB → Wien Zentralverschiebebf</div>
+                        <div class="pos-card-footer">
+                            <div class="pos-card-resources">
+                                <span class="resource-chip">1× Vehicle</span>
+                                <span class="resource-chip">2× Personnel</span>
+                                <span class="resource-chip">1× Capacity</span>
+                            </div>
+                            <span class="badge badge-success">Freigegeben</span>
+                        </div>
+                    </div>
+
+                    <div class="detail-pos-card">
+                        <div class="pos-card-header">
+                            <span class="pos-card-name">Rangierung Wien ZVB</span>
+                            <span class="badge badge-warning">Leistung</span>
+                        </div>
+                        <div class="pos-card-route">Wien Zentralverschiebebf</div>
+                        <div class="pos-card-footer">
+                            <div class="pos-card-resources">
+                                <span class="resource-chip">1× Personnel</span>
+                            </div>
+                            <span class="badge badge-success">Freigegeben</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================
+     KONZEPT C — Accordion mit Status-Heatmap
+     ============================================================ -->
+<div class="concept-section concept-c">
+    <div class="concept-header">
+        <h2>C — Accordion + Status-Heatmap + Kacheln</h2>
+        <span class="tag tag-compact">Visuell</span>
+    </div>
+    <div class="concept-desc">
+        <strong>Idee:</strong> Jeder Auftrag zeigt eine Mini-Heatmap der Positionsstatus als farbige Zellen.
+        Aufklappen zeigt Positionen als 2-spaltige Kacheln mit Ressourcen-Icons.
+        Sehr visuell und auf einen Blick erfassbar.<br>
+        <strong>Pro:</strong> Am intuitivsten, Heatmap zeigt sofort Problemstellen, Kacheln geben mehr Platz fuer Details.<br>
+        <strong>Contra:</strong> Braucht mehr vertikalen Platz wenn ausgeklappt.
+    </div>
+    <div class="concept-body">
+        <div class="grid-header" style="grid-template-columns: 40px 110px 1.2fr 1fr 220px 120px; gap:12px;">
+            <div></div>
+            <div>Nr.</div>
+            <div>Auftragsname</div>
+            <div>Kunde</div>
+            <div>Positionsstatus</div>
+            <div>Prozess</div>
+        </div>
+
+        <div class="order-accordion">
+            <div class="accordion-header" onclick="this.nextElementSibling.classList.toggle('open'); this.querySelector('.chevron').classList.toggle('expanded')">
+                <div class="chevron" style="font-size:14px">&#9654;</div>
+                <div class="mono">ORD-2026-001</div>
+                <div>Qnamic Kohletransport Hamburg-Muenchen</div>
+                <div class="cell-ellipsis muted">Qnamic AG</div>
+                <div class="heatmap">
+                    <div class="heatmap-cell hm-active" data-tooltip="Kohle Taeglich: Freigegeben">&#10003;</div>
+                    <div class="heatmap-cell hm-active" data-tooltip="Kohle Express: Freigegeben">&#10003;</div>
+                    <div class="heatmap-cell hm-progress" data-tooltip="Kohle Wochenende: In Bearbeitung">&#9679;</div>
+                    <div class="heatmap-cell hm-warning" data-tooltip="Rangierung MUC: Ueberarbeiten">!</div>
+                </div>
+                <div><span class="badge badge-warning">Planung</span></div>
+            </div>
+            <div class="accordion-body open">
+                <div class="accordion-inner">
+                    <div class="pos-tile">
+                        <div class="pos-tile-header">
+                            <span class="pos-tile-name">Kohle HH-MUC Taeglich</span>
+                            <span class="badge badge-info" style="font-size:9px">Fahrplan</span>
+                        </div>
+                        <div class="pos-tile-route">Hamburg Hbf → Muenchen Hbf</div>
+                        <div class="pos-tile-bottom">
+                            <div class="pos-tile-resources">
+                                <div class="res-icon res-vehicle" title="Vehicle">V</div>
+                                <div class="res-icon res-personnel" title="Personnel">P</div>
+                                <div class="res-icon res-capacity" title="Capacity">C</div>
+                            </div>
+                            <span class="badge badge-success">Freigegeben</span>
+                        </div>
+                    </div>
+                    <div class="pos-tile">
+                        <div class="pos-tile-header">
+                            <span class="pos-tile-name">Kohle HH-MUC Express</span>
+                            <span class="badge badge-info" style="font-size:9px">Fahrplan</span>
+                        </div>
+                        <div class="pos-tile-route">Hamburg Hbf → Muenchen Ost</div>
+                        <div class="pos-tile-bottom">
+                            <div class="pos-tile-resources">
+                                <div class="res-icon res-vehicle" title="Vehicle">V</div>
+                            </div>
+                            <span class="badge badge-success">Freigegeben</span>
+                        </div>
+                    </div>
+                    <div class="pos-tile">
+                        <div class="pos-tile-header">
+                            <span class="pos-tile-name">Kohle Wochenende</span>
+                            <span class="badge badge-info" style="font-size:9px">Fahrplan</span>
+                        </div>
+                        <div class="pos-tile-route">Hamburg Hbf → Muenchen Hbf</div>
+                        <div class="pos-tile-bottom">
+                            <div class="pos-tile-resources">
+                                <div class="res-icon res-vehicle" title="Vehicle">V</div>
+                                <div class="res-icon res-capacity" title="Capacity">C</div>
+                            </div>
+                            <span class="badge badge-info">In Bearbeitung</span>
+                        </div>
+                    </div>
+                    <div class="pos-tile">
+                        <div class="pos-tile-header">
+                            <span class="pos-tile-name">Rangierleistung MUC</span>
+                            <span class="badge badge-warning" style="font-size:9px">Leistung</span>
+                        </div>
+                        <div class="pos-tile-route">Muenchen Ost</div>
+                        <div class="pos-tile-bottom">
+                            <div class="pos-tile-resources">
+                                <div class="res-icon res-personnel" title="Personnel">P</div>
+                            </div>
+                            <span class="badge badge-warning">Ueberarbeiten</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="order-accordion">
+            <div class="accordion-header" onclick="this.nextElementSibling.classList.toggle('open'); this.querySelector('.chevron').classList.toggle('expanded')">
+                <div class="chevron" style="font-size:14px">&#9654;</div>
+                <div class="mono">ORD-2026-002</div>
+                <div>BLS Stahltransport Basel-Wien</div>
+                <div class="cell-ellipsis muted">BLS Cargo AG</div>
+                <div class="heatmap">
+                    <div class="heatmap-cell hm-active">&#10003;</div>
+                    <div class="heatmap-cell hm-active">&#10003;</div>
+                </div>
+                <div><span class="badge badge-success">Produktion</span></div>
+            </div>
+            <div class="accordion-body"></div>
+        </div>
+
+        <div class="order-accordion">
+            <div class="accordion-header" onclick="this.nextElementSibling.classList.toggle('open'); this.querySelector('.chevron').classList.toggle('expanded')">
+                <div class="chevron" style="font-size:14px">&#9654;</div>
+                <div class="mono">ORD-2026-003</div>
+                <div>SBB Personenverkehr Bern-Zuerich</div>
+                <div class="cell-ellipsis muted">SBB AG</div>
+                <div class="heatmap">
+                    <div class="heatmap-cell hm-progress">&#9679;</div>
+                    <div class="heatmap-cell hm-progress">&#9679;</div>
+                    <div class="heatmap-cell hm-neutral">-</div>
+                    <div class="heatmap-cell hm-neutral">-</div>
+                    <div class="heatmap-cell hm-danger">&#10007;</div>
+                </div>
+                <div><span class="badge badge-info">Auftrag</span></div>
+            </div>
+            <div class="accordion-body"></div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================
+     VERGLEICHSTABELLE
+     ============================================================ -->
+<div class="comparison">
+    <table>
+        <thead>
+        <tr>
+            <th style="width:200px">Kriterium</th>
+            <th>A — Expandable Rows</th>
+            <th>B — Split View</th>
+            <th>C — Accordion + Heatmap</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr>
+            <td>Status auf einen Blick</td>
+            <td><span class="check">&#10003;</span> Statusbalken + Zaehler</td>
+            <td><span class="partial">~</span> Nur Positionsanzahl</td>
+            <td><span class="check">&#10003;</span> Heatmap pro Position</td>
+        </tr>
+        <tr>
+            <td>Positionen inline sichtbar</td>
+            <td><span class="check">&#10003;</span> Sub-Rows</td>
+            <td><span class="check">&#10003;</span> Seitenpanel</td>
+            <td><span class="check">&#10003;</span> Kacheln</td>
+        </tr>
+        <tr>
+            <td>Detailtiefe</td>
+            <td><span class="partial">~</span> Kompakt</td>
+            <td><span class="check">&#10003;</span> Sehr detailliert</td>
+            <td><span class="check">&#10003;</span> Mit Ressourcen-Icons</td>
+        </tr>
+        <tr>
+            <td>Skalierung (viele Auftraege)</td>
+            <td><span class="check">&#10003;</span> Sehr gut</td>
+            <td><span class="partial">~</span> Braucht Breite</td>
+            <td><span class="partial">~</span> Braucht Hoehe</td>
+        </tr>
+        <tr>
+            <td>Mobile-tauglich</td>
+            <td><span class="check">&#10003;</span> Ja</td>
+            <td><span class="cross">&#10007;</span> Nein</td>
+            <td><span class="check">&#10003;</span> Ja</td>
+        </tr>
+        <tr>
+            <td>Vaadin-Umsetzung</td>
+            <td>Grid + TreeGrid</td>
+            <td>SplitLayout + Grid</td>
+            <td>Details-Component</td>
+        </tr>
+        <tr>
+            <td><strong>Empfehlung</strong></td>
+            <td><strong style="color:var(--accent)">Bestes Gesamtpaket</strong></td>
+            <td>Gut fuer Power-User</td>
+            <td>Am visuellsten</td>
+        </tr>
+        </tbody>
+    </table>
+</div>
+
+</div>
+</body>
+</html>

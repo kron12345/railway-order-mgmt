@@ -1,9 +1,6 @@
-package com.ordermgmt.railway.domain.order.model;
+package com.ordermgmt.railway.domain.customer.model;
 
 import java.time.Instant;
-import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.UUID;
 
 import jakarta.persistence.*;
@@ -15,56 +12,34 @@ import org.springframework.data.annotation.LastModifiedBy;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import com.ordermgmt.railway.domain.customer.model.Customer;
-
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Entity
-@Table(name = "orders")
+@Table(name = "customers")
 @Audited
 @EntityListeners(AuditingEntityListener.class)
 @Getter
 @Setter
 @NoArgsConstructor
-public class Order {
+public class Customer {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
     @Column(nullable = false, unique = true, length = 50)
-    private String orderNumber;
+    private String customerNumber;
 
     @Column(nullable = false)
     private String name;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "customer_id")
-    private Customer customer;
-
-    @Column(length = 2000)
-    private String comment;
-
-    private String tags;
-
-    private LocalDate validFrom;
-
-    private LocalDate validTo;
-
-    @Column(length = 50)
-    private String timetableYearLabel;
+    private String contactPerson;
 
     @Enumerated(EnumType.STRING)
-    @Column(length = 40)
-    private ProcessStatus processStatus = ProcessStatus.AUFTRAG;
-
-    @Column(length = 50)
-    private String internalStatus;
-
-    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<OrderPosition> positions = new ArrayList<>();
+    @Column(nullable = false, length = 20)
+    private CustomerStatus status = CustomerStatus.ACTIVE;
 
     @CreatedDate
     @Column(nullable = false, updatable = false)

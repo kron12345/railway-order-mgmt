@@ -9,7 +9,7 @@ import org.springframework.data.repository.history.RevisionRepository;
 import org.springframework.stereotype.Repository;
 
 import com.ordermgmt.railway.domain.order.model.Order;
-import com.ordermgmt.railway.domain.order.model.OrderStatus;
+import com.ordermgmt.railway.domain.order.model.ProcessStatus;
 
 @Repository
 public interface OrderRepository
@@ -17,5 +17,9 @@ public interface OrderRepository
 
     Optional<Order> findByOrderNumber(String orderNumber);
 
-    List<Order> findByStatus(OrderStatus status);
+    List<Order> findByProcessStatus(ProcessStatus processStatus);
+
+    List<Order> findByCustomerId(UUID customerId);
+
+    List<Order> findByNameContainingIgnoreCase(String name);
 }
