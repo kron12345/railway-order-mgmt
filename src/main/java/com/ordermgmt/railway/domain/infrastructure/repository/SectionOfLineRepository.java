@@ -8,6 +8,7 @@ import org.springframework.stereotype.Repository;
 
 import com.ordermgmt.railway.domain.infrastructure.model.SectionOfLine;
 
+/** Repository for railway sections of line. */
 @Repository
 public interface SectionOfLineRepository extends JpaRepository<SectionOfLine, UUID> {
 

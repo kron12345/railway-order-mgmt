@@ -9,6 +9,7 @@ import com.vaadin.flow.component.page.AppShellConfigurator;
 import com.vaadin.flow.component.page.Push;
 import com.vaadin.flow.theme.Theme;
 
+/** Spring Boot and Vaadin bootstrap entry point. */
 @SpringBootApplication
 @Push
 @Theme("order-mgmt")

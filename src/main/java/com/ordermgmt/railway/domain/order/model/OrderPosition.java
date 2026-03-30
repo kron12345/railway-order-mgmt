@@ -17,6 +17,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/** Audited line item belonging to an order. */
 @Entity
 @Table(name = "order_positions")
 @Audited

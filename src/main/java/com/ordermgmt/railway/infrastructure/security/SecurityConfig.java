@@ -17,6 +17,7 @@ import org.springframework.security.oauth2.core.oidc.user.OidcUserAuthority;
 
 import com.vaadin.flow.spring.security.VaadinWebSecurity;
 
+/** Configures Vaadin security and maps Keycloak roles to authorities. */
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig extends VaadinWebSecurity {

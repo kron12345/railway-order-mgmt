@@ -1,12 +1,14 @@
 package com.ordermgmt.railway.domain.infrastructure.service;
 
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -24,6 +26,7 @@ import com.ordermgmt.railway.domain.infrastructure.repository.SectionOfLineRepos
 
 import lombok.RequiredArgsConstructor;
 
+/** Imports operational points and sections of line from RINF CSV exports. */
 @Service
 @RequiredArgsConstructor
 public class RinfImportService {
@@ -53,97 +56,98 @@ public class RinfImportService {
     public ImportLog importOperationalPoints(InputStream csvStream, String country) {
         ImportLog entry = newLog("RINF_OP", country);
         try {
-            List<String[]> rows = parseCsv(csvStream);
+            List<OperationalPoint> operationalPoints =
+                    toOperationalPoints(parseCsv(csvStream), country);
             opRepo.deleteByCountry(country);
-
-            List<OperationalPoint> batch = new ArrayList<>(BATCH_SIZE);
-            int count = 0;
-            for (String[] row : rows) {
-                if (row.length < 2) continue;
-                OperationalPoint op = new OperationalPoint();
-                op.setUopid(clean(row[0]));
-                op.setName(clean(row[1]));
-                op.setCountry(country);
-
-                if (row.length > 2 && !row[2].isBlank()) {
-                    parseWkt(clean(row[2]), op);
-                }
-                if (row.length > 3 && !row[3].isBlank()) {
-                    try {
-                        op.setOpType(Integer.parseInt(clean(row[3])));
-                    } catch (NumberFormatException ignored) {
-                    }
-                }
-                if (row.length > 4 && !row[4].isBlank()) {
-                    op.setTafTapCode(clean(row[4]));
-                }
-
-                batch.add(op);
-                if (batch.size() >= BATCH_SIZE) {
-                    opRepo.saveAll(batch);
-                    batch.clear();
-                }
-                count++;
-            }
-            if (!batch.isEmpty()) opRepo.saveAll(batch);
-
-            entry.setRecordCount(count);
-            entry.setStatus("SUCCESS");
-            entry.setMessage(count + " operational points imported for " + country);
-            log.info("Imported {} OPs for {}", count, country);
+            saveInBatches(operationalPoints, opRepo::saveAll);
+            markSuccess(
+                    entry,
+                    operationalPoints.size(),
+                    operationalPoints.size() + " operational points imported for " + country);
+            log.info("Imported {} OPs for {}", operationalPoints.size(), country);
         } catch (Exception e) {
-            entry.setStatus("ERROR");
-            entry.setMessage(e.getMessage());
+            markFailure(entry, e);
             log.error("OP import failed for {}", country, e);
         }
-        entry.setFinishedAt(Instant.now());
-        return logRepo.save(entry);
+        return finish(entry);
     }
 
     @Transactional
     public ImportLog importSectionsOfLine(InputStream csvStream, String country) {
         ImportLog entry = newLog("RINF_SOL", country);
         try {
-            List<String[]> rows = parseCsv(csvStream);
+            List<SectionOfLine> sectionsOfLine = toSectionsOfLine(parseCsv(csvStream), country);
             solRepo.deleteByCountry(country);
-
-            List<SectionOfLine> batch = new ArrayList<>(BATCH_SIZE);
-            int count = 0;
-            for (String[] row : rows) {
-                if (row.length < 3) continue;
-                SectionOfLine sol = new SectionOfLine();
-                sol.setSolId(clean(row[0]));
-                sol.setStartOpUopid(clean(row[1]));
-                sol.setEndOpUopid(clean(row[2]));
-                sol.setCountry(country);
-
-                if (row.length > 3 && !row[3].isBlank()) {
-                    try {
-                        sol.setLengthMeters(Double.parseDouble(clean(row[3])));
-                    } catch (NumberFormatException ignored) {
-                    }
-                }
-
-                batch.add(sol);
-                if (batch.size() >= BATCH_SIZE) {
-                    solRepo.saveAll(batch);
-                    batch.clear();
-                }
-                count++;
-            }
-            if (!batch.isEmpty()) solRepo.saveAll(batch);
-
-            entry.setRecordCount(count);
-            entry.setStatus("SUCCESS");
-            entry.setMessage(count + " sections of line imported for " + country);
-            log.info("Imported {} SoLs for {}", count, country);
+            saveInBatches(sectionsOfLine, solRepo::saveAll);
+            markSuccess(
+                    entry,
+                    sectionsOfLine.size(),
+                    sectionsOfLine.size() + " sections of line imported for " + country);
+            log.info("Imported {} SoLs for {}", sectionsOfLine.size(), country);
         } catch (Exception e) {
-            entry.setStatus("ERROR");
-            entry.setMessage(e.getMessage());
+            markFailure(entry, e);
             log.error("SoL import failed for {}", country, e);
         }
-        entry.setFinishedAt(Instant.now());
-        return logRepo.save(entry);
+        return finish(entry);
+    }
+
+    private List<OperationalPoint> toOperationalPoints(List<String[]> rows, String country) {
+        List<OperationalPoint> operationalPoints = new ArrayList<>();
+        for (String[] row : rows) {
+            if (row.length < 2) {
+                continue;
+            }
+            operationalPoints.add(toOperationalPoint(row, country));
+        }
+        return operationalPoints;
+    }
+
+    private OperationalPoint toOperationalPoint(String[] row, String country) {
+        OperationalPoint operationalPoint = new OperationalPoint();
+        operationalPoint.setUopid(valueAt(row, 0));
+        operationalPoint.setName(valueAt(row, 1));
+        operationalPoint.setCountry(country);
+
+        String wkt = valueAt(row, 2);
+        if (!wkt.isBlank()) {
+            parseWkt(wkt, operationalPoint);
+        }
+
+        Integer opType = parseInteger(row, 3);
+        if (opType != null) {
+            operationalPoint.setOpType(opType);
+        }
+
+        String tafTapCode = valueAt(row, 4);
+        if (!tafTapCode.isBlank()) {
+            operationalPoint.setTafTapCode(tafTapCode);
+        }
+        return operationalPoint;
+    }
+
+    private List<SectionOfLine> toSectionsOfLine(List<String[]> rows, String country) {
+        List<SectionOfLine> sectionsOfLine = new ArrayList<>();
+        for (String[] row : rows) {
+            if (row.length < 3) {
+                continue;
+            }
+            sectionsOfLine.add(toSectionOfLine(row, country));
+        }
+        return sectionsOfLine;
+    }
+
+    private SectionOfLine toSectionOfLine(String[] row, String country) {
+        SectionOfLine sectionOfLine = new SectionOfLine();
+        sectionOfLine.setSolId(valueAt(row, 0));
+        sectionOfLine.setStartOpUopid(valueAt(row, 1));
+        sectionOfLine.setEndOpUopid(valueAt(row, 2));
+        sectionOfLine.setCountry(country);
+
+        Double lengthMeters = parseDouble(row, 3);
+        if (lengthMeters != null) {
+            sectionOfLine.setLengthMeters(lengthMeters);
+        }
+        return sectionOfLine;
     }
 
     private void parseWkt(String wkt, OperationalPoint op) {
@@ -154,11 +158,11 @@ public class RinfImportService {
         }
     }
 
-    private List<String[]> parseCsv(InputStream is) throws Exception {
+    private List<String[]> parseCsv(InputStream is) throws IOException {
         List<String[]> rows = new ArrayList<>();
         try (BufferedReader reader =
                 new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
-            String header = reader.readLine(); // skip header
+            reader.readLine();
             String line;
             while ((line = reader.readLine()) != null) {
                 if (!line.isBlank()) {
@@ -189,6 +193,57 @@ public class RinfImportService {
 
     private String clean(String s) {
         return s != null ? s.trim().replace("\"", "") : "";
+    }
+
+    private String valueAt(String[] row, int index) {
+        return row.length > index ? clean(row[index]) : "";
+    }
+
+    private Integer parseInteger(String[] row, int index) {
+        String value = valueAt(row, index);
+        if (value.isBlank()) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
+    private Double parseDouble(String[] row, int index) {
+        String value = valueAt(row, index);
+        if (value.isBlank()) {
+            return null;
+        }
+        try {
+            return Double.parseDouble(value);
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
+    private <T> void saveInBatches(List<T> items, Consumer<List<T>> saver) {
+        for (int start = 0; start < items.size(); start += BATCH_SIZE) {
+            int end = Math.min(start + BATCH_SIZE, items.size());
+            saver.accept(items.subList(start, end));
+        }
+    }
+
+    private void markSuccess(ImportLog entry, int recordCount, String message) {
+        entry.setRecordCount(recordCount);
+        entry.setStatus("SUCCESS");
+        entry.setMessage(message);
+    }
+
+    private void markFailure(ImportLog entry, Exception exception) {
+        entry.setStatus("ERROR");
+        entry.setMessage(exception.getMessage());
+    }
+
+    private ImportLog finish(ImportLog entry) {
+        entry.setFinishedAt(Instant.now());
+        return logRepo.save(entry);
     }
 
     private ImportLog newLog(String source, String country) {

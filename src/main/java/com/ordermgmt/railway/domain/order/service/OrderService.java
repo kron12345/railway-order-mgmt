@@ -15,6 +15,7 @@ import com.ordermgmt.railway.domain.order.repository.OrderRepository;
 
 import lombok.RequiredArgsConstructor;
 
+/** Coordinates order and position persistence for the UI layer. */
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -24,25 +25,23 @@ public class OrderService {
     private final OrderPositionRepository positionRepository;
 
     @Transactional(readOnly = true)
-    public List<Order> findAll() {
-        return orderRepository.findAll();
-    }
-
-    @Transactional(readOnly = true)
     public List<Order> findAllWithPositions() {
         List<Order> orders = orderRepository.findAll();
-        orders.forEach(o -> o.getPositions().size());
+        initializePositions(orders);
         return orders;
     }
 
+    @Transactional(readOnly = true)
     public Optional<Order> findById(UUID id) {
         return orderRepository.findById(id);
     }
 
+    @Transactional(readOnly = true)
     public List<Order> findByProcessStatus(ProcessStatus status) {
         return orderRepository.findByProcessStatus(status);
     }
 
+    @Transactional(readOnly = true)
     public List<Order> search(String query) {
         return orderRepository.findByNameContainingIgnoreCase(query);
     }
@@ -58,7 +57,7 @@ public class OrderService {
     @Transactional(readOnly = true)
     public List<OrderPosition> findPositionsByOrderId(UUID orderId) {
         List<OrderPosition> positions = positionRepository.findByOrderId(orderId);
-        positions.forEach(p -> p.getPurchasePositions().size());
+        initializePurchasePositions(positions);
         return positions;
     }
 
@@ -70,11 +69,16 @@ public class OrderService {
         positionRepository.deleteById(positionId);
     }
 
+    @Transactional(readOnly = true)
     public long count() {
         return orderRepository.count();
     }
 
-    public long countByStatus(ProcessStatus status) {
-        return orderRepository.findByProcessStatus(status).size();
+    private void initializePositions(List<Order> orders) {
+        orders.forEach(order -> order.getPositions().size());
+    }
+
+    private void initializePurchasePositions(List<OrderPosition> positions) {
+        positions.forEach(position -> position.getPurchasePositions().size());
     }
 }

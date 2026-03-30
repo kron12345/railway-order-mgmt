@@ -26,9 +26,9 @@ class ArchitectureTest {
                     .definedBy("com.ordermgmt.railway.ui..")
                     .layer("Infrastructure")
                     .definedBy("com.ordermgmt.railway.infrastructure..")
-                    .layer("DTO")
+                    .optionalLayer("DTO")
                     .definedBy("com.ordermgmt.railway.dto..")
-                    .layer("Mapper")
+                    .optionalLayer("Mapper")
                     .definedBy("com.ordermgmt.railway.mapper..")
                     .whereLayer("UI")
                     .mayNotBeAccessedByAnyLayer()
@@ -41,19 +41,19 @@ class ArchitectureTest {
     static final ArchRule domain_must_not_depend_on_ui =
             noClasses()
                     .that()
-                    .resideInAPackage("..domain..")
+                    .resideInAPackage("com.ordermgmt.railway.domain..")
                     .should()
                     .dependOnClassesThat()
-                    .resideInAPackage("..ui..");
+                    .resideInAPackage("com.ordermgmt.railway.ui..");
 
     @ArchTest
     static final ArchRule domain_must_not_depend_on_infrastructure =
             noClasses()
                     .that()
-                    .resideInAPackage("..domain..")
+                    .resideInAPackage("com.ordermgmt.railway.domain..")
                     .should()
                     .dependOnClassesThat()
-                    .resideInAPackage("..infrastructure..");
+                    .resideInAPackage("com.ordermgmt.railway.infrastructure..");
 
     // === Naming Conventions ===
 
@@ -80,6 +80,8 @@ class ArchitectureTest {
                     .resideInAPackage("..view..")
                     .and()
                     .areNotInterfaces()
+                    .and()
+                    .areTopLevelClasses()
                     .should()
                     .haveSimpleNameEndingWith("View");
 

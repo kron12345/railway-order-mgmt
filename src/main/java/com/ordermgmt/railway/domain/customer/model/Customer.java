@@ -16,6 +16,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/** Audited customer master record used by orders. */
 @Entity
 @Table(name = "customers")
 @Audited

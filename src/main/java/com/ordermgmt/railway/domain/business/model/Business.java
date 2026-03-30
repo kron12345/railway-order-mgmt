@@ -15,6 +15,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/** Audited business work item tracked in the order management domain. */
 @Entity
 @Table(name = "businesses")
 @Audited

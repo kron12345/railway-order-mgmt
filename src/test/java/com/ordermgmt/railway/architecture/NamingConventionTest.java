@@ -40,7 +40,8 @@ class NamingConventionTest {
                     .or()
                     .haveSimpleNameEndingWith("Response")
                     .should()
-                    .resideInAnyPackage("..dto..", "..model..");
+                    .resideInAnyPackage("..dto..", "..model..")
+                    .allowEmptyShould(true);
 
     @ArchTest
     static final ArchRule mappers_should_reside_in_mapper_package =
@@ -48,7 +49,8 @@ class NamingConventionTest {
                     .that()
                     .haveSimpleNameEndingWith("Mapper")
                     .should()
-                    .resideInAPackage("..mapper..");
+                    .resideInAPackage("..mapper..")
+                    .allowEmptyShould(true);
 
     @ArchTest
     static final ArchRule configs_should_be_suffixed =

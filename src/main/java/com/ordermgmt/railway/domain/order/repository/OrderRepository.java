@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.domain.order.model.ProcessStatus;
 
+/** Repository for orders and their revision history. */
 @Repository
 public interface OrderRepository
         extends JpaRepository<Order, UUID>, RevisionRepository<Order, UUID, Long> {

@@ -9,6 +9,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/** Stores metadata and outcome information for infrastructure imports. */
 @Entity
 @Table(name = "import_log")
 @Getter

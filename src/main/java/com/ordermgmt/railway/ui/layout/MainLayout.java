@@ -17,6 +17,7 @@ import com.vaadin.flow.router.RouterLayout;
 
 import com.ordermgmt.railway.ui.component.LanguageSwitcher;
 
+/** Shared application shell with navigation and locale switching. */
 public class MainLayout extends AppLayout implements RouterLayout, LocaleChangeObserver {
 
     private H1 title;

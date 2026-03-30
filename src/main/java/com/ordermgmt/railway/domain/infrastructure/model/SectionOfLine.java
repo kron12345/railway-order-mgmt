@@ -9,6 +9,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/** Railway section of line imported from RINF reference data. */
 @Entity
 @Table(name = "sections_of_line")
 @Getter

@@ -1,4 +1,4 @@
-package com.ordermgmt.railway.ui.view.order;
+package com.ordermgmt.railway.ui.component.order;
 
 import java.util.function.BiFunction;
 
@@ -17,6 +17,7 @@ import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.order.service.OrderService;
 
+/** Displays and manages the positions that belong to an order. */
 public class OrderPositionPanel extends Div {
 
     private final Order order;

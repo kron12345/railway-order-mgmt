@@ -7,6 +7,7 @@ import com.vaadin.flow.component.html.Span;
 
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.order.model.PositionStatus;
+import com.ordermgmt.railway.domain.order.model.PositionType;
 
 /**
  * Card-style tile for displaying an order position inside the accordion. Shows name, type badge,
@@ -95,16 +96,19 @@ public class PositionTile extends Div {
                 .set("padding-top", "8px")
                 .set("border-top", "1px solid var(--rom-border-subtle, var(--rom-border))");
 
+        Span statusBadge = createStatusBadge(pos.getInternalStatus());
+        footer.add(createResources(), statusBadge);
+        return footer;
+    }
+
+    private Div createResources() {
         Div resources = new Div();
         resources.getStyle().set("display", "flex").set("gap", "4px");
         resources.add(createResourceIcon("V", "rgba(96,165,250,0.12)", "var(--rom-status-info)"));
         resources.add(
                 createResourceIcon("P", "rgba(251,191,36,0.12)", "var(--rom-status-warning)"));
         resources.add(createResourceIcon("C", "rgba(52,211,153,0.12)", "var(--rom-status-active)"));
-
-        Span statusBadge = createStatusBadge(pos.getInternalStatus());
-        footer.add(resources, statusBadge);
-        return footer;
+        return resources;
     }
 
     private Div createResourceIcon(String label, String bg, String color) {
@@ -126,12 +130,13 @@ public class PositionTile extends Div {
     }
 
     private Span createTypeBadge(OrderPosition pos) {
-        String label = pos.getType() != null ? pos.getType().name() : "—";
-        boolean isFahrplan = "FAHRPLAN".equals(label);
-        String color = isFahrplan ? "var(--rom-status-info)" : "var(--rom-status-warning)";
-        String bgColor = isFahrplan ? "rgba(96,165,250,0.12)" : "rgba(251,191,36,0.12)";
+        PositionType type = pos.getType();
+        boolean isTimetable = type == PositionType.FAHRPLAN;
+        String color = isTimetable ? "var(--rom-status-info)" : "var(--rom-status-warning)";
+        String bgColor = isTimetable ? "rgba(96,165,250,0.12)" : "rgba(251,191,36,0.12)";
+        String label = type == null ? "—" : getTranslation("position.type." + type.name());
 
-        Span badge = new Span(isFahrplan ? "Fahrplan" : "Leistung");
+        Span badge = new Span(label);
         badge.getStyle()
                 .set("font-size", "9px")
                 .set("font-weight", "600")
@@ -147,30 +152,8 @@ public class PositionTile extends Div {
     }
 
     private Span createStatusBadge(PositionStatus status) {
-        String label;
-        String color;
-        if (status == null) {
-            label = "—";
-            color = "var(--rom-text-muted)";
-        } else {
-            label =
-                    switch (status) {
-                        case IN_BEARBEITUNG -> "In Bearbeitung";
-                        case FREIGEGEBEN -> "Freigegeben";
-                        case UEBERARBEITEN -> "Überarbeiten";
-                        case UEBERMITTELT -> "Übermittelt";
-                        case BEANTRAGT -> "Beantragt";
-                        case ABGESCHLOSSEN -> "Abgeschlossen";
-                        case ANNULLIERT -> "Annulliert";
-                    };
-            color =
-                    switch (status) {
-                        case FREIGEGEBEN, ABGESCHLOSSEN -> "var(--rom-status-active)";
-                        case IN_BEARBEITUNG, UEBERMITTELT -> "var(--rom-status-info)";
-                        case UEBERARBEITEN, BEANTRAGT -> "var(--rom-status-warning)";
-                        case ANNULLIERT -> "var(--rom-status-danger)";
-                    };
-        }
+        String label = statusLabel(status);
+        String color = statusColor(status);
 
         Span badge = new Span(label);
         badge.getStyle()
@@ -185,5 +168,21 @@ public class PositionTile extends Div {
                 .set("background", "color-mix(in srgb, " + color + " 12%, transparent)")
                 .set("border", "1px solid " + color);
         return badge;
+    }
+
+    private String statusLabel(PositionStatus status) {
+        return status == null ? "—" : getTranslation("position.status." + status.name());
+    }
+
+    private String statusColor(PositionStatus status) {
+        if (status == null) {
+            return "var(--rom-text-muted)";
+        }
+        return switch (status) {
+            case FREIGEGEBEN, ABGESCHLOSSEN -> "var(--rom-status-active)";
+            case IN_BEARBEITUNG, UEBERMITTELT -> "var(--rom-status-info)";
+            case UEBERARBEITEN, BEANTRAGT -> "var(--rom-status-warning)";
+            case ANNULLIERT -> "var(--rom-status-danger)";
+        };
     }
 }

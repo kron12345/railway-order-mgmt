@@ -21,6 +21,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/** Audited order aggregate root for customer work. */
 @Entity
 @Table(name = "orders")
 @Audited

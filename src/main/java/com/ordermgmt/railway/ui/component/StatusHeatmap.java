@@ -35,10 +35,10 @@ public class StatusHeatmap extends Div {
 
     private Div createCell(OrderPosition pos) {
         PositionStatus status = pos.getInternalStatus();
-        CellStyle cs = cellStyle(status);
+        CellStyle style = cellStyle(status);
 
         Div cell = new Div();
-        cell.setText(cs.icon);
+        cell.setText(style.icon);
         cell.getStyle()
                 .set("width", "26px")
                 .set("height", "26px")
@@ -50,8 +50,8 @@ public class StatusHeatmap extends Div {
                 .set("font-size", "11px")
                 .set("font-weight", "600")
                 .set("cursor", "default")
-                .set("background", cs.bg)
-                .set("color", cs.color)
+                .set("background", style.bg)
+                .set("color", style.color)
                 .set("transition", "transform 0.15s");
 
         cell.getElement().setAttribute("title", pos.getName() + ": " + statusLabel(status));
@@ -77,16 +77,7 @@ public class StatusHeatmap extends Div {
     }
 
     private String statusLabel(PositionStatus status) {
-        if (status == null) return "—";
-        return switch (status) {
-            case IN_BEARBEITUNG -> "In Bearbeitung";
-            case FREIGEGEBEN -> "Freigegeben";
-            case UEBERARBEITEN -> "Überarbeiten";
-            case UEBERMITTELT -> "Übermittelt";
-            case BEANTRAGT -> "Beantragt";
-            case ABGESCHLOSSEN -> "Abgeschlossen";
-            case ANNULLIERT -> "Annulliert";
-        };
+        return status == null ? "—" : getTranslation("position.status." + status.name());
     }
 
     private record CellStyle(String bg, String color, String icon) {}

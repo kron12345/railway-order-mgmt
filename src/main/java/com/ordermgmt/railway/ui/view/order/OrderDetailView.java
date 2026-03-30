@@ -28,8 +28,11 @@ import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.domain.order.model.ProcessStatus;
 import com.ordermgmt.railway.domain.order.service.OrderService;
 import com.ordermgmt.railway.ui.component.StatusBadge;
+import com.ordermgmt.railway.ui.component.order.OrderFormPanel;
+import com.ordermgmt.railway.ui.component.order.OrderPositionPanel;
 import com.ordermgmt.railway.ui.layout.MainLayout;
 
+/** Handles creation, editing, and deletion for a single order. */
 @Route(value = "orders/:orderId", layout = MainLayout.class)
 @PageTitle("Order Detail")
 @PermitAll
@@ -137,6 +140,23 @@ public class OrderDetailView extends VerticalLayout implements BeforeEnterObserv
 
     /** Compact summary header: order info in one line + action buttons. */
     private Div createCompactHeader() {
+        Div header = createHeaderContainer();
+        Span spacer = new Span();
+        spacer.getStyle().set("flex", "1");
+        header.add(
+                createCompactBackButton(),
+                createOrderNumberLabel(),
+                createOrderNameLabel(),
+                createCustomerLabel(),
+                createProcessBadge(order.getProcessStatus()),
+                createDatesLabel(),
+                spacer,
+                createEditButton(),
+                createDeleteButton());
+        return header;
+    }
+
+    private Div createHeaderContainer() {
         Div header = new Div();
         header.setWidthFull();
         header.getStyle()
@@ -150,66 +170,72 @@ public class OrderDetailView extends VerticalLayout implements BeforeEnterObserv
                 .set("align-items", "center")
                 .set("gap", "16px")
                 .set("flex-wrap", "wrap");
+        return header;
+    }
 
-        // Back button
-        Button back = new Button(VaadinIcon.ARROW_LEFT.create());
-        back.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
-        back.getStyle().set("color", "var(--rom-text-muted)");
-        back.addClickListener(e -> UI.getCurrent().navigate("orders"));
+    private Button createCompactBackButton() {
+        Button backButton = new Button(VaadinIcon.ARROW_LEFT.create());
+        backButton.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
+        backButton.getStyle().set("color", "var(--rom-text-muted)");
+        backButton.addClickListener(e -> UI.getCurrent().navigate("orders"));
+        return backButton;
+    }
 
-        // Order number
-        Span orderNum = new Span(order.getOrderNumber());
-        orderNum.getStyle()
+    private Span createOrderNumberLabel() {
+        Span orderNumber = new Span(order.getOrderNumber());
+        orderNumber
+                .getStyle()
                 .set("font-family", "'JetBrains Mono', monospace")
                 .set("font-size", "13px")
                 .set("font-weight", "700")
                 .set("color", "var(--rom-accent)");
+        return orderNumber;
+    }
 
-        // Order name
+    private Span createOrderNameLabel() {
         Span orderName = new Span(order.getName());
         orderName
                 .getStyle()
                 .set("font-weight", "600")
                 .set("font-size", "14px")
                 .set("color", "var(--rom-text-primary)");
+        return orderName;
+    }
 
-        // Customer
-        String custName = order.getCustomer() != null ? order.getCustomer().getName() : "—";
-        Span customer = new Span(custName);
+    private Span createCustomerLabel() {
+        String customerName = order.getCustomer() != null ? order.getCustomer().getName() : "—";
+        Span customer = new Span(customerName);
         customer.getStyle().set("color", "var(--rom-text-muted)").set("font-size", "12px");
+        return customer;
+    }
 
-        // Process status badge
-        StatusBadge processBadge = createProcessBadge(order.getProcessStatus());
-
-        // Validity dates
+    private Span createDatesLabel() {
         Span dates = new Span(formatDates());
         dates.getStyle()
                 .set("font-family", "'JetBrains Mono', monospace")
                 .set("font-size", "11px")
                 .set("color", "var(--rom-text-muted)");
+        return dates;
+    }
 
-        // Spacer
-        Span spacer = new Span();
-        spacer.getStyle().set("flex", "1");
-
-        // Edit button → opens dialog
-        Button editBtn = new Button(getTranslation("common.edit"), VaadinIcon.EDIT.create());
-        editBtn.addThemeVariants(ButtonVariant.LUMO_SMALL);
-        editBtn.getStyle()
+    private Button createEditButton() {
+        Button editButton = new Button(getTranslation("common.edit"), VaadinIcon.EDIT.create());
+        editButton.addThemeVariants(ButtonVariant.LUMO_SMALL);
+        editButton
+                .getStyle()
                 .set("color", "var(--rom-accent)")
                 .set("border", "1px solid rgba(45,212,191,0.3)")
                 .set("background", "rgba(45,212,191,0.08)");
-        editBtn.addClickListener(e -> openEditDialog());
+        editButton.addClickListener(e -> openEditDialog());
+        return editButton;
+    }
 
-        // Delete button
-        Button delBtn = new Button(VaadinIcon.TRASH.create());
-        delBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
-        delBtn.getStyle().set("color", "var(--rom-status-danger)");
-        delBtn.addClickListener(e -> confirmDelete());
-
-        header.add(
-                back, orderNum, orderName, customer, processBadge, dates, spacer, editBtn, delBtn);
-        return header;
+    private Button createDeleteButton() {
+        Button deleteButton = new Button(VaadinIcon.TRASH.create());
+        deleteButton.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
+        deleteButton.getStyle().set("color", "var(--rom-status-danger)");
+        deleteButton.addClickListener(e -> confirmDelete());
+        return deleteButton;
     }
 
     private void openEditDialog() {

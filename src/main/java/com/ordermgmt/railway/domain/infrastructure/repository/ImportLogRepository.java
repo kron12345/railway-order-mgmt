@@ -8,6 +8,7 @@ import org.springframework.stereotype.Repository;
 
 import com.ordermgmt.railway.domain.infrastructure.model.ImportLog;
 
+/** Repository for infrastructure import log entries. */
 @Repository
 public interface ImportLogRepository extends JpaRepository<ImportLog, UUID> {
 

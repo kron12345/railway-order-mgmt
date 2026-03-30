@@ -21,3 +21,7 @@ spring:
         provider:
           keycloak:
             issuer-uri: http://localhost:8180/realms/test
+  devtools:
+    livereload:
+      enabled: false
+      port: 35729

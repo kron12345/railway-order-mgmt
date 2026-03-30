@@ -13,6 +13,7 @@ import com.ordermgmt.railway.ui.component.KpiCard;
 import com.ordermgmt.railway.ui.component.KpiRow;
 import com.ordermgmt.railway.ui.layout.MainLayout;
 
+/** Landing page showing the dashboard shell and KPI placeholders. */
 @Route(value = "", layout = MainLayout.class)
 @PageTitle("Dashboard")
 @PermitAll

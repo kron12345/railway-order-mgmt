@@ -9,6 +9,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/** Railway operational point imported from RINF reference data. */
 @Entity
 @Table(name = "operational_points")
 @Getter

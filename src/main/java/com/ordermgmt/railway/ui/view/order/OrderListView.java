@@ -25,10 +25,12 @@ import com.vaadin.flow.router.Route;
 import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.domain.order.model.ProcessStatus;
 import com.ordermgmt.railway.domain.order.service.OrderService;
+import com.ordermgmt.railway.ui.component.PositionTile;
 import com.ordermgmt.railway.ui.component.StatusBadge;
 import com.ordermgmt.railway.ui.component.StatusHeatmap;
 import com.ordermgmt.railway.ui.layout.MainLayout;
 
+/** Lists all orders and exposes a compact expandable summary for each one. */
 @Route(value = "orders", layout = MainLayout.class)
 @PageTitle("Orders")
 @PermitAll
@@ -129,20 +131,7 @@ public class OrderListView extends VerticalLayout {
 
     private void refreshList() {
         orderList.removeAll();
-
-        var status = statusFilter.getValue();
-        var query = searchField.getValue();
-        List<Order> orders;
-
-        if (status != null) {
-            orders = orderService.findByProcessStatus(status);
-            orders.forEach(o -> o.getPositions().size());
-        } else if (query != null && !query.isBlank()) {
-            orders = orderService.search(query);
-            orders.forEach(o -> o.getPositions().size());
-        } else {
-            orders = orderService.findAllWithPositions();
-        }
+        List<Order> orders = loadOrders();
 
         countLabel.setText(orders.size() + " " + getTranslation("order.title"));
 
@@ -161,8 +150,30 @@ public class OrderListView extends VerticalLayout {
         }
     }
 
+    private List<Order> loadOrders() {
+        ProcessStatus selectedStatus = statusFilter.getValue();
+        String query = searchField.getValue();
+
+        if (selectedStatus != null) {
+            return orderService.findByProcessStatus(selectedStatus);
+        }
+        if (query != null && !query.isBlank()) {
+            return orderService.search(query);
+        }
+        return orderService.findAllWithPositions();
+    }
+
     private Component createAccordionRow(Order order) {
-        // --- Summary (always visible) ---
+        Details details = new Details(createSummary(order), createTilesContainer(order));
+        details.setOpened(false);
+        details.setWidthFull();
+        details.getStyle()
+                .set("border-bottom", "1px solid var(--rom-border)")
+                .set("--vaadin-details-summary-padding", "12px 16px");
+        return details;
+    }
+
+    private Div createSummary(Order order) {
         Div summary = new Div();
         summary.getStyle()
                 .set("display", "flex")
@@ -201,16 +212,19 @@ public class OrderListView extends VerticalLayout {
         heatmap.getStyle().set("min-width", "80px");
 
         StatusBadge processBadge = createProcessBadge(order.getProcessStatus());
+        summary.add(orderNum, orderName, customer, heatmap, processBadge, createEditButton(order));
+        return summary;
+    }
 
-        // Edit button
-        Button editBtn = new Button(VaadinIcon.EDIT.create());
-        editBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
-        editBtn.getStyle().set("color", "var(--rom-text-muted)");
-        editBtn.addClickListener(e -> UI.getCurrent().navigate("orders/" + order.getId()));
+    private Button createEditButton(Order order) {
+        Button editButton = new Button(VaadinIcon.EDIT.create());
+        editButton.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
+        editButton.getStyle().set("color", "var(--rom-text-muted)");
+        editButton.addClickListener(e -> UI.getCurrent().navigate("orders/" + order.getId()));
+        return editButton;
+    }
 
-        summary.add(orderNum, orderName, customer, heatmap, processBadge, editBtn);
-
-        // --- Expandable content (position tiles) ---
+    private Div createTilesContainer(Order order) {
         Div tilesContainer = new Div();
         tilesContainer
                 .getStyle()
@@ -220,29 +234,21 @@ public class OrderListView extends VerticalLayout {
                 .set("padding", "8px 0");
 
         for (var pos : order.getPositions()) {
-            var tile = new com.ordermgmt.railway.ui.component.PositionTile(pos);
+            var tile = new PositionTile(pos);
             tile.addClickListener(e -> UI.getCurrent().navigate("orders/" + order.getId()));
             tilesContainer.add(tile);
         }
 
         if (order.getPositions().isEmpty()) {
-            Span noPos = new Span("Keine Positionen");
-            noPos.getStyle()
+            Span emptyMessage = new Span(getTranslation("order.positions.empty"));
+            emptyMessage
+                    .getStyle()
                     .set("color", "var(--rom-text-muted)")
                     .set("font-size", "12px")
                     .set("padding", "8px 0");
-            tilesContainer.add(noPos);
+            tilesContainer.add(emptyMessage);
         }
-
-        // --- Accordion (Details component) ---
-        Details details = new Details(summary, tilesContainer);
-        details.setOpened(false);
-        details.setWidthFull();
-        details.getStyle()
-                .set("border-bottom", "1px solid var(--rom-border)")
-                .set("--vaadin-details-summary-padding", "12px 16px");
-
-        return details;
+        return tilesContainer;
     }
 
     private StatusBadge createProcessBadge(ProcessStatus status) {

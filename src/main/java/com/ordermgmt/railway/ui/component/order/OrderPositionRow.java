@@ -1,4 +1,4 @@
-package com.ordermgmt.railway.ui.view.order;
+package com.ordermgmt.railway.ui.component.order;
 
 import java.util.ArrayList;
 import java.util.List;

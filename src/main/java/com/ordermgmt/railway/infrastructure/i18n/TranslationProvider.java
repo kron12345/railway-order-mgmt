@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 
 import com.vaadin.flow.i18n.I18NProvider;
 
+/** Loads localized UI messages from the application's resource bundles. */
 @Component
 public class TranslationProvider implements I18NProvider {
 

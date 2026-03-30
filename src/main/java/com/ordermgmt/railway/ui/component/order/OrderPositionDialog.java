@@ -1,4 +1,4 @@
-package com.ordermgmt.railway.ui.view.order;
+package com.ordermgmt.railway.ui.component.order;
 
 import java.util.function.BiFunction;
 
@@ -21,6 +21,7 @@ import com.ordermgmt.railway.domain.order.model.PositionStatus;
 import com.ordermgmt.railway.domain.order.model.PositionType;
 import com.ordermgmt.railway.domain.order.service.OrderService;
 
+/** Dialog for creating and editing a single order position. */
 public class OrderPositionDialog extends Dialog {
 
     private final OrderService orderService;
@@ -58,6 +59,14 @@ public class OrderPositionDialog extends Dialog {
     }
 
     private void buildForm() {
+        configureFields();
+
+        FormLayout form = createFormLayout();
+        readFrom();
+        add(form);
+    }
+
+    private void configureFields() {
         name.setLabel(t("position.name"));
         name.setRequired(true);
         name.setWidthFull();
@@ -90,7 +99,9 @@ public class OrderPositionDialog extends Dialog {
 
         tags.setLabel(t("order.tags"));
         tags.setWidthFull();
+    }
 
+    private FormLayout createFormLayout() {
         FormLayout form = new FormLayout();
         form.setResponsiveSteps(
                 new FormLayout.ResponsiveStep("0", 1), new FormLayout.ResponsiveStep("500px", 2));
@@ -101,9 +112,7 @@ public class OrderPositionDialog extends Dialog {
         form.add(serviceType, status);
         form.setColspan(tags, 2);
         form.add(tags);
-
-        readFrom();
-        add(form);
+        return form;
     }
 
     private void buildFooter() {
@@ -169,6 +178,7 @@ public class OrderPositionDialog extends Dialog {
         return addListener(SaveEvent.class, listener);
     }
 
+    /** Fired after a position has been saved successfully. */
     public static class SaveEvent extends ComponentEvent<OrderPositionDialog> {
         public SaveEvent(OrderPositionDialog source) {
             super(source, false);

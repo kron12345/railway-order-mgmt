@@ -9,6 +9,7 @@ import org.springframework.stereotype.Repository;
 
 import com.ordermgmt.railway.domain.infrastructure.model.OperationalPoint;
 
+/** Repository for railway operational points. */
 @Repository
 public interface OperationalPointRepository extends JpaRepository<OperationalPoint, UUID> {
 

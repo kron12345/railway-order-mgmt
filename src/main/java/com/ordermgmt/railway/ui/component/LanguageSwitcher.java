@@ -5,6 +5,7 @@ import java.util.Locale;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.select.Select;
 
+/** Locale selector for switching the current UI language. */
 public class LanguageSwitcher extends Select<Locale> {
 
     public LanguageSwitcher() {

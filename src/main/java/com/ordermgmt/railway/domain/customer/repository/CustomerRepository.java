@@ -8,6 +8,7 @@ import org.springframework.stereotype.Repository;
 
 import com.ordermgmt.railway.domain.customer.model.Customer;
 
+/** Repository for persisting and querying customers. */
 @Repository
 public interface CustomerRepository extends JpaRepository<Customer, UUID> {
 

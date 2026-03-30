@@ -1,4 +1,4 @@
-package com.ordermgmt.railway.ui.view.order;
+package com.ordermgmt.railway.ui.component.order;
 
 import java.util.function.BiFunction;
 
@@ -15,6 +15,7 @@ import com.ordermgmt.railway.domain.customer.repository.CustomerRepository;
 import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.domain.order.model.ProcessStatus;
 
+/** Reusable form for editing the core fields of an order. */
 public class OrderFormPanel extends Div {
 
     private final TextField orderNumber = new TextField();

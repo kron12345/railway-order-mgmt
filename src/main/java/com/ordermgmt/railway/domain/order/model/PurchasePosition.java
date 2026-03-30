@@ -11,6 +11,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/** Purchased execution unit linked to an order position and resource need. */
 @Entity
 @Table(name = "purchase_positions")
 @Audited

@@ -8,6 +8,7 @@ import org.springframework.stereotype.Repository;
 
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
 
+/** Repository for order positions. */
 @Repository
 public interface OrderPositionRepository extends JpaRepository<OrderPosition, UUID> {
 

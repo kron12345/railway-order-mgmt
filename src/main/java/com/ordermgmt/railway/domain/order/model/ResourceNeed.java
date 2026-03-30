@@ -10,6 +10,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/** Resource demand attached to an order position. */
 @Entity
 @Table(name = "resource_needs")
 @Audited
