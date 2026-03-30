@@ -25,6 +25,7 @@ public class PurchaseCalendarGrid extends Div {
     private static final LocalDate FPJ_2027 = LocalDate.of(2026, 12, 12);
 
     public PurchaseCalendarGrid(List<PurchasePosition> purchases, LocalDate from, LocalDate to) {
+        setWidthFull();
         getStyle()
                 .set("overflow-x", "auto")
                 .set("border", "1px solid var(--rom-border)")
@@ -37,10 +38,11 @@ public class PurchaseCalendarGrid extends Div {
                 .max().orElse(5);
 
         Div table = new Div();
+        int cols = maxWeeks * 7 + maxWeeks - 1;
         table.getStyle()
                 .set("display", "grid")
-                .set("grid-template-columns", "100px repeat(" + (maxWeeks * 7 + maxWeeks - 1) + ", 1fr)")
-                .set("min-width", "max-content")
+                .set("grid-template-columns", "100px repeat(" + cols + ", minmax(24px, 1fr))")
+                .set("width", "100%")
                 .set("font-family", "'JetBrains Mono', monospace")
                 .set("font-size", "11px");
 

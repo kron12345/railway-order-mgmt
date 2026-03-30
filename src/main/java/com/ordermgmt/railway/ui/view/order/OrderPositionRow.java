@@ -37,14 +37,19 @@ public class OrderPositionRow extends Div {
         this.position = position;
         this.translator = translator;
 
+        setWidthFull();
         getStyle()
                 .set("border-bottom", "1px solid var(--rom-border)")
-                .set("padding", "0");
+                .set("padding", "0")
+                .set("box-sizing", "border-box");
 
         add(createSummary(translator, onEdit, onDelete));
 
         calendarSlot.setWidthFull();
-        calendarSlot.getStyle().set("padding", "0 12px 12px 12px");
+        calendarSlot.getStyle()
+                .set("padding", "0 12px 12px 12px")
+                .set("overflow-x", "auto")
+                .set("box-sizing", "border-box");
         calendarSlot.setVisible(false);
         add(calendarSlot);
     }

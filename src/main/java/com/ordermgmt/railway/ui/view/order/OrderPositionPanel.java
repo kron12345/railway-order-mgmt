@@ -32,12 +32,13 @@ public class OrderPositionPanel extends Div {
         this.orderService = orderService;
         this.translator = translator;
 
+        setWidthFull();
         getStyle()
                 .set("background", "var(--rom-bg-card)")
                 .set("border", "1px solid var(--rom-border)")
                 .set("border-radius", "6px")
-                .set("padding", "var(--lumo-space-l)")
-                .set("flex", "1");
+                .set("padding", "var(--lumo-space-m) var(--lumo-space-l)")
+                .set("box-sizing", "border-box");
 
         add(createHeader());
 

@@ -24,12 +24,14 @@ public class PurchaseCalendarPanel extends Div {
             List<PurchasePosition> purchases,
             BiFunction<String, Object[], String> translator) {
         this.t = translator;
+        setWidthFull();
         getStyle()
                 .set("background", "var(--rom-bg-primary)")
                 .set("border", "1px solid var(--rom-border)")
                 .set("border-radius", "6px")
-                .set("padding", "16px")
-                .set("margin-top", "8px");
+                .set("padding", "12px 16px")
+                .set("margin-top", "8px")
+                .set("box-sizing", "border-box");
 
         add(createHeader(position, purchases));
         add(createTtrBar());

@@ -35,19 +35,21 @@ public class OrderFormPanel extends Div {
             BiFunction<String, Object[], String> translator) {
         this.translator = translator;
 
+        setWidthFull();
         getStyle()
                 .set("background", "var(--rom-bg-card)")
                 .set("border", "1px solid var(--rom-border)")
                 .set("border-radius", "6px")
-                .set("padding", "var(--lumo-space-l)")
-                .set("margin-bottom", "var(--lumo-space-l)");
+                .set("padding", "var(--lumo-space-m) var(--lumo-space-l)")
+                .set("margin-bottom", "var(--lumo-space-s)")
+                .set("box-sizing", "border-box");
 
         H3 sectionTitle = new H3(t("order.edit"));
         sectionTitle
                 .getStyle()
                 .set("color", "var(--rom-text-primary)")
-                .set("margin", "0 0 var(--lumo-space-m) 0")
-                .set("font-size", "var(--lumo-font-size-l)");
+                .set("margin", "0 0 var(--lumo-space-s) 0")
+                .set("font-size", "var(--lumo-font-size-m)");
 
         orderNumber.setLabel(t("order.number"));
         orderNumber.setRequired(true);

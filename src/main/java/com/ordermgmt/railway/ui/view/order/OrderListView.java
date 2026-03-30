@@ -42,10 +42,14 @@ public class OrderListView extends VerticalLayout {
 
     public OrderListView(OrderService orderService) {
         this.orderService = orderService;
-        setPadding(true);
+        setPadding(false);
         setSpacing(false);
-        setSizeFull();
-        getStyle().set("background", "var(--rom-bg-primary)");
+        setWidthFull();
+        getStyle()
+                .set("background", "var(--rom-bg-primary)")
+                .set("padding", "var(--lumo-space-xs) var(--lumo-space-m)")
+                .set("overflow-x", "hidden")
+                .set("box-sizing", "border-box");
 
         add(createHeader());
         add(createToolbar());

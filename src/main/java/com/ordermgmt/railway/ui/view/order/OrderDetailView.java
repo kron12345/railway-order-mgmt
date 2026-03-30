@@ -1,5 +1,6 @@
 package com.ordermgmt.railway.ui.view.order;
 
+import java.time.format.DateTimeFormatter;
 import java.util.UUID;
 
 import jakarta.annotation.security.PermitAll;
@@ -8,7 +9,8 @@ import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.confirmdialog.ConfirmDialog;
-import com.vaadin.flow.component.html.H2;
+import com.vaadin.flow.component.dialog.Dialog;
+import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.notification.Notification;
@@ -25,6 +27,7 @@ import com.ordermgmt.railway.domain.customer.repository.CustomerRepository;
 import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.domain.order.model.ProcessStatus;
 import com.ordermgmt.railway.domain.order.service.OrderService;
+import com.ordermgmt.railway.ui.component.StatusBadge;
 import com.ordermgmt.railway.ui.layout.MainLayout;
 
 @Route(value = "orders/:orderId", layout = MainLayout.class)
@@ -37,16 +40,20 @@ public class OrderDetailView extends VerticalLayout implements BeforeEnterObserv
     private Order order;
     private boolean isNew;
 
-    private OrderFormPanel formPanel;
-    private OrderPositionPanel positionPanel;
+    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("dd.MM.yyyy");
 
     public OrderDetailView(OrderService orderService, CustomerRepository customerRepository) {
         this.orderService = orderService;
         this.customerRepository = customerRepository;
-        setPadding(true);
+        setPadding(false);
         setSpacing(false);
+        setWidthFull();
         setSizeFull();
-        getStyle().set("background", "var(--rom-bg-primary)");
+        getStyle()
+                .set("background", "var(--rom-bg-primary)")
+                .set("padding", "var(--lumo-space-xs) var(--lumo-space-m)")
+                .set("overflow-x", "hidden")
+                .set("box-sizing", "border-box");
     }
 
     @Override
@@ -57,6 +64,7 @@ public class OrderDetailView extends VerticalLayout implements BeforeEnterObserv
             isNew = true;
             order = new Order();
             order.setProcessStatus(ProcessStatus.AUFTRAG);
+            buildNewOrderView();
         } else {
             isNew = false;
             try {
@@ -65,86 +73,172 @@ public class OrderDetailView extends VerticalLayout implements BeforeEnterObserv
             } catch (IllegalArgumentException e) {
                 order = null;
             }
+            if (order == null) {
+                event.forwardTo("orders");
+                return;
+            }
+            buildDetailView();
         }
-
-        if (order == null && !isNew) {
-            event.forwardTo("orders");
-            return;
-        }
-
-        buildView();
     }
 
-    private void buildView() {
+    /** New order: show form directly (needs data first). */
+    private void buildNewOrderView() {
         removeAll();
-        add(createHeader());
-        formPanel = new OrderFormPanel(order, customerRepository, this::getTranslation);
-        add(formPanel);
-
-        if (!isNew) {
-            positionPanel = new OrderPositionPanel(order, orderService, this::getTranslation);
-            add(positionPanel);
-        }
-    }
-
-    private HorizontalLayout createHeader() {
-        Button back = new Button(VaadinIcon.ARROW_LEFT.create());
-        back.addThemeVariants(ButtonVariant.LUMO_TERTIARY);
-        back.getStyle().set("color", "var(--rom-text-secondary)");
-        back.addClickListener(e -> UI.getCurrent().navigate("orders"));
-
-        String titleText =
-                isNew
-                        ? getTranslation("order.new")
-                        : getTranslation("order.edit") + " — " + order.getOrderNumber();
-        H2 title = new H2(titleText);
-        title.getStyle()
-                .set("color", "var(--rom-text-primary)")
-                .set("font-weight", "600")
-                .set("margin", "0");
-
-        Span spacer = new Span();
+        add(createBackRow(getTranslation("order.new")));
+        OrderFormPanel form = new OrderFormPanel(order, customerRepository, this::getTranslation);
+        add(form);
 
         Button save = new Button(getTranslation("common.save"), VaadinIcon.CHECK.create());
         save.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
         save.getStyle()
                 .set("background", "var(--rom-accent)")
                 .set("color", "var(--rom-bg-primary)")
-                .set("font-weight", "600");
-        save.addClickListener(e -> saveOrder());
+                .set("font-weight", "600")
+                .set("align-self", "flex-end")
+                .set("margin-top", "var(--lumo-space-s)");
+        save.addClickListener(e -> {
+            if (!form.validate()) return;
+            form.writeTo(order);
+            order = orderService.save(order);
+            Notification.show("✓", 2000, Notification.Position.BOTTOM_END)
+                    .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+            UI.getCurrent().navigate("orders/" + order.getId());
+        });
+        add(save);
+    }
 
-        HorizontalLayout actions = new HorizontalLayout(save);
+    /** Existing order: compact header + positions. */
+    private void buildDetailView() {
+        removeAll();
+        add(createCompactHeader());
+        var positionPanel = new OrderPositionPanel(order, orderService, this::getTranslation);
+        add(positionPanel);
+    }
 
-        if (!isNew) {
-            Button delete = new Button(getTranslation("common.delete"), VaadinIcon.TRASH.create());
-            delete.addThemeVariants(ButtonVariant.LUMO_ERROR, ButtonVariant.LUMO_TERTIARY);
-            delete.addClickListener(e -> confirmDelete());
-            actions.add(delete);
-        }
+    private HorizontalLayout createBackRow(String titleText) {
+        Button back = new Button(VaadinIcon.ARROW_LEFT.create());
+        back.addThemeVariants(ButtonVariant.LUMO_TERTIARY);
+        back.getStyle().set("color", "var(--rom-text-secondary)");
+        back.addClickListener(e -> UI.getCurrent().navigate("orders"));
 
-        HorizontalLayout header = new HorizontalLayout(back, title, spacer, actions);
+        Span title = new Span(titleText);
+        title.getStyle()
+                .set("font-size", "var(--lumo-font-size-xl)")
+                .set("font-weight", "600")
+                .set("color", "var(--rom-text-primary)");
+
+        HorizontalLayout row = new HorizontalLayout(back, title);
+        row.setAlignItems(FlexComponent.Alignment.CENTER);
+        row.setWidthFull();
+        row.getStyle().set("margin-bottom", "var(--lumo-space-s)");
+        return row;
+    }
+
+    /** Compact summary header: order info in one line + action buttons. */
+    private Div createCompactHeader() {
+        Div header = new Div();
         header.setWidthFull();
-        header.expand(spacer);
-        header.setAlignItems(FlexComponent.Alignment.CENTER);
-        header.getStyle().set("margin-bottom", "var(--lumo-space-l)");
+        header.getStyle()
+                .set("background", "var(--rom-bg-card)")
+                .set("border", "1px solid var(--rom-border)")
+                .set("border-radius", "6px")
+                .set("padding", "10px 16px")
+                .set("margin-bottom", "var(--lumo-space-s)")
+                .set("box-sizing", "border-box")
+                .set("display", "flex")
+                .set("align-items", "center")
+                .set("gap", "16px")
+                .set("flex-wrap", "wrap");
+
+        // Back button
+        Button back = new Button(VaadinIcon.ARROW_LEFT.create());
+        back.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
+        back.getStyle().set("color", "var(--rom-text-muted)");
+        back.addClickListener(e -> UI.getCurrent().navigate("orders"));
+
+        // Order number
+        Span orderNum = new Span(order.getOrderNumber());
+        orderNum.getStyle()
+                .set("font-family", "'JetBrains Mono', monospace")
+                .set("font-size", "13px")
+                .set("font-weight", "700")
+                .set("color", "var(--rom-accent)");
+
+        // Order name
+        Span orderName = new Span(order.getName());
+        orderName.getStyle()
+                .set("font-weight", "600")
+                .set("font-size", "14px")
+                .set("color", "var(--rom-text-primary)");
+
+        // Customer
+        String custName = order.getCustomer() != null ? order.getCustomer().getName() : "—";
+        Span customer = new Span(custName);
+        customer.getStyle()
+                .set("color", "var(--rom-text-muted)")
+                .set("font-size", "12px");
+
+        // Process status badge
+        StatusBadge processBadge = createProcessBadge(order.getProcessStatus());
+
+        // Validity dates
+        Span dates = new Span(formatDates());
+        dates.getStyle()
+                .set("font-family", "'JetBrains Mono', monospace")
+                .set("font-size", "11px")
+                .set("color", "var(--rom-text-muted)");
+
+        // Spacer
+        Span spacer = new Span();
+        spacer.getStyle().set("flex", "1");
+
+        // Edit button → opens dialog
+        Button editBtn = new Button(getTranslation("common.edit"), VaadinIcon.EDIT.create());
+        editBtn.addThemeVariants(ButtonVariant.LUMO_SMALL);
+        editBtn.getStyle()
+                .set("color", "var(--rom-accent)")
+                .set("border", "1px solid rgba(45,212,191,0.3)")
+                .set("background", "rgba(45,212,191,0.08)");
+        editBtn.addClickListener(e -> openEditDialog());
+
+        // Delete button
+        Button delBtn = new Button(VaadinIcon.TRASH.create());
+        delBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
+        delBtn.getStyle().set("color", "var(--rom-status-danger)");
+        delBtn.addClickListener(e -> confirmDelete());
+
+        header.add(back, orderNum, orderName, customer, processBadge, dates, spacer, editBtn, delBtn);
         return header;
     }
 
-    private void saveOrder() {
-        if (!formPanel.validate()) {
-            return;
-        }
-        formPanel.writeTo(order);
-        order = orderService.save(order);
+    private void openEditDialog() {
+        Dialog dialog = new Dialog();
+        dialog.setHeaderTitle(getTranslation("order.edit") + " — " + order.getOrderNumber());
+        dialog.setWidth("800px");
 
-        Notification.show(getTranslation("common.save") + " ✓", 3000, Notification.Position.BOTTOM_END)
-                .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+        OrderFormPanel form = new OrderFormPanel(order, customerRepository, this::getTranslation);
+        dialog.add(form);
 
-        if (isNew) {
-            UI.getCurrent().navigate("orders/" + order.getId());
-        } else {
-            buildView();
-        }
+        Button cancel = new Button(getTranslation("common.cancel"));
+        cancel.addClickListener(e -> dialog.close());
+
+        Button save = new Button(getTranslation("common.save"));
+        save.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
+        save.getStyle()
+                .set("background", "var(--rom-accent)")
+                .set("color", "var(--rom-bg-primary)");
+        save.addClickListener(e -> {
+            if (!form.validate()) return;
+            form.writeTo(order);
+            order = orderService.save(order);
+            Notification.show("✓", 2000, Notification.Position.BOTTOM_END)
+                    .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+            dialog.close();
+            buildDetailView();
+        });
+
+        dialog.getFooter().add(cancel, save);
+        dialog.open();
     }
 
     private void confirmDelete() {
@@ -159,5 +253,23 @@ public class OrderDetailView extends VerticalLayout implements BeforeEnterObserv
             UI.getCurrent().navigate("orders");
         });
         dialog.open();
+    }
+
+    private StatusBadge createProcessBadge(ProcessStatus status) {
+        if (status == null) return new StatusBadge("—", StatusBadge.StatusType.NEUTRAL);
+        String label = getTranslation("process." + status.name());
+        return switch (status) {
+            case AUFTRAG -> new StatusBadge(label, StatusBadge.StatusType.INFO);
+            case PLANUNG -> new StatusBadge(label, StatusBadge.StatusType.WARNING);
+            case PRODUKT_LEISTUNG -> new StatusBadge(label, StatusBadge.StatusType.INFO);
+            case PRODUKTION -> new StatusBadge(label, StatusBadge.StatusType.SUCCESS);
+            case ABRECHNUNG_NACHBEREITUNG -> new StatusBadge(label, StatusBadge.StatusType.NEUTRAL);
+        };
+    }
+
+    private String formatDates() {
+        String from = order.getValidFrom() != null ? order.getValidFrom().format(DATE_FMT) : "—";
+        String to = order.getValidTo() != null ? order.getValidTo().format(DATE_FMT) : "—";
+        return from + " → " + to;
     }
 }
