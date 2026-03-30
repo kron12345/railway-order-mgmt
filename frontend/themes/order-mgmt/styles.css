@@ -1,3 +1,76 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* === Railway Order Management — Bloomberg-inspired Dark Theme === */
+
+html {
+    --rom-bg-primary: #0B1120;
+    --rom-bg-secondary: #111827;
+    --rom-bg-card: #1A2332;
+    --rom-bg-hover: #1E293B;
+    --rom-bg-selected: #172A3A;
+    --rom-border: #1E3A5F;
+    --rom-border-subtle: #1C2D42;
+
+    --rom-text-primary: #E2E8F0;
+    --rom-text-secondary: #94A3B8;
+    --rom-text-muted: #64748B;
+
+    --rom-accent: #2DD4BF;
+    --rom-accent-hover: #14B8A6;
+    --rom-accent-muted: rgba(45, 212, 191, 0.15);
+
+    --rom-status-active: #34D399;
+    --rom-status-warning: #FBBF24;
+    --rom-status-danger: #F87171;
+    --rom-status-info: #60A5FA;
+    --rom-status-neutral: #94A3B8;
+
+    /* Lumo Dark overrides */
+    --lumo-base-color: var(--rom-bg-primary);
+    --lumo-body-text-color: var(--rom-text-primary);
+    --lumo-header-text-color: var(--rom-text-primary);
+    --lumo-secondary-text-color: var(--rom-text-secondary);
+    --lumo-tertiary-text-color: var(--rom-text-muted);
+    --lumo-primary-color: var(--rom-accent);
+    --lumo-primary-text-color: var(--rom-accent);
+    --lumo-contrast-5pct: rgba(255, 255, 255, 0.05);
+    --lumo-contrast-10pct: rgba(255, 255, 255, 0.08);
+    --lumo-contrast-20pct: rgba(255, 255, 255, 0.12);
+    --lumo-shade-5pct: rgba(0, 0, 0, 0.2);
+    --lumo-shade-10pct: rgba(0, 0, 0, 0.35);
+
+    --lumo-font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    --lumo-font-size-s: 0.8125rem;
+    --lumo-font-size-m: 0.875rem;
+    --lumo-font-size-l: 1rem;
+    --lumo-font-size-xl: 1.25rem;
+    --lumo-font-size-xxl: 1.5rem;
+
+    background-color: var(--rom-bg-primary) !important;
+    color: var(--rom-text-primary);
+}
+
+/* === Global Dark Background === */
+body,
+vaadin-app-layout {
+    background: var(--rom-bg-primary) !important;
+}
+
+vaadin-app-layout::part(navbar) {
+    background: var(--rom-bg-secondary);
+    border-bottom: 1px solid var(--rom-border);
+}
+
+vaadin-app-layout::part(drawer) {
+    background: var(--rom-bg-secondary);
+    border-right: 1px solid var(--rom-border);
+}
+
+/* === Side Navigation === */
+vaadin-side-nav-item {
+    --lumo-primary-text-color: var(--rom-accent);
+}

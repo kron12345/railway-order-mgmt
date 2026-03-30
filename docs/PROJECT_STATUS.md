@@ -85,7 +85,7 @@
 - [ ] Customer Entity + Views
 - [ ] Railcar Entity + Views
 - [ ] Route Entity + Views
-- [ ] GitHub Wiki befuellen
+- [x] ~~GitHub Wiki befuellen~~ (9 Seiten erstellt)
 - [ ] Weitere Flyway Migrationen (customer, railcar, route)
 
 ## Bekannte Issues
@@ -102,6 +102,8 @@
 ## Changelog
 | Datum | Aenderung |
 |---|---|
+| 2026-03-30 | Lokale PostgreSQL + Keycloak eingerichtet, sebastian als Admin, MCP Server konfiguriert |
+| 2026-03-30 | GitHub Wiki: 9 Seiten (Home, Getting Started, Architecture, Auth, i18n, DB, Push, Quality, Deployment) |
 | 2026-03-30 | Repo-Ausstattung: .editorconfig, mvnw, CONTRIBUTING.md, SECURITY.md, Dependabot, Gitleaks |
 | 2026-03-30 | Quality-Tools: Spotless, ArchUnit, JaCoCo, SpotBugs, OWASP Dep Check |
 | 2026-03-30 | CI/CD: GitHub Actions Pipeline (ci.yml) mit allen Quality Gates |
