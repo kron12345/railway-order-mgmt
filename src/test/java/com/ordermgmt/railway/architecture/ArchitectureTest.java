@@ -1,0 +1,100 @@
+package com.ordermgmt.railway.architecture;
+
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static com.tngtech.archunit.library.Architectures.layeredArchitecture;
+
+import com.tngtech.archunit.core.importer.ImportOption;
+import com.tngtech.archunit.junit.AnalyzeClasses;
+import com.tngtech.archunit.junit.ArchTest;
+import com.tngtech.archunit.lang.ArchRule;
+
+@AnalyzeClasses(
+        packages = "com.ordermgmt.railway",
+        importOptions = ImportOption.DoNotIncludeTests.class)
+class ArchitectureTest {
+
+    // === Layer Rules ===
+
+    @ArchTest
+    static final ArchRule layer_dependencies_are_respected =
+            layeredArchitecture()
+                    .consideringAllDependencies()
+                    .layer("Domain")
+                    .definedBy("com.ordermgmt.railway.domain..")
+                    .layer("UI")
+                    .definedBy("com.ordermgmt.railway.ui..")
+                    .layer("Infrastructure")
+                    .definedBy("com.ordermgmt.railway.infrastructure..")
+                    .layer("DTO")
+                    .definedBy("com.ordermgmt.railway.dto..")
+                    .layer("Mapper")
+                    .definedBy("com.ordermgmt.railway.mapper..")
+                    .whereLayer("UI")
+                    .mayNotBeAccessedByAnyLayer()
+                    .whereLayer("Domain")
+                    .mayOnlyBeAccessedByLayers("UI", "Infrastructure", "DTO", "Mapper")
+                    .whereLayer("Infrastructure")
+                    .mayOnlyBeAccessedByLayers("UI");
+
+    @ArchTest
+    static final ArchRule domain_must_not_depend_on_ui =
+            noClasses()
+                    .that()
+                    .resideInAPackage("..domain..")
+                    .should()
+                    .dependOnClassesThat()
+                    .resideInAPackage("..ui..");
+
+    @ArchTest
+    static final ArchRule domain_must_not_depend_on_infrastructure =
+            noClasses()
+                    .that()
+                    .resideInAPackage("..domain..")
+                    .should()
+                    .dependOnClassesThat()
+                    .resideInAPackage("..infrastructure..");
+
+    // === Naming Conventions ===
+
+    @ArchTest
+    static final ArchRule repositories_should_be_suffixed =
+            classes()
+                    .that()
+                    .resideInAPackage("..repository..")
+                    .should()
+                    .haveSimpleNameEndingWith("Repository");
+
+    @ArchTest
+    static final ArchRule services_should_be_suffixed =
+            classes()
+                    .that()
+                    .resideInAPackage("..service..")
+                    .should()
+                    .haveSimpleNameEndingWith("Service");
+
+    @ArchTest
+    static final ArchRule views_should_be_suffixed =
+            classes()
+                    .that()
+                    .resideInAPackage("..view..")
+                    .and()
+                    .areNotInterfaces()
+                    .should()
+                    .haveSimpleNameEndingWith("View");
+
+    // === Annotation Rules ===
+
+    @ArchTest
+    static final ArchRule repositories_should_be_interfaces =
+            classes().that().resideInAPackage("..repository..").should().beInterfaces();
+
+    @ArchTest
+    static final ArchRule domain_models_must_not_use_field_injection =
+            noClasses()
+                    .that()
+                    .resideInAPackage("..domain..model..")
+                    .should()
+                    .dependOnClassesThat()
+                    .resideInAPackage("org.springframework.beans.factory.annotation..");
+}

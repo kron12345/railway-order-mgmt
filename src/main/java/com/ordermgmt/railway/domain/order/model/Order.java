@@ -1,9 +1,10 @@
 package com.ordermgmt.railway.domain.order.model;
 
+import java.time.Instant;
+import java.util.UUID;
+
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+
 import org.hibernate.envers.Audited;
 import org.springframework.data.annotation.CreatedBy;
 import org.springframework.data.annotation.CreatedDate;
@@ -11,8 +12,9 @@ import org.springframework.data.annotation.LastModifiedBy;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import java.time.Instant;
-import java.util.UUID;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Entity
 @Table(name = "orders")
@@ -49,9 +51,7 @@ public class Order {
     @Column(updatable = false)
     private String createdBy;
 
-    @LastModifiedBy
-    private String updatedBy;
+    @LastModifiedBy private String updatedBy;
 
-    @Version
-    private Long version;
+    @Version private Long version;
 }

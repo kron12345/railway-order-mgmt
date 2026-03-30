@@ -1,22 +1,23 @@
 package com.ordermgmt.railway.infrastructure.push;
 
-import com.vaadin.flow.shared.Registration;
-import org.springframework.stereotype.Service;
-
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
+import org.springframework.stereotype.Service;
+
+import com.vaadin.flow.shared.Registration;
+
 /**
- * Broadcasts events to all connected Vaadin UIs for live updates.
- * Register listeners in view's onAttach(), unregister in onDetach().
- * Always update UI inside ui.access(() -> { ... }).
+ * Broadcasts events to all connected Vaadin UIs for live updates. Register listeners in view's
+ * onAttach(), unregister in onDetach(). Always update UI inside ui.access(() -> { ... }).
  */
 @Service
 public class BroadcastService {
 
-    private final Map<Class<?>, CopyOnWriteArrayList<Consumer<?>>> listeners = new ConcurrentHashMap<>();
+    private final Map<Class<?>, CopyOnWriteArrayList<Consumer<?>>> listeners =
+            new ConcurrentHashMap<>();
 
     @SuppressWarnings("unchecked")
     public <T> Registration register(Class<T> eventType, Consumer<T> listener) {
