@@ -3,7 +3,7 @@
 > Dieses Dokument wird von Claude bei jeder Aenderung automatisch aktualisiert.
 
 ## Letzte Aktualisierung
-**2026-03-30** — Quality-Tools + CI/CD + .env Konfiguration
+**2026-03-30** — Keycloak SSO Login Fix + Playwright E2E Tests
 
 ## Projektstatus: Setup + Quality Gates abgeschlossen
 
@@ -20,7 +20,7 @@
 
 | Komponente | Status | Details |
 |---|---|---|
-| **Security (Keycloak)** | Skeleton | SecurityConfig mit OIDC + Keycloak Role Mapping |
+| **Security (Keycloak)** | Funktioniert | SecurityConfig mit OIDC + Keycloak Role Mapping, Login-Flow getestet |
 | **i18n** | Grundstruktur | TranslationProvider + 4 Sprachen (de/en/it/fr) |
 | **Push / Live Updates** | Skeleton | BroadcastService implementiert, @Push aktiv |
 | **Audit Trail** | Konfiguriert | Hibernate Envers, Order Entity @Audited |
@@ -70,7 +70,7 @@
 |---|---|---|
 | **MainLayout** | Implementiert | — |
 | **LoginView** | Implementiert | `/login` |
-| **DashboardView** | Noch nicht | `/` |
+| **DashboardView** | Implementiert | `/` |
 | **OrderListView** | Noch nicht | `/orders` |
 
 ## Datenbank-Migrationen
@@ -80,7 +80,7 @@
 | V1 | `V1__create_schema.sql` | orders, orders_audit, revinfo |
 
 ## Offene TODOs
-- [ ] Dashboard View implementieren
+- [x] ~~Dashboard View implementieren~~
 - [ ] Order CRUD Views (Liste, Detail, Formular)
 - [ ] Customer Entity + Views
 - [ ] Railcar Entity + Views
@@ -90,6 +90,7 @@
 
 ## Bekannte Issues
 - Tailwind CSS Feature Flag in Vaadin 24.6 nicht unterstuetzt (direkt via CSS integriert)
+- ~~Schwarze Seite nach Keycloak-Login~~ (behoben: doppelte OAuth2-Config in SecurityConfig entfernt)
 
 ## Architektur-Entscheidungen (ADRs)
 1. **ADR-001**: Spring Security OAuth2 statt Keycloak Adapter
@@ -102,6 +103,7 @@
 ## Changelog
 | Datum | Aenderung |
 |---|---|
+| 2026-03-30 | Fix: schwarze Seite nach Keycloak-Login (doppelte OAuth2-Config entfernt), Playwright E2E Test fuer Login-Flow |
 | 2026-03-30 | Lokale PostgreSQL + Keycloak eingerichtet, sebastian als Admin, MCP Server konfiguriert |
 | 2026-03-30 | GitHub Wiki: 9 Seiten (Home, Getting Started, Architecture, Auth, i18n, DB, Push, Quality, Deployment) |
 | 2026-03-30 | Repo-Ausstattung: .editorconfig, mvnw, CONTRIBUTING.md, SECURITY.md, Dependabot, Gitleaks |
