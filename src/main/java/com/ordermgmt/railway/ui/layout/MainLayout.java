@@ -94,6 +94,9 @@ public class MainLayout extends AppLayout implements RouterLayout, LocaleChangeO
         sideNav.addItem(
                 new SideNavItem(
                         getTranslation("nav.customers"), "customers", VaadinIcon.USERS.create()));
+        sideNav.addItem(
+                new SideNavItem(
+                        getTranslation("nav.settings"), "settings", VaadinIcon.COG.create()));
     }
 
     @Override

@@ -1,0 +1,24 @@
+package com.ordermgmt.railway.domain.infrastructure.repository;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import com.ordermgmt.railway.domain.infrastructure.model.OperationalPoint;
+
+@Repository
+public interface OperationalPointRepository extends JpaRepository<OperationalPoint, UUID> {
+
+    Optional<OperationalPoint> findByUopid(String uopid);
+
+    List<OperationalPoint> findByCountry(String country);
+
+    List<OperationalPoint> findByNameContainingIgnoreCase(String name);
+
+    long countByCountry(String country);
+
+    void deleteByCountry(String country);
+}
