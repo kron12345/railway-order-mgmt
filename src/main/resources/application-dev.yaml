@@ -1,0 +1,15 @@
+spring:
+  jpa:
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+  devtools:
+    restart:
+      enabled: true
+
+logging:
+  level:
+    com.ordermgmt.railway: DEBUG
+    org.springframework.security: DEBUG

@@ -1,0 +1,23 @@
+spring:
+  datasource:
+    url: jdbc:tc:postgresql:16-alpine:///ordermgmt_test
+    driver-class-name: org.testcontainers.jdbc.ContainerDatabaseDriver
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+
+  flyway:
+    enabled: false
+
+  security:
+    oauth2:
+      client:
+        registration:
+          keycloak:
+            client-id: test-client
+            client-secret: test-secret
+        provider:
+          keycloak:
+            issuer-uri: http://localhost:8180/realms/test

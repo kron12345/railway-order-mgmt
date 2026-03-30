@@ -1,0 +1,63 @@
+# Maven
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# Vaadin
+node_modules/
+frontend/generated/
+vite.generated.ts
+vite.config.ts
+tsconfig.json
+types.d.ts
+pnpmfile.cjs
+pnpm-lock.yaml
+package.json
+package-lock.json
+webpack.generated.js
+
+# IDE - IntelliJ IDEA
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+
+# IDE - Eclipse
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings/
+.springBeans
+.sts4-cache
+bin/
+
+# IDE - VS Code
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
+
+# Spring Boot
+spring-shell.log
+
+# Docker
+docker/keycloak/data/
+docker/postgres-data/
+
+# Credentials - NEVER commit
+*.pem
+*.key
+credentials*.json

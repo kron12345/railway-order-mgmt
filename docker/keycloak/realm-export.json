@@ -1,0 +1,62 @@
+{
+  "realm": "railway",
+  "enabled": true,
+  "displayName": "Railway Order Management",
+  "defaultLocale": "de",
+  "internationalizationEnabled": true,
+  "supportedLocales": ["de", "en", "it", "fr"],
+  "roles": {
+    "realm": [
+      { "name": "admin", "description": "Full system access" },
+      { "name": "dispatcher", "description": "Can manage orders and routes" },
+      { "name": "viewer", "description": "Read-only access" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "order-mgmt",
+      "name": "Railway Order Management",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "dev-secret-change-in-production",
+      "redirectUris": ["http://localhost:8080/*"],
+      "webOrigins": ["http://localhost:8080"],
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "protocol": "openid-connect",
+      "defaultClientScopes": ["openid", "profile", "email", "roles"]
+    }
+  ],
+  "users": [
+    {
+      "username": "admin",
+      "email": "admin@railway.local",
+      "firstName": "Admin",
+      "lastName": "User",
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "admin",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["admin"]
+    },
+    {
+      "username": "dispatcher",
+      "email": "dispatcher@railway.local",
+      "firstName": "Test",
+      "lastName": "Dispatcher",
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "dispatcher",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["dispatcher"]
+    }
+  ]
+}

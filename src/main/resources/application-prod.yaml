@@ -1,0 +1,11 @@
+spring:
+  jpa:
+    show-sql: false
+
+vaadin:
+  launch-browser: false
+
+logging:
+  level:
+    com.ordermgmt.railway: INFO
+    org.springframework.security: WARN

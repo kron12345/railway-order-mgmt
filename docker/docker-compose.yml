@@ -1,0 +1,42 @@
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: ordermgmt-postgres
+    environment:
+      POSTGRES_DB: ordermgmt
+      POSTGRES_USER: ordermgmt
+      POSTGRES_PASSWORD: ordermgmt
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ordermgmt"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    container_name: ordermgmt-keycloak
+    command: start-dev --import-realm
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/ordermgmt
+      KC_DB_USERNAME: ordermgmt
+      KC_DB_PASSWORD: ordermgmt
+      KC_DB_SCHEMA: keycloak
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HTTP_PORT: 8180
+    ports:
+      - "8180:8180"
+    volumes:
+      - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres-data:

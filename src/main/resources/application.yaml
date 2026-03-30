@@ -1,0 +1,46 @@
+spring:
+  application:
+    name: railway-order-mgmt
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:ordermgmt}
+    username: ${DB_USER:ordermgmt}
+    password: ${DB_PASSWORD:ordermgmt}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        default_schema: public
+        org.hibernate.envers:
+          audit_table_suffix: _audit
+          revision_field_name: revision_id
+          revision_type_field_name: revision_type
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  security:
+    oauth2:
+      client:
+        registration:
+          keycloak:
+            client-id: ${KEYCLOAK_CLIENT_ID:order-mgmt}
+            client-secret: ${KEYCLOAK_CLIENT_SECRET:}
+            scope: openid, profile, email, roles
+        provider:
+          keycloak:
+            issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/railway}
+
+server:
+  port: 8080
+
+vaadin:
+  launch-browser: true
+  allowed-packages:
+    - com.ordermgmt.railway
