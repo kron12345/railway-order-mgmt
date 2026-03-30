@@ -55,8 +55,11 @@ public class OrderService {
         orderRepository.deleteById(id);
     }
 
+    @Transactional(readOnly = true)
     public List<OrderPosition> findPositionsByOrderId(UUID orderId) {
-        return positionRepository.findByOrderId(orderId);
+        List<OrderPosition> positions = positionRepository.findByOrderId(orderId);
+        positions.forEach(p -> p.getPurchasePositions().size());
+        return positions;
     }
 
     public OrderPosition savePosition(OrderPosition position) {

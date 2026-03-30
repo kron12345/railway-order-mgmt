@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bestellpositionen — Visualisierungskonzepte</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+    --bg-primary: #0B1120;
+    --bg-secondary: #111827;
+    --bg-card: #1A2332;
+    --bg-hover: #1E293B;
+    --border: #1E3A5F;
+    --border-subtle: #1C2D42;
+    --text-primary: #E2E8F0;
+    --text-secondary: #94A3B8;
+    --text-muted: #64748B;
+    --accent: #2DD4BF;
+    --st-confirmed: #34D399;
+    --st-ordered: #60A5FA;
+    --st-open: #94A3B8;
+    --st-rejected: #F87171;
+    --st-cancelled: #6B7280;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: var(--bg-primary); color: var(--text-primary); font-family: 'DM Sans', sans-serif; font-size: 14px; }
+.page { max-width: 1400px; margin: 0 auto; padding: 40px 24px; }
+h1 { font-family: 'JetBrains Mono', monospace; font-size: 26px; font-weight: 700; color: var(--accent); margin-bottom: 6px; letter-spacing: 0.04em; }
+.subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 48px; }
+.concept { margin-bottom: 56px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.concept-head { padding: 16px 20px; background: var(--bg-secondary); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+.concept-head h2 { font-family: 'JetBrains Mono', monospace; font-size: 16px; color: var(--accent); }
+.tag { font-family: 'JetBrains Mono', monospace; font-size: 10px; padding: 3px 10px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.08em; }
+.tag-rec { background: rgba(45,212,191,0.15); color: var(--accent); border: 1px solid var(--accent); }
+.tag-alt { background: rgba(96,165,250,0.12); color: var(--st-ordered); border: 1px solid var(--st-ordered); }
+.tag-vis { background: rgba(251,191,36,0.12); color: #FBBF24; border: 1px solid #FBBF24; }
+.concept-desc { padding: 14px 20px; background: var(--bg-card); color: var(--text-secondary); font-size: 13px; border-bottom: 1px solid var(--border-subtle); line-height: 1.6; }
+.concept-body { padding: 20px; background: var(--bg-primary); }
+.mono { font-family: 'JetBrains Mono', monospace; }
+.badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; font-family: 'JetBrains Mono', monospace; text-transform: uppercase; letter-spacing: 0.04em; }
+.b-confirmed { color: var(--st-confirmed); background: rgba(52,211,153,0.12); border: 1px solid rgba(52,211,153,0.3); }
+.b-ordered { color: var(--st-ordered); background: rgba(96,165,250,0.12); border: 1px solid rgba(96,165,250,0.3); }
+.b-open { color: var(--st-open); background: rgba(148,163,184,0.1); border: 1px solid rgba(148,163,184,0.2); }
+.b-rejected { color: var(--st-rejected); background: rgba(248,113,113,0.12); border: 1px solid rgba(248,113,113,0.3); }
+
+/* ===== KONZEPT 1: Calendar Heatmap ===== */
+.cal-context { margin-bottom: 16px; padding: 12px 16px; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-subtle); }
+.cal-context-title { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+.cal-context-route { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-secondary); }
+.cal-summary { display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+.cal-stat { display: flex; align-items: center; gap: 6px; }
+.cal-stat-dot { width: 10px; height: 10px; border-radius: 3px; }
+.cal-stat-val { font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 600; }
+.cal-stat-label { font-size: 11px; color: var(--text-muted); }
+
+.cal-grid { display: flex; gap: 2px; flex-wrap: wrap; margin-bottom: 16px; }
+.cal-month-label { width: 100%; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin: 8px 0 4px 0; }
+.cal-month-label:first-child { margin-top: 0; }
+.cal-day {
+    width: 18px; height: 18px; border-radius: 3px; cursor: pointer;
+    transition: transform 0.1s, box-shadow 0.15s;
+    position: relative;
+}
+.cal-day:hover { transform: scale(1.4); z-index: 2; box-shadow: 0 0 8px rgba(0,0,0,0.5); }
+.cal-day[data-tip]:hover::after {
+    content: attr(data-tip);
+    position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+    background: var(--bg-secondary); border: 1px solid var(--border); color: var(--text-primary);
+    padding: 4px 8px; border-radius: 4px; font-size: 10px; white-space: nowrap; z-index: 20;
+    font-family: 'JetBrains Mono', monospace;
+}
+.d-confirmed { background: var(--st-confirmed); }
+.d-ordered { background: var(--st-ordered); }
+.d-open { background: rgba(148,163,184,0.25); }
+.d-rejected { background: var(--st-rejected); }
+.d-cancelled { background: var(--st-cancelled); opacity: 0.4; }
+.d-none { background: rgba(148,163,184,0.06); }
+.d-weekend { background: rgba(148,163,184,0.03); border: 1px dashed rgba(148,163,184,0.1); }
+
+.cal-legend { display: flex; gap: 12px; flex-wrap: wrap; padding-top: 8px; border-top: 1px solid var(--border-subtle); }
+.cal-legend-item { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-muted); }
+.cal-legend-box { width: 12px; height: 12px; border-radius: 2px; }
+
+/* ===== KONZEPT 2: Collapsed Range Blocks ===== */
+.range-list { display: flex; flex-direction: column; gap: 6px; }
+.range-block {
+    display: grid; grid-template-columns: 180px 1fr 80px 100px 40px;
+    gap: 12px; align-items: center;
+    padding: 10px 16px; background: var(--bg-card); border: 1px solid var(--border-subtle);
+    border-radius: 6px; cursor: pointer; transition: border-color 0.15s;
+}
+.range-block:hover { border-color: var(--accent); }
+.range-dates { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-primary); }
+.range-bar { height: 6px; border-radius: 3px; overflow: hidden; display: flex; }
+.range-bar .seg { height: 100%; }
+.range-count { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-muted); text-align: right; }
+.range-chevron { color: var(--text-muted); font-size: 14px; text-align: center; transition: transform 0.2s; }
+.range-block.open .range-chevron { transform: rotate(90deg); color: var(--accent); }
+.range-detail { padding: 0 16px 12px 16px; display: none; }
+.range-block.open + .range-detail { display: block; }
+.range-detail table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.range-detail th { text-align: left; padding: 6px 8px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid var(--border-subtle); }
+.range-detail td { padding: 5px 8px; border-bottom: 1px solid rgba(30,58,95,0.3); font-family: 'JetBrains Mono', monospace; }
+
+/* ===== KONZEPT 3: Timeline Strip + Table ===== */
+.tl-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.tl-strip-wrap { margin-bottom: 16px; }
+.tl-strip-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.06em; }
+.tl-strip {
+    display: flex; height: 32px; border-radius: 4px; overflow: hidden; border: 1px solid var(--border-subtle);
+    cursor: crosshair; position: relative;
+}
+.tl-seg { transition: opacity 0.15s; position: relative; }
+.tl-seg:hover { opacity: 0.8; }
+.tl-seg[data-tip]:hover::after {
+    content: attr(data-tip);
+    position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+    background: var(--bg-secondary); border: 1px solid var(--border); color: var(--text-primary);
+    padding: 4px 8px; border-radius: 4px; font-size: 10px; white-space: nowrap; z-index: 20;
+    font-family: 'JetBrains Mono', monospace;
+}
+.tl-brush {
+    position: absolute; top: 0; height: 100%;
+    border: 2px solid var(--accent); background: rgba(45,212,191,0.08);
+    border-radius: 3px; pointer-events: none; display: none;
+}
+.tl-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.tl-table th { text-align: left; padding: 8px 10px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid var(--border); background: var(--bg-secondary); position: sticky; top: 0; }
+.tl-table td { padding: 6px 10px; border-bottom: 1px solid var(--border-subtle); font-family: 'JetBrains Mono', monospace; }
+.tl-table tr:hover { background: var(--bg-hover); }
+.tl-table-wrap { max-height: 240px; overflow-y: auto; border: 1px solid var(--border-subtle); border-radius: 6px; }
+.tl-filter-row { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.tl-filter-btn { padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border); background: transparent; color: var(--text-secondary); font-size: 11px; font-family: 'JetBrains Mono', monospace; cursor: pointer; transition: all 0.15s; }
+.tl-filter-btn:hover, .tl-filter-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(45,212,191,0.08); }
+
+/* Comparison */
+.cmp { margin-top: 48px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.cmp table { width: 100%; border-collapse: collapse; }
+.cmp th { background: var(--bg-secondary); font-family: 'JetBrains Mono', monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--border); }
+.cmp td { padding: 10px 16px; border-bottom: 1px solid var(--border-subtle); font-size: 13px; color: var(--text-secondary); }
+.cmp tr:last-child td { border-bottom: none; }
+.chk { color: var(--st-confirmed); }
+.prt { color: #FBBF24; }
+.crs { color: var(--st-rejected); }
+</style>
+</head>
+<body>
+<div class="page">
+
+<h1>BESTELLPOSITIONEN</h1>
+<p class="subtitle">3 Konzepte fuer die Darstellung von 100+ Bestellpositionen pro Auftragsposition (z.B. taeglicher Zug ueber 3 Monate)</p>
+
+<!-- ===== KONZEPT 1: Calendar Heatmap ===== -->
+<div class="concept">
+<div class="concept-head">
+    <h2>1 — Kalender-Heatmap</h2>
+    <span class="tag tag-rec">Empfohlen</span>
+</div>
+<div class="concept-desc">
+    <strong>Idee:</strong> Jeder Tag = ein farbiges Kaestchen. Farbe = Bestellstatus. Hover zeigt Details.
+    Wie eine GitHub-Contribution-Map, aber fuer Bestellungen. Sofort erkennbar: wo gibt es Probleme?<br>
+    <strong>Pro:</strong> 90 Tage auf einen Blick, Muster sofort erkennbar (z.B. "Woche 3 alle abgelehnt"), Tooltip fuer Details.<br>
+    <strong>Contra:</strong> Einzelne Bestellung schwer zu editieren, eher Monitoring als CRUD.
+</div>
+<div class="concept-body">
+    <div class="cal-context">
+        <div class="cal-context-title">Kohle HH-MUC Taeglich — Kapazitaet Netz (Bestellung)</div>
+        <div class="cal-context-route">Hamburg Hbf → Muenchen Hbf · Ab 06:40 · 92 Bestellpositionen</div>
+    </div>
+
+    <div class="cal-summary">
+        <div class="cal-stat"><div class="cal-stat-dot" style="background:var(--st-confirmed)"></div><span class="cal-stat-val">52</span><span class="cal-stat-label">Bestaetigt</span></div>
+        <div class="cal-stat"><div class="cal-stat-dot" style="background:var(--st-ordered)"></div><span class="cal-stat-val">23</span><span class="cal-stat-label">Bestellt</span></div>
+        <div class="cal-stat"><div class="cal-stat-dot" style="background:rgba(148,163,184,0.4)"></div><span class="cal-stat-val">12</span><span class="cal-stat-label">Offen</span></div>
+        <div class="cal-stat"><div class="cal-stat-dot" style="background:var(--st-rejected)"></div><span class="cal-stat-val">3</span><span class="cal-stat-label">Abgelehnt</span></div>
+        <div class="cal-stat"><div class="cal-stat-dot" style="background:var(--st-cancelled)"></div><span class="cal-stat-val">2</span><span class="cal-stat-label">Storniert</span></div>
+    </div>
+
+    <div class="cal-grid" id="calGrid"></div>
+
+    <div class="cal-legend">
+        <div class="cal-legend-item"><div class="cal-legend-box" style="background:var(--st-confirmed)"></div>Bestaetigt</div>
+        <div class="cal-legend-item"><div class="cal-legend-box" style="background:var(--st-ordered)"></div>Bestellt</div>
+        <div class="cal-legend-item"><div class="cal-legend-box" style="background:rgba(148,163,184,0.25)"></div>Offen</div>
+        <div class="cal-legend-item"><div class="cal-legend-box" style="background:var(--st-rejected)"></div>Abgelehnt</div>
+        <div class="cal-legend-item"><div class="cal-legend-box d-weekend" style="width:12px;height:12px"></div>Wochenende</div>
+    </div>
+</div>
+</div>
+
+<!-- ===== KONZEPT 2: Collapsed Range Blocks ===== -->
+<div class="concept">
+<div class="concept-head">
+    <h2>2 — Zusammengefasste Zeitbloecke</h2>
+    <span class="tag tag-alt">Kompakt</span>
+</div>
+<div class="concept-desc">
+    <strong>Idee:</strong> Aufeinanderfolgende Tage mit gleichem Status werden zu Bloecken zusammengefasst.
+    Statt 90 Zeilen sieht man z.B. 8 Bloecke: "01.12–22.12: 22× Bestaetigt", "23.12–25.12: 3× Abgelehnt", etc.
+    Klick auf Block klappt die einzelnen Tage auf.<br>
+    <strong>Pro:</strong> Dramatische Reduktion (90 → ~8 Zeilen), CRUD-faehig beim Aufklappen.<br>
+    <strong>Contra:</strong> Verliert Tagesmuster, Wochenenden nicht direkt sichtbar.
+</div>
+<div class="concept-body">
+    <div class="range-list">
+        <div class="range-block" onclick="this.classList.toggle('open')">
+            <div class="range-dates">01.12 – 22.12.2026</div>
+            <div class="range-bar"><div class="seg" style="flex:1;background:var(--st-confirmed)"></div></div>
+            <div class="range-count">22 Tage</div>
+            <div><span class="badge b-confirmed">Bestaetigt</span></div>
+            <div class="range-chevron">▶</div>
+        </div>
+        <div class="range-detail">
+            <table>
+                <tr><th>Datum</th><th>Abfahrt</th><th>Debicode</th><th>Status</th><th>Rueckmeldung</th></tr>
+                <tr><td>01.12.2026 Mo</td><td>06:40</td><td>DEB-8801</td><td><span class="badge b-confirmed">Bestaetigt</span></td><td>28.11 14:22</td></tr>
+                <tr><td>02.12.2026 Di</td><td>06:40</td><td>DEB-8802</td><td><span class="badge b-confirmed">Bestaetigt</span></td><td>28.11 14:22</td></tr>
+                <tr><td>03.12.2026 Mi</td><td>06:40</td><td>DEB-8803</td><td><span class="badge b-confirmed">Bestaetigt</span></td><td>28.11 14:22</td></tr>
+                <tr><td style="color:var(--text-muted)">… 19 weitere</td><td></td><td></td><td></td><td></td></tr>
+            </table>
+        </div>
+
+        <div class="range-block" onclick="this.classList.toggle('open')">
+            <div class="range-dates">23.12 – 25.12.2026</div>
+            <div class="range-bar"><div class="seg" style="flex:1;background:var(--st-rejected)"></div></div>
+            <div class="range-count">3 Tage</div>
+            <div><span class="badge b-rejected">Abgelehnt</span></div>
+            <div class="range-chevron">▶</div>
+        </div>
+        <div class="range-detail"></div>
+
+        <div class="range-block" onclick="this.classList.toggle('open')">
+            <div class="range-dates">26.12 – 31.12.2026</div>
+            <div class="range-bar"><div class="seg" style="flex:1;background:var(--st-ordered)"></div></div>
+            <div class="range-count">6 Tage</div>
+            <div><span class="badge b-ordered">Bestellt</span></div>
+            <div class="range-chevron">▶</div>
+        </div>
+        <div class="range-detail"></div>
+
+        <div class="range-block" onclick="this.classList.toggle('open')">
+            <div class="range-dates">01.01 – 15.01.2027</div>
+            <div class="range-bar"><div class="seg" style="flex:1;background:var(--st-confirmed)"></div></div>
+            <div class="range-count">15 Tage</div>
+            <div><span class="badge b-confirmed">Bestaetigt</span></div>
+            <div class="range-chevron">▶</div>
+        </div>
+        <div class="range-detail"></div>
+
+        <div class="range-block" onclick="this.classList.toggle('open')">
+            <div class="range-dates">16.01 – 31.01.2027</div>
+            <div class="range-bar">
+                <div class="seg" style="flex:10;background:var(--st-ordered)"></div>
+                <div class="seg" style="flex:6;background:rgba(148,163,184,0.25)"></div>
+            </div>
+            <div class="range-count">16 Tage</div>
+            <div><span class="badge b-ordered">Gemischt</span></div>
+            <div class="range-chevron">▶</div>
+        </div>
+        <div class="range-detail"></div>
+
+        <div class="range-block" onclick="this.classList.toggle('open')">
+            <div class="range-dates">01.02 – 28.02.2027</div>
+            <div class="range-bar"><div class="seg" style="flex:1;background:rgba(148,163,184,0.25)"></div></div>
+            <div class="range-count">28 Tage</div>
+            <div><span class="badge b-open">Offen</span></div>
+            <div class="range-chevron">▶</div>
+        </div>
+        <div class="range-detail"></div>
+    </div>
+</div>
+</div>
+
+<!-- ===== KONZEPT 3: Timeline Strip + Filtered Table ===== -->
+<div class="concept">
+<div class="concept-head">
+    <h2>3 — Timeline-Streifen + Filter-Tabelle</h2>
+    <span class="tag tag-vis">Hybrid</span>
+</div>
+<div class="concept-desc">
+    <strong>Idee:</strong> Oben ein farbiger Zeitstreifen als Ueberblick (proportionale Segmente nach Status).
+    Darunter eine scrollbare Tabelle mit Status-Filtern. Klick auf ein Segment im Streifen filtert die Tabelle.<br>
+    <strong>Pro:</strong> Bester Kompromiss aus Ueberblick und CRUD, Filter reduzieren sichtbare Zeilen.<br>
+    <strong>Contra:</strong> Braucht mehr Platz als die anderen, zwei Interaktionszonen.
+</div>
+<div class="concept-body">
+    <div class="tl-strip-wrap">
+        <div class="tl-strip-label">Dez 2026 – Feb 2027 · 92 Bestellpositionen</div>
+        <div class="tl-strip">
+            <div class="tl-seg" style="flex:22;background:var(--st-confirmed)" data-tip="01–22 Dez: 22× Bestaetigt"></div>
+            <div class="tl-seg" style="flex:3;background:var(--st-rejected)" data-tip="23–25 Dez: 3× Abgelehnt"></div>
+            <div class="tl-seg" style="flex:6;background:var(--st-ordered)" data-tip="26–31 Dez: 6× Bestellt"></div>
+            <div class="tl-seg" style="flex:15;background:var(--st-confirmed)" data-tip="01–15 Jan: 15× Bestaetigt"></div>
+            <div class="tl-seg" style="flex:10;background:var(--st-ordered)" data-tip="16–25 Jan: 10× Bestellt"></div>
+            <div class="tl-seg" style="flex:6;background:rgba(148,163,184,0.25)" data-tip="26–31 Jan: 6× Offen"></div>
+            <div class="tl-seg" style="flex:28;background:rgba(148,163,184,0.15)" data-tip="01–28 Feb: 28× Offen"></div>
+        </div>
+    </div>
+
+    <div class="tl-filter-row">
+        <button class="tl-filter-btn active" onclick="document.querySelectorAll('.tl-filter-btn').forEach(b=>b.classList.remove('active'));this.classList.add('active')">Alle (92)</button>
+        <button class="tl-filter-btn" onclick="document.querySelectorAll('.tl-filter-btn').forEach(b=>b.classList.remove('active'));this.classList.add('active')">Bestaetigt (37)</button>
+        <button class="tl-filter-btn" onclick="document.querySelectorAll('.tl-filter-btn').forEach(b=>b.classList.remove('active'));this.classList.add('active')">Bestellt (16)</button>
+        <button class="tl-filter-btn" onclick="document.querySelectorAll('.tl-filter-btn').forEach(b=>b.classList.remove('active'));this.classList.add('active')">Offen (34)</button>
+        <button class="tl-filter-btn" onclick="document.querySelectorAll('.tl-filter-btn').forEach(b=>b.classList.remove('active'));this.classList.add('active')">Abgelehnt (3)</button>
+        <button class="tl-filter-btn" onclick="document.querySelectorAll('.tl-filter-btn').forEach(b=>b.classList.remove('active'));this.classList.add('active')">Storniert (2)</button>
+    </div>
+
+    <div class="tl-table-wrap">
+        <table class="tl-table" id="tlTable">
+            <thead><tr><th>Datum</th><th>Wochentag</th><th>Abfahrt</th><th>Debicode</th><th>Status</th><th>Bestellt am</th><th>Rueckmeldung</th></tr></thead>
+            <tbody id="tlBody"></tbody>
+        </table>
+    </div>
+</div>
+</div>
+
+<!-- Comparison -->
+<div class="cmp">
+<table>
+<thead><tr><th style="width:200px">Kriterium</th><th>1 — Kalender-Heatmap</th><th>2 — Zeitbloecke</th><th>3 — Timeline + Tabelle</th></tr></thead>
+<tbody>
+<tr><td>100+ Positionen auf einen Blick</td><td><span class="chk">✓</span> Alles sichtbar</td><td><span class="chk">✓</span> Komprimiert auf ~8 Zeilen</td><td><span class="prt">~</span> Streifen + scrollen</td></tr>
+<tr><td>Muster erkennen (z.B. Woche abgelehnt)</td><td><span class="chk">✓</span> Sofort sichtbar</td><td><span class="prt">~</span> Nur Bloecke</td><td><span class="prt">~</span> Nur im Streifen</td></tr>
+<tr><td>Einzelne Bestellung bearbeiten</td><td><span class="crs">✗</span> Nur Ansicht</td><td><span class="chk">✓</span> Aufklappen</td><td><span class="chk">✓</span> Direkt in Tabelle</td></tr>
+<tr><td>Bulk-Aktionen (z.B. alle offenen bestellen)</td><td><span class="crs">✗</span> Nein</td><td><span class="prt">~</span> Pro Block</td><td><span class="chk">✓</span> Filter + Multiselect</td></tr>
+<tr><td>Platzbedarf</td><td><span class="chk">✓</span> Sehr kompakt</td><td><span class="chk">✓</span> Kompakt</td><td><span class="prt">~</span> Braucht Hoehe</td></tr>
+<tr><td><strong>Empfehlung</strong></td><td><strong style="color:var(--accent)">Bester Ueberblick</strong></td><td>Guter Kompromiss</td><td>Beste CRUD-Faehigkeit</td></tr>
+</tbody>
+</table>
+</div>
+
+<p style="margin-top:32px;color:var(--text-muted);font-size:12px">
+<strong>Mein Vorschlag:</strong> Kombination aus 1 + 3. Kalender-Heatmap als Ueberblick oben, darunter die Filter-Tabelle fuer CRUD. Klick auf einen Tag im Kalender scrollt zur entsprechenden Zeile.
+</p>
+
+</div>
+
+<script>
+// Generate calendar heatmap for Dec 2026 - Feb 2027
+const grid = document.getElementById('calGrid');
+const statuses = ['confirmed','ordered','open','rejected','cancelled'];
+const months = [
+    { name: 'Dezember 2026', year: 2026, month: 11, days: 31 },
+    { name: 'Januar 2027', year: 2027, month: 0, days: 31 },
+    { name: 'Februar 2027', year: 2027, month: 1, days: 28 }
+];
+
+function randomStatus(dayOfMonth, month) {
+    if (month === 11 && dayOfMonth <= 22) return 'confirmed';
+    if (month === 11 && dayOfMonth >= 23 && dayOfMonth <= 25) return 'rejected';
+    if (month === 11 && dayOfMonth >= 26) return 'ordered';
+    if (month === 0 && dayOfMonth <= 15) return 'confirmed';
+    if (month === 0 && dayOfMonth <= 25) return 'ordered';
+    if (month === 0) return 'open';
+    return 'open';
+}
+
+const dayNames = ['So','Mo','Di','Mi','Do','Fr','Sa'];
+
+months.forEach(m => {
+    const label = document.createElement('div');
+    label.className = 'cal-month-label';
+    label.textContent = m.name;
+    grid.appendChild(label);
+
+    for (let d = 1; d <= m.days; d++) {
+        const date = new Date(m.year, m.month, d);
+        const dow = date.getDay();
+        const isWeekend = dow === 0 || dow === 6;
+        const status = isWeekend ? null : randomStatus(d, m.month);
+
+        const cell = document.createElement('div');
+        cell.className = 'cal-day ' + (isWeekend ? 'd-weekend' : status ? 'd-' + status : 'd-none');
+
+        const dateStr = String(d).padStart(2, '0') + '.' + String(m.month + 1).padStart(2, '0');
+        const statusLabel = status ? {confirmed:'Bestätigt',ordered:'Bestellt',open:'Offen',rejected:'Abgelehnt',cancelled:'Storniert'}[status] : 'Kein Verkehr';
+        cell.setAttribute('data-tip', dateStr + ' ' + dayNames[dow] + ' · ' + statusLabel);
+        grid.appendChild(cell);
+    }
+});
+
+// Generate table rows for Concept 3
+const tbody = document.getElementById('tlBody');
+months.forEach(m => {
+    for (let d = 1; d <= m.days; d++) {
+        const date = new Date(m.year, m.month, d);
+        const dow = date.getDay();
+        if (dow === 0 || dow === 6) continue;
+
+        const status = randomStatus(d, m.month);
+        const dateStr = String(d).padStart(2, '0') + '.' + String(m.month + 1).padStart(2, '0') + '.' + m.year;
+        const badgeClass = {confirmed:'b-confirmed',ordered:'b-ordered',open:'b-open',rejected:'b-rejected',cancelled:'b-open'}[status];
+        const label = {confirmed:'Bestätigt',ordered:'Bestellt',open:'Offen',rejected:'Abgelehnt',cancelled:'Storniert'}[status];
+        const debi = 'DEB-' + (8800 + d);
+        const ordered = status !== 'open' ? '25.11.2026' : '—';
+        const feedback = status === 'confirmed' ? '28.11 14:22' : status === 'rejected' ? '29.11 09:15' : '—';
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${dateStr}</td><td>${dayNames[dow]}</td><td>06:40</td><td>${debi}</td><td><span class="badge ${badgeClass}">${label}</span></td><td>${ordered}</td><td>${feedback}</td>`;
+        tbody.appendChild(tr);
+    }
+});
+</script>
+</body>
+</html>

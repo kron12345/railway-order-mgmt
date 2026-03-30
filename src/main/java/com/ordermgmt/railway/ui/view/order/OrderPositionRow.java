@@ -1,0 +1,164 @@
+package com.ordermgmt.railway.ui.view.order;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.BiFunction;
+import java.util.function.Consumer;
+
+import com.ordermgmt.railway.domain.order.model.PurchasePosition;
+
+import com.vaadin.flow.component.button.Button;
+import com.vaadin.flow.component.button.ButtonVariant;
+import com.vaadin.flow.component.html.Div;
+import com.vaadin.flow.component.html.Span;
+import com.vaadin.flow.component.icon.VaadinIcon;
+import com.vaadin.flow.component.orderedlayout.FlexComponent;
+import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
+
+import com.ordermgmt.railway.domain.order.model.OrderPosition;
+import com.ordermgmt.railway.ui.component.PurchaseCalendarPanel;
+import com.ordermgmt.railway.ui.component.StatusBadge;
+
+/**
+ * Single position row with summary info and toggleable purchase calendar.
+ */
+public class OrderPositionRow extends Div {
+
+    private final OrderPosition position;
+    private final Div calendarSlot = new Div();
+    private boolean calendarOpen = false;
+
+    public OrderPositionRow(
+            OrderPosition position,
+            BiFunction<String, Object[], String> translator,
+            Consumer<OrderPosition> onEdit,
+            Consumer<OrderPosition> onDelete) {
+        this.position = position;
+
+        getStyle()
+                .set("border-bottom", "1px solid var(--rom-border)")
+                .set("padding", "0");
+
+        add(createSummary(translator, onEdit, onDelete));
+
+        calendarSlot.setWidthFull();
+        calendarSlot.getStyle().set("padding", "0 12px 12px 12px");
+        calendarSlot.setVisible(false);
+        add(calendarSlot);
+    }
+
+    private HorizontalLayout createSummary(
+            BiFunction<String, Object[], String> t,
+            Consumer<OrderPosition> onEdit,
+            Consumer<OrderPosition> onDelete) {
+
+        Span name = new Span(position.getName());
+        name.getStyle()
+                .set("font-weight", "600")
+                .set("font-size", "13px")
+                .set("color", "var(--rom-text-primary)")
+                .set("min-width", "150px");
+
+        StatusBadge typeBadge = createTypeBadge(t);
+
+        Span route = new Span(formatRoute());
+        route.getStyle()
+                .set("font-family", "'JetBrains Mono', monospace")
+                .set("font-size", "12px")
+                .set("color", "var(--rom-text-secondary)")
+                .set("flex", "1");
+
+        StatusBadge statusBadge = createStatusBadge(t);
+
+        // Purchase calendar toggle — prominent button
+        long purchaseCount = position.getPurchasePositions() != null
+                ? position.getPurchasePositions().size() : 0;
+        String calLabel = purchaseCount > 0 ? purchaseCount + " Bestell." : "Bestell.";
+        Button calBtn = new Button(calLabel, VaadinIcon.CALENDAR.create());
+        calBtn.addThemeVariants(ButtonVariant.LUMO_SMALL);
+        calBtn.getStyle()
+                .set("font-family", "'JetBrains Mono', monospace")
+                .set("font-size", "10px")
+                .set("font-weight", "600")
+                .set("border-radius", "4px")
+                .set("min-width", "90px");
+        if (purchaseCount > 0) {
+            calBtn.getStyle()
+                    .set("background", "rgba(45,212,191,0.1)")
+                    .set("color", "var(--rom-accent)")
+                    .set("border", "1px solid rgba(45,212,191,0.3)");
+        } else {
+            calBtn.getStyle()
+                    .set("background", "rgba(148,163,184,0.06)")
+                    .set("color", "var(--rom-text-muted)")
+                    .set("border", "1px solid var(--rom-border)");
+        }
+        calBtn.addClickListener(e -> toggleCalendar());
+
+        // Edit + Delete (smaller, secondary)
+        Button editBtn = new Button(VaadinIcon.EDIT.create());
+        editBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
+        editBtn.getStyle().set("color", "var(--rom-text-muted)");
+        editBtn.addClickListener(e -> onEdit.accept(position));
+
+        Button delBtn = new Button(VaadinIcon.TRASH.create());
+        delBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
+        delBtn.getStyle().set("color", "var(--rom-status-danger)");
+        delBtn.addClickListener(e -> onDelete.accept(position));
+
+        HorizontalLayout row = new HorizontalLayout(
+                name, typeBadge, route, statusBadge, calBtn, editBtn, delBtn);
+        row.setWidthFull();
+        row.setAlignItems(FlexComponent.Alignment.CENTER);
+        row.getStyle()
+                .set("padding", "10px 12px")
+                .set("gap", "12px")
+                .set("cursor", "default");
+        row.expand(route);
+
+        return row;
+    }
+
+    private void toggleCalendar() {
+        calendarOpen = !calendarOpen;
+        calendarSlot.setVisible(calendarOpen);
+
+        if (calendarOpen && calendarSlot.getComponentCount() == 0) {
+            List<PurchasePosition> purchases = position.getPurchasePositions() != null
+                    ? new ArrayList<>(position.getPurchasePositions())
+                    : List.of();
+            calendarSlot.add(new PurchaseCalendarPanel(position, purchases));
+        }
+    }
+
+    private StatusBadge createTypeBadge(BiFunction<String, Object[], String> t) {
+        if (position.getType() == null) {
+            return new StatusBadge("—", StatusBadge.StatusType.NEUTRAL);
+        }
+        String label = t.apply("position.type." + position.getType().name(), new Object[0]);
+        return switch (position.getType()) {
+            case FAHRPLAN -> new StatusBadge(label, StatusBadge.StatusType.INFO);
+            case LEISTUNG -> new StatusBadge(label, StatusBadge.StatusType.WARNING);
+        };
+    }
+
+    private StatusBadge createStatusBadge(BiFunction<String, Object[], String> t) {
+        if (position.getInternalStatus() == null) {
+            return new StatusBadge("—", StatusBadge.StatusType.NEUTRAL);
+        }
+        String label = t.apply("position.status." + position.getInternalStatus().name(), new Object[0]);
+        return switch (position.getInternalStatus()) {
+            case IN_BEARBEITUNG, UEBERMITTELT -> new StatusBadge(label, StatusBadge.StatusType.INFO);
+            case FREIGEGEBEN, ABGESCHLOSSEN -> new StatusBadge(label, StatusBadge.StatusType.SUCCESS);
+            case UEBERARBEITEN, BEANTRAGT -> new StatusBadge(label, StatusBadge.StatusType.WARNING);
+            case ANNULLIERT -> new StatusBadge(label, StatusBadge.StatusType.DANGER);
+        };
+    }
+
+    private String formatRoute() {
+        String from = position.getFromLocation();
+        String to = position.getToLocation();
+        if (from == null && to == null) return "—";
+        return (from != null ? from : "?") + " → " + (to != null ? to : "?");
+    }
+}

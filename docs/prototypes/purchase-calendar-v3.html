@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bestellkalender v3 — Kompakt</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+    --bg: #0B1120; --bg2: #111827; --bg3: #1A2332; --bg4: #1E293B;
+    --brd: #1E3A5F; --brd2: #1C2D42;
+    --t1: #E2E8F0; --t2: #94A3B8; --t3: #64748B;
+    --acc: #2DD4BF;
+    --confirmed: #34D399; --ordered: #60A5FA; --open-st: #64748B; --rejected: #F87171; --cancelled: #6B7280;
+    --ttr5: #FBBF24;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: var(--bg); color: var(--t1); font-family: 'DM Sans', sans-serif; font-size: 14px; }
+.page { max-width: 100%; margin: 0 auto; padding: 24px; }
+.mono { font-family: 'JetBrains Mono', monospace; }
+
+/* Header */
+.hdr { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; flex-wrap: wrap; gap: 12px; }
+.hdr-left h1 { font-family: 'JetBrains Mono', monospace; font-size: 18px; font-weight: 700; color: var(--t1); }
+.hdr-left .route { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--t2); margin-top: 2px; }
+.hdr-right { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.stat { display: flex; align-items: center; gap: 4px; }
+.stat-dot { width: 8px; height: 8px; border-radius: 2px; }
+.stat-n { font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700; }
+.stat-l { font-size: 10px; color: var(--t3); }
+
+/* TTR mini bar */
+.ttr-mini { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 10px; color: var(--t3); }
+.ttr-mini .ttr-phase { font-family: 'JetBrains Mono', monospace; padding: 2px 8px; border-radius: 3px; background: rgba(251,191,36,0.12); color: var(--ttr5); border: 1px solid rgba(251,191,36,0.3); font-weight: 600; letter-spacing: 0.04em; }
+.ttr-mini .fpj-badge { font-family: 'JetBrains Mono', monospace; padding: 2px 8px; border-radius: 3px; background: rgba(45,212,191,0.1); color: var(--acc); border: 1px solid rgba(45,212,191,0.25); }
+
+/* Compact Calendar */
+.cal-wrap { margin-bottom: 16px; border: 1px solid var(--brd); border-radius: 6px; overflow-x: auto; }
+.cal { border-collapse: collapse; width: max-content; min-width: 100%; }
+
+/* Week separator columns */
+.cal .wsep { width: 3px; padding: 0; background: var(--bg); }
+.cal .wsep-head { width: 3px; padding: 0; background: var(--bg2); }
+
+/* Header rows */
+.cal .week-num-row th {
+    font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 400;
+    color: var(--t3); background: var(--bg2); padding: 3px 0; text-align: center;
+    border-bottom: 1px solid rgba(30,58,95,0.5);
+}
+.cal .day-name-row th {
+    font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 600;
+    color: var(--t3); background: var(--bg2); padding: 4px 0; text-align: center;
+    border-bottom: 1px solid var(--brd); min-width: 30px;
+}
+.cal .day-name-row th.we { color: rgba(148,163,184,0.3); }
+.cal .month-hdr { background: var(--bg2); border-bottom: 1px solid var(--brd); }
+
+/* Month label cell */
+.cal td.mlabel {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600;
+    color: var(--t2); background: var(--bg2); padding: 6px 10px;
+    white-space: nowrap; border-right: 1px solid var(--brd);
+    position: sticky; left: 0; z-index: 3;
+}
+.cal td.mlabel .fpj { display: block; font-size: 8px; color: var(--acc); font-weight: 400; margin-top: 1px; }
+
+/* Day cells */
+.cal td.dc {
+    padding: 0; text-align: center; border-bottom: 1px solid var(--brd2);
+    min-width: 30px; height: 32px; position: relative;
+}
+.cal td.dc .d {
+    display: flex; align-items: center; justify-content: center;
+    width: 100%; height: 100%;
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600;
+    cursor: pointer; transition: filter 0.1s;
+}
+.cal td.dc .d:hover { filter: brightness(1.3); z-index: 2; }
+.cal td.dc .d[data-t]:hover::after {
+    content: attr(data-t); position: absolute; bottom: calc(100% + 4px); left: 50%;
+    transform: translateX(-50%); background: var(--bg2); border: 1px solid var(--brd);
+    color: var(--t1); padding: 3px 8px; border-radius: 3px; font-size: 10px;
+    white-space: nowrap; z-index: 30; pointer-events: none;
+}
+.d-con { background: rgba(52,211,153,0.2); color: var(--confirmed); }
+.d-ord { background: rgba(96,165,250,0.2); color: var(--ordered); }
+.d-opn { background: rgba(148,163,184,0.06); color: var(--t3); }
+.d-rej { background: rgba(248,113,113,0.2); color: var(--rejected); }
+.d-can { background: rgba(107,114,128,0.1); color: var(--cancelled); text-decoration: line-through; }
+.d-we { background: rgba(148,163,184,0.02); color: rgba(148,163,184,0.15); }
+.d-empty { background: transparent; }
+
+/* FPJ boundary */
+.fpj-line { border-left: 2px solid var(--acc) !important; }
+
+/* Legend */
+.legend { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 20px; }
+.leg { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--t3); }
+.leg-b { width: 12px; height: 12px; border-radius: 2px; display: flex; align-items: center; justify-content: center; font-size: 7px; font-weight: 700; }
+
+/* Detail Table */
+.sec-title { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--t3); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
+.f-row { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+.fb { padding: 4px 10px; border-radius: 3px; border: 1px solid var(--brd); background: transparent; color: var(--t2); font-size: 10px; font-family: 'JetBrains Mono', monospace; cursor: pointer; transition: all 0.15s; }
+.fb:hover, .fb.on { border-color: var(--acc); color: var(--acc); background: rgba(45,212,191,0.06); }
+.tw { max-height: 220px; overflow-y: auto; border: 1px solid var(--brd); border-radius: 5px; }
+.dt { width: 100%; border-collapse: collapse; font-size: 11px; }
+.dt th { position: sticky; top: 0; text-align: left; padding: 6px 8px; color: var(--t3); font-family: 'JetBrains Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid var(--brd); background: var(--bg2); z-index: 5; }
+.dt td { padding: 4px 8px; border-bottom: 1px solid var(--brd2); font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+.dt tr:hover { background: var(--bg4); }
+.badge { display: inline-flex; padding: 1px 6px; border-radius: 3px; font-size: 9px; font-weight: 600; font-family: 'JetBrains Mono', monospace; text-transform: uppercase; }
+.b-c { color: var(--confirmed); background: rgba(52,211,153,0.12); }
+.b-o { color: var(--ordered); background: rgba(96,165,250,0.12); }
+.b-p { color: var(--open-st); background: rgba(148,163,184,0.08); }
+.b-r { color: var(--rejected); background: rgba(248,113,113,0.12); }
+</style>
+</head>
+<body>
+<div class="page">
+
+<div class="hdr">
+    <div class="hdr-left">
+        <h1>Kohle HH-MUC Taeglich — Kapazitaet Netz</h1>
+        <div class="route">Hamburg Hbf → Muenchen Hbf · Ab 06:40 · 92 Bestellpositionen</div>
+    </div>
+    <div class="hdr-right">
+        <div class="stat"><div class="stat-dot" style="background:var(--confirmed)"></div><span class="stat-n">37</span><span class="stat-l">Best.</span></div>
+        <div class="stat"><div class="stat-dot" style="background:var(--ordered)"></div><span class="stat-n">16</span><span class="stat-l">Best.</span></div>
+        <div class="stat"><div class="stat-dot" style="background:var(--open-st)"></div><span class="stat-n">34</span><span class="stat-l">Offen</span></div>
+        <div class="stat"><div class="stat-dot" style="background:var(--rejected)"></div><span class="stat-n">3</span><span class="stat-l">Abgel.</span></div>
+    </div>
+</div>
+
+<div class="ttr-mini">
+    <span class="fpj-badge">FPJ 2027</span>
+    <span>Fahrplanwechsel 12.12.2026</span>
+    <span class="ttr-phase">▸ Phase 5: Kurzfrist / Ad-hoc</span>
+    <span>Bestellschluss war Jan 2026 · Zuweisung Aug 2026</span>
+</div>
+
+<div class="cal-wrap">
+    <table class="cal" id="cal"></table>
+</div>
+
+<div class="legend">
+    <div class="leg"><div class="leg-b d-con">3</div>Bestaetigt</div>
+    <div class="leg"><div class="leg-b d-ord">3</div>Bestellt</div>
+    <div class="leg"><div class="leg-b d-opn">3</div>Offen</div>
+    <div class="leg"><div class="leg-b d-rej">3</div>Abgelehnt</div>
+    <div class="leg"><div class="leg-b d-we" style="border:1px dashed rgba(148,163,184,0.15)"></div>Wochenende</div>
+    <div class="leg"><div style="width:2px;height:12px;background:var(--acc);border-radius:1px"></div>Fahrplanwechsel</div>
+</div>
+
+<div class="sec-title">Bestellpositionen — Detail</div>
+<div class="f-row">
+    <button class="fb on">Alle (92)</button>
+    <button class="fb">Bestaetigt (37)</button>
+    <button class="fb">Bestellt (16)</button>
+    <button class="fb">Offen (34)</button>
+    <button class="fb">Abgelehnt (3)</button>
+</div>
+<div class="tw">
+    <table class="dt">
+        <thead><tr><th>Datum</th><th>Tag</th><th>FPJ</th><th>Ab</th><th>Debicode</th><th>Status</th><th>Bestellt</th><th>Rueckm.</th></tr></thead>
+        <tbody id="tbl"></tbody>
+    </table>
+</div>
+
+</div>
+
+<script>
+const FPJ_DATE = new Date(2026, 11, 12);
+const DN = ['So','Mo','Di','Mi','Do','Fr','Sa'];
+const DNH = ['Mo','Di','Mi','Do','Fr','Sa','So'];
+
+function st(y, m, d) {
+    const dow = new Date(y, m, d).getDay();
+    if (dow === 0 || dow === 6) return 'we';
+    if (m === 11 && d <= 22) return 'con';
+    if (m === 11 && d >= 23 && d <= 25) return 'rej';
+    if (m === 11 && d >= 26) return 'ord';
+    if (m === 0 && d <= 15) return 'con';
+    if (m === 0 && d <= 25) return 'ord';
+    return 'opn';
+}
+function stL(s) { return {con:'Bestätigt',ord:'Bestellt',opn:'Offen',rej:'Abgelehnt',can:'Storniert',we:'WE'}[s]||''; }
+function stB(s) { return {con:'b-c',ord:'b-o',opn:'b-p',rej:'b-r'}[s]||'b-p'; }
+
+const months = [
+    { l: 'Dez 2026', y: 2026, m: 11, days: 31, fpj: 'FPJ 2026→2027' },
+    { l: 'Jan 2027', y: 2027, m: 0, days: 31, fpj: 'FPJ 2027' },
+    { l: 'Feb 2027', y: 2027, m: 1, days: 28, fpj: 'FPJ 2027' },
+    { l: 'Mär 2027', y: 2027, m: 2, days: 31, fpj: 'FPJ 2027' },
+];
+
+// Calculate max weeks needed
+let maxWeeks = 0;
+months.forEach(mo => {
+    const firstDow = new Date(mo.y, mo.m, 1).getDay();
+    const startCol = firstDow === 0 ? 6 : firstDow - 1;
+    const totalSlots = startCol + mo.days;
+    const weeks = Math.ceil(totalSlots / 7);
+    if (weeks > maxWeeks) maxWeeks = weeks;
+});
+
+const table = document.getElementById('cal');
+
+// Build header: week numbers row
+let h1 = '<thead><tr class="week-num-row"><th style="background:var(--bg2);border-bottom:1px solid rgba(30,58,95,0.5);position:sticky;left:0;z-index:4"></th>';
+for (let w = 0; w < maxWeeks; w++) {
+    if (w > 0) h1 += '<th class="wsep-head"></th>';
+    h1 += '<th colspan="7" style="text-align:center">KW ' + (w + 1) + '</th>';
+}
+h1 += '</tr>';
+
+// Day name row
+let h2 = '<tr class="day-name-row"><th style="position:sticky;left:0;z-index:4;background:var(--bg2);border-right:1px solid var(--brd)">Monat</th>';
+for (let w = 0; w < maxWeeks; w++) {
+    if (w > 0) h2 += '<th class="wsep-head"></th>';
+    DNH.forEach((n, i) => {
+        const cls = i >= 5 ? ' class="we"' : '';
+        h2 += '<th' + cls + '>' + n + '</th>';
+    });
+}
+h2 += '</tr></thead>';
+table.innerHTML = h1 + h2 + '<tbody id="calBody"></tbody>';
+
+const calBody = document.getElementById('calBody');
+const tblBody = document.getElementById('tbl');
+
+months.forEach(mo => {
+    const tr = document.createElement('tr');
+    const firstDow = new Date(mo.y, mo.m, 1).getDay();
+    const startCol = firstDow === 0 ? 6 : firstDow - 1;
+
+    // Month label
+    const mlabel = document.createElement('td');
+    mlabel.className = 'mlabel';
+    mlabel.innerHTML = mo.l + '<span class="fpj">' + mo.fpj + '</span>';
+    tr.appendChild(mlabel);
+
+    let dayIdx = 1;
+    for (let w = 0; w < maxWeeks; w++) {
+        // Week separator
+        if (w > 0) {
+            const sep = document.createElement('td');
+            sep.className = 'wsep';
+            sep.style.cssText = 'padding:0;width:3px;background:var(--bg);border-bottom:1px solid var(--brd2)';
+            tr.appendChild(sep);
+        }
+
+        for (let wd = 0; wd < 7; wd++) {
+            const td = document.createElement('td');
+            td.className = 'dc';
+            const globalPos = w * 7 + wd;
+            const inRange = globalPos >= startCol && dayIdx <= mo.days;
+
+            if (inRange) {
+                const d = dayIdx;
+                const status = st(mo.y, mo.m, d);
+                const dateObj = new Date(mo.y, mo.m, d);
+                const isFpj = (mo.y === 2026 && mo.m === 11 && d === 12);
+                const ds = String(d).padStart(2, '0') + '.' + String(mo.m + 1).padStart(2, '0');
+                const tip = ds + ' ' + DN[dateObj.getDay()] + (status !== 'we' ? ' · ' + stL(status) : '');
+
+                if (isFpj) td.classList.add('fpj-line');
+
+                const div = document.createElement('div');
+                div.className = 'd d-' + status;
+                div.textContent = d;
+                div.setAttribute('data-t', tip);
+                td.appendChild(div);
+                dayIdx++;
+            } else {
+                const div = document.createElement('div');
+                div.className = 'd d-empty';
+                td.appendChild(div);
+            }
+            tr.appendChild(td);
+        }
+    }
+    calBody.appendChild(tr);
+
+    // Table rows
+    for (let d = 1; d <= mo.days; d++) {
+        const date = new Date(mo.y, mo.m, d);
+        const dow = date.getDay();
+        if (dow === 0 || dow === 6) continue;
+        const s = st(mo.y, mo.m, d);
+        const ds = String(d).padStart(2, '0') + '.' + String(mo.m + 1).padStart(2, '0') + '.' + mo.y;
+        const fpj = date < FPJ_DATE ? '2026' : '2027';
+        const deb = 'DEB-' + (8800 + d + mo.m * 31);
+        const oAt = s !== 'opn' ? '25.11.26' : '—';
+        const fb = s === 'con' ? '28.11' : s === 'rej' ? '29.11' : '—';
+        const r = document.createElement('tr');
+        r.innerHTML = '<td>' + ds + '</td><td>' + DN[dow] + '</td><td style="color:var(--acc)">' + fpj + '</td><td>06:40</td><td>' + deb + '</td><td><span class="badge ' + stB(s) + '">' + stL(s) + '</span></td><td>' + oAt + '</td><td>' + fb + '</td>';
+        tblBody.appendChild(r);
+    }
+});
+
+// Filter buttons
+document.querySelectorAll('.fb').forEach(b => {
+    b.addEventListener('click', () => {
+        document.querySelectorAll('.fb').forEach(x => x.classList.remove('on'));
+        b.classList.add('on');
+    });
+});
+</script>
+</body>
+</html>

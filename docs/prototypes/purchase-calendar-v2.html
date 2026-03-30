@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bestellkalender — Kalender + TTR-Phasen + CRUD</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+    --bg: #0B1120; --bg2: #111827; --bg3: #1A2332; --bg4: #1E293B;
+    --brd: #1E3A5F; --brd2: #1C2D42;
+    --t1: #E2E8F0; --t2: #94A3B8; --t3: #64748B;
+    --acc: #2DD4BF;
+    --confirmed: #34D399; --ordered: #60A5FA; --open-st: #94A3B8; --rejected: #F87171; --cancelled: #6B7280;
+    /* TTR Phase colors */
+    --ttr1: #A78BFA; --ttr2: #818CF8; --ttr3: #60A5FA; --ttr4: #2DD4BF; --ttr5: #FBBF24;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: var(--bg); color: var(--t1); font-family: 'DM Sans', sans-serif; font-size: 14px; }
+.page { max-width: 1400px; margin: 0 auto; padding: 32px 24px; }
+
+/* Header */
+.hdr { margin-bottom: 24px; }
+.hdr h1 { font-family: 'JetBrains Mono', monospace; font-size: 15px; color: var(--acc); letter-spacing: 0.06em; margin-bottom: 2px; }
+.hdr-sub { font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 700; color: var(--t1); }
+.hdr-route { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--t2); margin-top: 4px; }
+
+/* Summary bar */
+.summary { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 20px; padding: 14px 18px; background: var(--bg3); border: 1px solid var(--brd2); border-radius: 6px; }
+.sum-item { display: flex; align-items: center; gap: 6px; }
+.sum-dot { width: 10px; height: 10px; border-radius: 3px; }
+.sum-val { font-family: 'JetBrains Mono', monospace; font-size: 15px; font-weight: 700; }
+.sum-label { font-size: 11px; color: var(--t3); }
+
+/* TTR Phase bar */
+.ttr-bar { margin-bottom: 20px; }
+.ttr-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--t3); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+.ttr-strip { display: flex; height: 24px; border-radius: 4px; overflow: hidden; border: 1px solid var(--brd2); }
+.ttr-seg { display: flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 600; letter-spacing: 0.04em; color: rgba(0,0,0,0.7); position: relative; }
+.ttr-seg[data-tip]:hover::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); background: var(--bg2); border: 1px solid var(--brd); color: var(--t1); padding: 4px 10px; border-radius: 4px; font-size: 10px; white-space: nowrap; z-index: 20; }
+.fpj-marker { position: relative; display: flex; align-items: center; }
+.fpj-marker::before { content: ''; position: absolute; left: 0; top: -4px; bottom: -4px; width: 2px; background: var(--acc); }
+
+/* Calendar Table */
+.cal-wrap { margin-bottom: 24px; border: 1px solid var(--brd); border-radius: 6px; overflow: auto; }
+.cal { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.cal th { padding: 8px 4px; font-family: 'JetBrains Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--t3); background: var(--bg2); border-bottom: 1px solid var(--brd); text-align: center; }
+.cal th.month-col { width: 130px; text-align: left; padding-left: 12px; }
+.cal th.day-col { width: calc((100% - 130px) / 7); }
+.cal td { padding: 0; border-bottom: 1px solid var(--brd2); height: 36px; vertical-align: top; }
+.cal td.month-cell { padding: 8px 12px; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; color: var(--t2); background: var(--bg2); vertical-align: middle; border-right: 1px solid var(--brd); }
+.cal td.month-cell .fpj-tag { display: block; font-size: 9px; color: var(--acc); font-weight: 400; margin-top: 2px; }
+
+/* Week row */
+.week-row td { border-bottom: 1px solid rgba(30,58,95,0.3); }
+.week-row:last-child td { border-bottom: 1px solid var(--brd2); }
+
+/* Day cell */
+.day-cell {
+    width: 100%; height: 100%; min-height: 34px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600;
+    cursor: default; transition: transform 0.1s;
+    position: relative; border-right: 1px solid rgba(30,58,95,0.15);
+}
+.day-cell:hover { transform: scale(1.1); z-index: 2; }
+.day-cell[data-tip]:hover::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); background: var(--bg2); border: 1px solid var(--brd); color: var(--t1); padding: 3px 8px; border-radius: 4px; font-size: 10px; white-space: nowrap; z-index: 30; }
+.dc-confirmed { background: rgba(52,211,153,0.18); color: var(--confirmed); }
+.dc-ordered { background: rgba(96,165,250,0.18); color: var(--ordered); }
+.dc-open { background: rgba(148,163,184,0.08); color: var(--t3); }
+.dc-rejected { background: rgba(248,113,113,0.18); color: var(--rejected); }
+.dc-cancelled { background: rgba(107,114,128,0.12); color: var(--cancelled); text-decoration: line-through; }
+.dc-weekend { background: rgba(148,163,184,0.03); color: rgba(148,163,184,0.2); }
+.dc-empty { background: transparent; }
+.dc-today { box-shadow: inset 0 0 0 2px var(--acc); border-radius: 2px; }
+
+/* FPJ boundary */
+.fpj-boundary { border-left: 3px solid var(--acc) !important; }
+.fpj-boundary .day-cell { border-left: none; }
+
+/* Legend */
+.legend { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
+.leg-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--t3); }
+.leg-box { width: 14px; height: 14px; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 700; }
+
+/* Filter + Table */
+.filter-row { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.f-btn { padding: 5px 12px; border-radius: 4px; border: 1px solid var(--brd); background: transparent; color: var(--t2); font-size: 11px; font-family: 'JetBrains Mono', monospace; cursor: pointer; transition: all 0.15s; }
+.f-btn:hover, .f-btn.active { border-color: var(--acc); color: var(--acc); background: rgba(45,212,191,0.08); }
+.tbl-wrap { max-height: 280px; overflow-y: auto; border: 1px solid var(--brd); border-radius: 6px; }
+.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+.tbl th { position: sticky; top: 0; text-align: left; padding: 8px 10px; color: var(--t3); font-family: 'JetBrains Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid var(--brd); background: var(--bg2); z-index: 5; }
+.tbl td { padding: 6px 10px; border-bottom: 1px solid var(--brd2); font-family: 'JetBrains Mono', monospace; }
+.tbl tr:hover { background: var(--bg4); }
+.badge { display: inline-flex; padding: 2px 7px; border-radius: 3px; font-size: 9px; font-weight: 600; font-family: 'JetBrains Mono', monospace; text-transform: uppercase; letter-spacing: 0.03em; }
+.b-con { color: var(--confirmed); background: rgba(52,211,153,0.12); border: 1px solid rgba(52,211,153,0.3); }
+.b-ord { color: var(--ordered); background: rgba(96,165,250,0.12); border: 1px solid rgba(96,165,250,0.3); }
+.b-opn { color: var(--open-st); background: rgba(148,163,184,0.08); border: 1px solid rgba(148,163,184,0.15); }
+.b-rej { color: var(--rejected); background: rgba(248,113,113,0.12); border: 1px solid rgba(248,113,113,0.3); }
+</style>
+</head>
+<body>
+<div class="page">
+
+<!-- Header -->
+<div class="hdr">
+    <h1>BESTELLKALENDER</h1>
+    <div class="hdr-sub">Kohle HH-MUC Taeglich — Kapazitaet Netz</div>
+    <div class="hdr-route">Hamburg Hbf → Muenchen Hbf · Ab 06:40 · Ressource: capacity · 92 Bestellpositionen</div>
+</div>
+
+<!-- Summary -->
+<div class="summary">
+    <div class="sum-item"><div class="sum-dot" style="background:var(--confirmed)"></div><span class="sum-val">37</span><span class="sum-label">Bestaetigt</span></div>
+    <div class="sum-item"><div class="sum-dot" style="background:var(--ordered)"></div><span class="sum-val">16</span><span class="sum-label">Bestellt</span></div>
+    <div class="sum-item"><div class="sum-dot" style="background:rgba(148,163,184,0.4)"></div><span class="sum-val">34</span><span class="sum-label">Offen</span></div>
+    <div class="sum-item"><div class="sum-dot" style="background:var(--rejected)"></div><span class="sum-val">3</span><span class="sum-label">Abgelehnt</span></div>
+    <div class="sum-item"><div class="sum-dot" style="background:var(--cancelled)"></div><span class="sum-val">2</span><span class="sum-label">Storniert</span></div>
+    <div style="flex:1"></div>
+    <div class="sum-item" style="border-left:2px solid var(--acc);padding-left:12px"><span class="sum-label" style="color:var(--acc)">FPJ 2027 ab 12.12.2026</span></div>
+</div>
+
+<!-- TTR Phase Bar -->
+<div class="ttr-bar">
+    <div class="ttr-label">TTR-Phasen Fahrplanjahr 2027 (Fahrplanwechsel 12.12.2026)</div>
+    <div class="ttr-strip">
+        <div class="ttr-seg" style="flex:2;background:var(--ttr3);opacity:0.3" data-tip="Phase 3: Trassenbestellung (abgeschlossen Jan 2026)">Bestell.</div>
+        <div class="ttr-seg" style="flex:3;background:var(--ttr4);opacity:0.3" data-tip="Phase 4: Trassenzuweisung (Apr–Aug 2026)">Zuweisung</div>
+        <div class="ttr-seg" style="flex:8;background:var(--ttr5)" data-tip="Phase 5: Kurzfrist / Ad-hoc (seit Sep 2026, laufend)">▸ Kurzfrist / Ad-hoc (aktiv)</div>
+    </div>
+</div>
+
+<!-- Calendar Grid -->
+<div class="cal-wrap">
+    <table class="cal" id="calTable">
+        <thead>
+            <tr>
+                <th class="month-col">Monat</th>
+                <th class="day-col">Mo</th>
+                <th class="day-col">Di</th>
+                <th class="day-col">Mi</th>
+                <th class="day-col">Do</th>
+                <th class="day-col">Fr</th>
+                <th class="day-col" style="color:rgba(148,163,184,0.4)">Sa</th>
+                <th class="day-col" style="color:rgba(148,163,184,0.4)">So</th>
+            </tr>
+        </thead>
+        <tbody id="calBody"></tbody>
+    </table>
+</div>
+
+<!-- Legend -->
+<div class="legend">
+    <div class="leg-item"><div class="leg-box dc-confirmed" style="width:14px;height:14px">3</div>Bestaetigt</div>
+    <div class="leg-item"><div class="leg-box dc-ordered" style="width:14px;height:14px">3</div>Bestellt</div>
+    <div class="leg-item"><div class="leg-box dc-open" style="width:14px;height:14px">3</div>Offen</div>
+    <div class="leg-item"><div class="leg-box dc-rejected" style="width:14px;height:14px">3</div>Abgelehnt</div>
+    <div class="leg-item"><div class="leg-box dc-weekend" style="width:14px;height:14px;border:1px dashed rgba(148,163,184,0.15)"></div>Wochenende</div>
+    <div class="leg-item"><div style="width:14px;height:14px;border-left:3px solid var(--acc)"></div>Fahrplanwechsel</div>
+</div>
+
+<!-- Filter + Table -->
+<div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Bestellpositionen — Detail</div>
+<div class="filter-row">
+    <button class="f-btn active">Alle (92)</button>
+    <button class="f-btn" onclick="this.parentElement.querySelectorAll('.f-btn').forEach(b=>b.classList.remove('active'));this.classList.add('active')">Bestaetigt (37)</button>
+    <button class="f-btn" onclick="this.parentElement.querySelectorAll('.f-btn').forEach(b=>b.classList.remove('active'));this.classList.add('active')">Bestellt (16)</button>
+    <button class="f-btn" onclick="this.parentElement.querySelectorAll('.f-btn').forEach(b=>b.classList.remove('active'));this.classList.add('active')">Offen (34)</button>
+    <button class="f-btn" onclick="this.parentElement.querySelectorAll('.f-btn').forEach(b=>b.classList.remove('active'));this.classList.add('active')">Abgelehnt (3)</button>
+</div>
+<div class="tbl-wrap">
+    <table class="tbl">
+        <thead><tr><th>Datum</th><th>Tag</th><th>FPJ</th><th>Abfahrt</th><th>Debicode</th><th>Status</th><th>Bestellt am</th><th>Rueckmeldung</th></tr></thead>
+        <tbody id="tblBody"></tbody>
+    </table>
+</div>
+
+</div>
+
+<script>
+const FPJ_CHANGE = new Date(2026, 11, 12); // Dec 12, 2026 = FPJ 2027 start
+const dayNames = ['So','Mo','Di','Mi','Do','Fr','Sa'];
+
+function statusForDay(year, month, day) {
+    const d = new Date(year, month, day);
+    const dow = d.getDay();
+    if (dow === 0 || dow === 6) return 'weekend';
+    if (month === 11 && day <= 11) return 'confirmed'; // FPJ 2026 end
+    if (month === 11 && day <= 22) return 'confirmed';
+    if (month === 11 && day >= 23 && day <= 25) return 'rejected';
+    if (month === 11 && day >= 26) return 'ordered';
+    if (month === 0 && day <= 15) return 'confirmed';
+    if (month === 0 && day <= 25) return 'ordered';
+    if (month === 0) return 'open';
+    return 'open';
+}
+
+function statusLabel(s) {
+    return {confirmed:'Bestätigt',ordered:'Bestellt',open:'Offen',rejected:'Abgelehnt',cancelled:'Storniert',weekend:'Wochenende'}[s]||'—';
+}
+function statusBadge(s) {
+    return {confirmed:'b-con',ordered:'b-ord',open:'b-opn',rejected:'b-rej',cancelled:'b-opn'}[s]||'b-opn';
+}
+function cellClass(s) {
+    return {confirmed:'dc-confirmed',ordered:'dc-ordered',open:'dc-open',rejected:'dc-rejected',cancelled:'dc-cancelled',weekend:'dc-weekend'}[s]||'dc-empty';
+}
+
+const months = [
+    { label: 'Dezember 2026', year: 2026, month: 11, days: 31 },
+    { label: 'Januar 2027', year: 2027, month: 0, days: 31 },
+    { label: 'Februar 2027', year: 2027, month: 1, days: 28 },
+];
+
+const body = document.getElementById('calBody');
+const tblBody = document.getElementById('tblBody');
+
+months.forEach((m, mi) => {
+    const firstDow = new Date(m.year, m.month, 1).getDay(); // 0=Sun
+    const startCol = firstDow === 0 ? 6 : firstDow - 1; // Convert to Mon=0
+
+    // Build weeks
+    let weeks = [];
+    let week = new Array(7).fill(null);
+    let col = startCol;
+    for (let d = 1; d <= m.days; d++) {
+        week[col] = d;
+        col++;
+        if (col === 7 || d === m.days) {
+            weeks.push(week);
+            week = new Array(7).fill(null);
+            col = 0;
+        }
+    }
+
+    // Determine FPJ label
+    let fpjLabel = '';
+    if (m.month === 11) fpjLabel = 'FPJ 2026 → 2027';
+    else fpjLabel = 'FPJ 2027';
+
+    weeks.forEach((w, wi) => {
+        const tr = document.createElement('tr');
+        tr.className = 'week-row';
+
+        // Month cell (only first week row)
+        if (wi === 0) {
+            const td = document.createElement('td');
+            td.className = 'month-cell';
+            td.rowSpan = weeks.length;
+            td.innerHTML = m.label + '<span class="fpj-tag">' + fpjLabel + '</span>';
+            tr.appendChild(td);
+        }
+
+        // Day cells
+        w.forEach((day, ci) => {
+            const td = document.createElement('td');
+            if (day === null) {
+                td.innerHTML = '<div class="day-cell dc-empty"></div>';
+            } else {
+                const st = statusForDay(m.year, m.month, day);
+                const date = new Date(m.year, m.month, day);
+                const isFpjBoundary = (m.year === 2026 && m.month === 11 && day === 12);
+                const dateStr = String(day).padStart(2,'0') + '.' + String(m.month+1).padStart(2,'0');
+                const tip = dateStr + ' ' + dayNames[date.getDay()] + ' · ' + statusLabel(st);
+                const fpjClass = isFpjBoundary ? ' fpj-boundary' : '';
+
+                td.className = fpjClass;
+                td.innerHTML = '<div class="day-cell ' + cellClass(st) + '" data-tip="' + tip + '">' + day + '</div>';
+            }
+            tr.appendChild(td);
+        });
+
+        body.appendChild(tr);
+    });
+
+    // Table rows
+    for (let d = 1; d <= m.days; d++) {
+        const date = new Date(m.year, m.month, d);
+        const dow = date.getDay();
+        if (dow === 0 || dow === 6) continue;
+        const st = statusForDay(m.year, m.month, d);
+        const dateStr = String(d).padStart(2,'0') + '.' + String(m.month+1).padStart(2,'0') + '.' + m.year;
+        const fpj = date < FPJ_CHANGE ? '2026' : '2027';
+        const debi = 'DEB-' + (8800 + d + m.month * 31);
+        const orderedAt = st !== 'open' ? '25.11.2026' : '—';
+        const feedback = st === 'confirmed' ? '28.11 14:22' : st === 'rejected' ? '29.11 09:15' : '—';
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td>' + dateStr + '</td><td>' + dayNames[dow] + '</td><td style="color:var(--acc)">' + fpj + '</td><td>06:40</td><td>' + debi + '</td><td><span class="badge ' + statusBadge(st) + '">' + statusLabel(st) + '</span></td><td>' + orderedAt + '</td><td>' + feedback + '</td>';
+        tblBody.appendChild(tr);
+    }
+});
+</script>
+</body>
+</html>
