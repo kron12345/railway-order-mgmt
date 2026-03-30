@@ -7,9 +7,10 @@
   "supportedLocales": ["de", "en", "it", "fr"],
   "roles": {
     "realm": [
-      { "name": "admin", "description": "Full system access" },
-      { "name": "dispatcher", "description": "Can manage orders and routes" },
-      { "name": "viewer", "description": "Read-only access" }
+      { "name": "admin", "description": "Full system access — manage users, settings, all data" },
+      { "name": "dispatcher", "description": "Manage orders, routes, and railcar assignments" },
+      { "name": "customer-manager", "description": "Manage customer data and contracts" },
+      { "name": "viewer", "description": "Read-only access to all data" }
     ]
   },
   "clients": [
@@ -29,19 +30,19 @@
   ],
   "users": [
     {
-      "username": "admin",
-      "email": "admin@railway.local",
-      "firstName": "Admin",
-      "lastName": "User",
+      "username": "sebastian",
+      "email": "sebastian@railway.local",
+      "firstName": "Sebastian",
+      "lastName": "Admin",
       "enabled": true,
       "credentials": [
         {
           "type": "password",
-          "value": "admin",
+          "value": "sebastian",
           "temporary": false
         }
       ],
-      "realmRoles": ["admin"]
+      "realmRoles": ["admin", "dispatcher", "customer-manager"]
     },
     {
       "username": "dispatcher",
@@ -57,6 +58,21 @@
         }
       ],
       "realmRoles": ["dispatcher"]
+    },
+    {
+      "username": "viewer",
+      "email": "viewer@railway.local",
+      "firstName": "Test",
+      "lastName": "Viewer",
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "viewer",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["viewer"]
     }
   ]
 }
