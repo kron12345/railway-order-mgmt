@@ -109,6 +109,9 @@ public class MainLayout extends AppLayout
         sideNav.addItem(
                 new SideNavItem(
                         getTranslation("nav.settings"), "settings", VaadinIcon.COG.create()));
+        sideNav.addItem(
+                new SideNavItem(
+                        getTranslation("nav.profile"), "profile", VaadinIcon.USER.create()));
     }
 
     @Override

@@ -49,6 +49,14 @@ server:
     include-stacktrace: never
     include-message: never
 
+keycloak:
+  admin:
+    url: ${KEYCLOAK_ADMIN_URL:https://sso.animeland.de}
+    realm: ${KEYCLOAK_REALM:railway}
+    client-id: admin-cli
+    username: ${KEYCLOAK_ADMIN_USER:admin}
+    password: ${KEYCLOAK_ADMIN_PASSWORD:}
+
 vaadin:
   launch-browser: true
   allowed-packages:
