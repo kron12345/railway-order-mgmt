@@ -58,6 +58,9 @@ public class OrderPosition {
 
     private String toLocation;
 
+    @Column(length = 2000)
+    private String comment;
+
     @Column(columnDefinition = "jsonb")
     private String validity;
 

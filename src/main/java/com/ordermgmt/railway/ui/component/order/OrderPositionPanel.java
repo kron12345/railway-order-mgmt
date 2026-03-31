@@ -9,12 +9,17 @@ import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.H3;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.icon.VaadinIcon;
+import com.vaadin.flow.component.notification.Notification;
+import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 
+import com.ordermgmt.railway.domain.infrastructure.repository.OperationalPointRepository;
+import com.ordermgmt.railway.domain.infrastructure.repository.PredefinedTagRepository;
 import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
+import com.ordermgmt.railway.domain.order.model.PositionType;
 import com.ordermgmt.railway.domain.order.service.OrderService;
 
 /** Displays and manages the positions that belong to an order. */
@@ -22,15 +27,21 @@ public class OrderPositionPanel extends Div {
 
     private final Order order;
     private final OrderService orderService;
+    private final OperationalPointRepository opRepo;
+    private final PredefinedTagRepository tagRepo;
     private final BiFunction<String, Object[], String> translator;
     private final VerticalLayout rowContainer = new VerticalLayout();
 
     public OrderPositionPanel(
             Order order,
             OrderService orderService,
+            OperationalPointRepository opRepo,
+            PredefinedTagRepository tagRepo,
             BiFunction<String, Object[], String> translator) {
         this.order = order;
         this.orderService = orderService;
+        this.opRepo = opRepo;
+        this.tagRepo = tagRepo;
         this.translator = translator;
 
         setWidthFull();
@@ -58,14 +69,30 @@ public class OrderPositionPanel extends Div {
                 .set("margin", "0")
                 .set("font-size", "var(--lumo-font-size-l)");
 
-        Button addBtn = new Button(t("position.new"), VaadinIcon.PLUS.create());
-        addBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_PRIMARY);
-        addBtn.getStyle()
+        Button addService = new Button(
+                "+ " + t("position.type.LEISTUNG"), VaadinIcon.TOOLS.create());
+        addService.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_PRIMARY);
+        addService.getStyle()
                 .set("background", "var(--rom-accent)")
                 .set("color", "var(--rom-bg-primary)");
-        addBtn.addClickListener(e -> openPositionDialog(null));
+        addService.addClickListener(e -> openServiceDialog(null));
 
-        HorizontalLayout header = new HorizontalLayout(title, addBtn);
+        Button addTrain = new Button(
+                "+ " + t("position.type.FAHRPLAN"), VaadinIcon.TRAIN.create());
+        addTrain.addThemeVariants(ButtonVariant.LUMO_SMALL);
+        addTrain.getStyle()
+                .set("color", "var(--rom-status-info)")
+                .set("border", "1px solid var(--rom-status-info)")
+                .set("background", "rgba(68,138,255,0.08)");
+        addTrain.addClickListener(e ->
+                Notification.show(t("position.fahrplan.coming"), 3000,
+                                Notification.Position.BOTTOM_END)
+                        .addThemeVariants(NotificationVariant.LUMO_CONTRAST));
+
+        HorizontalLayout buttons = new HorizontalLayout(addService, addTrain);
+        buttons.setSpacing(true);
+
+        HorizontalLayout header = new HorizontalLayout(title, buttons);
         header.setWidthFull();
         header.setJustifyContentMode(FlexComponent.JustifyContentMode.BETWEEN);
         header.setAlignItems(FlexComponent.Alignment.CENTER);
@@ -78,7 +105,7 @@ public class OrderPositionPanel extends Div {
         var positions = orderService.findPositionsByOrderId(order.getId());
 
         if (positions.isEmpty()) {
-            Span empty = new Span("Keine Positionen");
+            Span empty = new Span(t("order.positions.empty"));
             empty.getStyle()
                     .set("color", "var(--rom-text-muted)")
                     .set("font-size", "12px")
@@ -90,16 +117,26 @@ public class OrderPositionPanel extends Div {
         for (OrderPosition pos : positions) {
             rowContainer.add(
                     new OrderPositionRow(
-                            pos,
-                            translator,
-                            this::openPositionDialog,
+                            pos, translator,
+                            this::openPositionForEdit,
                             this::confirmDeletePosition));
         }
     }
 
-    private void openPositionDialog(OrderPosition existing) {
-        OrderPositionDialog dialog =
-                new OrderPositionDialog(order, existing, orderService, translator);
+    private void openPositionForEdit(OrderPosition pos) {
+        if (pos.getType() == PositionType.LEISTUNG) {
+            openServiceDialog(pos);
+        } else {
+            // Fahrplan editor — coming soon
+            Notification.show(t("position.fahrplan.coming"), 3000,
+                            Notification.Position.BOTTOM_END)
+                    .addThemeVariants(NotificationVariant.LUMO_CONTRAST);
+        }
+    }
+
+    private void openServiceDialog(OrderPosition existing) {
+        ServicePositionDialog dialog = new ServicePositionDialog(
+                order, existing, orderService, opRepo, tagRepo, translator);
         dialog.addSaveListener(e -> refreshPositions());
         dialog.open();
     }
@@ -111,11 +148,10 @@ public class OrderPositionPanel extends Div {
         dialog.setCancelText(t("common.cancel"));
         dialog.setConfirmText(t("common.delete"));
         dialog.setConfirmButtonTheme("error primary");
-        dialog.addConfirmListener(
-                e -> {
-                    orderService.deletePosition(pos.getId());
-                    refreshPositions();
-                });
+        dialog.addConfirmListener(e -> {
+            orderService.deletePosition(pos.getId());
+            refreshPositions();
+        });
         dialog.open();
     }
 
