@@ -1,6 +1,9 @@
 package com.ordermgmt.railway.ui.component;
 
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.BiFunction;
 
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.Span;
@@ -9,15 +12,15 @@ import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.order.model.PositionStatus;
 import com.ordermgmt.railway.domain.order.model.PositionType;
 
-/**
- * Card-style tile for displaying an order position inside the accordion. Shows name, type badge,
- * route, time, resources, and status.
- */
+/** Card-style tile for displaying an order position with route, schedule, tags, and status. */
 public class PositionTile extends Div {
 
     private static final DateTimeFormatter DT_FMT = DateTimeFormatter.ofPattern("dd.MM. HH:mm");
+    private static final int MAX_TAGS = 2;
+    private final BiFunction<String, Object[], String> translator;
 
-    public PositionTile(OrderPosition pos) {
+    public PositionTile(OrderPosition pos, BiFunction<String, Object[], String> translator) {
+        this.translator = translator;
         addClassName("position-tile");
         getElement().setAttribute("tabindex", "0");
         getElement().setAttribute("role", "button");
@@ -40,6 +43,10 @@ public class PositionTile extends Div {
 
         add(createHeader(pos));
         add(createRoute(pos));
+        Div meta = createMeta(pos);
+        if (meta.getComponentCount() > 0) {
+            add(meta);
+        }
         add(createFooter(pos));
     }
 
@@ -80,13 +87,32 @@ public class PositionTile extends Div {
             route.setText("—");
         }
 
-        if (pos.getStart() != null) {
-            Span time = new Span(" · " + pos.getStart().format(DT_FMT));
-            time.getStyle().set("color", "var(--rom-text-muted)").set("font-size", "11px");
-            route.add(time);
+        return route;
+    }
+
+    private Div createMeta(OrderPosition pos) {
+        Div meta = new Div();
+        meta.getStyle()
+                .set("display", "flex")
+                .set("flex-wrap", "wrap")
+                .set("gap", "6px");
+
+        if (pos.getStart() != null || pos.getEnd() != null) {
+            meta.add(createMetaBadge(formatTimeWindow(pos), "var(--rom-status-info)"));
+        }
+        if (pos.getServiceType() != null && !pos.getServiceType().isBlank()) {
+            meta.add(createMetaBadge(pos.getServiceType(), "var(--rom-status-warning)"));
         }
 
-        return route;
+        List<String> tags = splitTags(pos.getTags());
+        for (int i = 0; i < Math.min(tags.size(), MAX_TAGS); i++) {
+            meta.add(createMetaBadge("#" + tags.get(i), "var(--rom-text-muted)"));
+        }
+        if (tags.size() > MAX_TAGS) {
+            meta.add(createMetaBadge("+" + (tags.size() - MAX_TAGS), "var(--rom-text-muted)"));
+        }
+
+        return meta;
     }
 
     private Div createFooter(OrderPosition pos) {
@@ -100,38 +126,29 @@ public class PositionTile extends Div {
                 .set("border-top", "1px solid var(--rom-border-subtle, var(--rom-border))");
 
         Span statusBadge = createStatusBadge(pos.getInternalStatus());
-        footer.add(createResources(), statusBadge);
+        footer.add(createPurchaseBadge(pos), statusBadge);
         return footer;
     }
 
-    private Div createResources() {
-        Div resources = new Div();
-        resources.getStyle().set("display", "flex").set("gap", "4px");
-        resources.add(createResourceIcon("V", "rgba(96,165,250,0.12)", "var(--rom-status-info)", "Vehicle"));
-        resources.add(createResourceIcon("P", "rgba(251,191,36,0.12)", "var(--rom-status-warning)", "Personnel"));
-        resources.add(createResourceIcon("C", "rgba(52,211,153,0.12)", "var(--rom-status-active)", "Capacity"));
-        return resources;
-    }
-
-    private Div createResourceIcon(String label, String bg, String color, String ariaLabel) {
-        Div icon = new Div();
-        icon.setText(label);
-        icon.getElement().setAttribute("aria-label", ariaLabel);
-        com.vaadin.flow.component.shared.Tooltip.forComponent(icon)
-                .withText(ariaLabel);
-        icon.getStyle()
-                .set("width", "22px")
-                .set("height", "22px")
-                .set("border-radius", "4px")
-                .set("display", "flex")
-                .set("align-items", "center")
-                .set("justify-content", "center")
+    private Span createPurchaseBadge(OrderPosition pos) {
+        int purchaseCount = pos.getPurchasePositions() != null ? pos.getPurchasePositions().size() : 0;
+        Span badge = new Span(purchaseCount + " " + t("purchase.calendar.btn"));
+        badge.getStyle()
                 .set("font-size", "10px")
                 .set("font-family", "'JetBrains Mono', monospace")
                 .set("font-weight", "600")
-                .set("background", bg)
-                .set("color", color);
-        return icon;
+                .set("padding", "2px 8px")
+                .set("border-radius", "4px")
+                .set("color", purchaseCount > 0 ? "var(--rom-accent)" : "var(--rom-text-muted)")
+                .set("background",
+                        purchaseCount > 0
+                                ? "rgba(45,212,191,0.08)"
+                                : "rgba(148,163,184,0.08)")
+                .set("border",
+                        purchaseCount > 0
+                                ? "1px solid rgba(45,212,191,0.25)"
+                                : "1px solid var(--rom-border)");
+        return badge;
     }
 
     private Span createTypeBadge(OrderPosition pos) {
@@ -139,7 +156,7 @@ public class PositionTile extends Div {
         boolean isTimetable = type == PositionType.FAHRPLAN;
         String color = isTimetable ? "var(--rom-status-info)" : "var(--rom-status-warning)";
         String bgColor = isTimetable ? "rgba(96,165,250,0.12)" : "rgba(251,191,36,0.12)";
-        String label = type == null ? "—" : getTranslation("position.type." + type.name());
+        String label = type == null ? "—" : t("position.type." + type.name());
 
         Span badge = new Span(label);
         badge.getStyle()
@@ -176,7 +193,7 @@ public class PositionTile extends Div {
     }
 
     private String statusLabel(PositionStatus status) {
-        return status == null ? "—" : getTranslation("position.status." + status.name());
+        return status == null ? "—" : t("position.status." + status.name());
     }
 
     private String statusColor(PositionStatus status) {
@@ -189,5 +206,46 @@ public class PositionTile extends Div {
             case UEBERARBEITEN, BEANTRAGT -> "var(--rom-status-warning)";
             case ANNULLIERT -> "var(--rom-status-danger)";
         };
+    }
+
+    private Span createMetaBadge(String text, String color) {
+        Span badge = new Span(text);
+        badge.getStyle()
+                .set("font-size", "10px")
+                .set("font-family", "'JetBrains Mono', monospace")
+                .set("font-weight", "500")
+                .set("padding", "2px 6px")
+                .set("border-radius", "4px")
+                .set("color", color)
+                .set("background", "color-mix(in srgb, " + color + " 10%, transparent)")
+                .set("border", "1px solid color-mix(in srgb, " + color + " 20%, transparent)");
+        return badge;
+    }
+
+    private String formatTimeWindow(OrderPosition pos) {
+        String start = pos.getStart() != null ? pos.getStart().format(DT_FMT) : "—";
+        String end = pos.getEnd() != null ? pos.getEnd().format(DT_FMT) : "—";
+        if (pos.getStart() != null && pos.getEnd() != null) {
+            return start + " → " + end;
+        }
+        return pos.getStart() != null ? start : end;
+    }
+
+    private List<String> splitTags(String rawTags) {
+        List<String> values = new ArrayList<>();
+        if (rawTags == null || rawTags.isBlank()) {
+            return values;
+        }
+        for (String token : rawTags.split(",")) {
+            String normalized = token.trim();
+            if (!normalized.isBlank()) {
+                values.add(normalized);
+            }
+        }
+        return values;
+    }
+
+    private String t(String key) {
+        return translator.apply(key, new Object[0]);
     }
 }

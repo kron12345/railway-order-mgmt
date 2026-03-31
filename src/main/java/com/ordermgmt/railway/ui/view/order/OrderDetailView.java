@@ -24,6 +24,7 @@ import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 
 import com.ordermgmt.railway.domain.customer.repository.CustomerRepository;
+import com.ordermgmt.railway.domain.infrastructure.repository.PredefinedTagRepository;
 import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.domain.order.model.ProcessStatus;
 import com.ordermgmt.railway.domain.order.service.OrderService;
@@ -40,14 +41,19 @@ public class OrderDetailView extends VerticalLayout implements BeforeEnterObserv
 
     private final OrderService orderService;
     private final CustomerRepository customerRepository;
+    private final PredefinedTagRepository predefinedTagRepository;
     private Order order;
     private boolean isNew;
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("dd.MM.yyyy");
 
-    public OrderDetailView(OrderService orderService, CustomerRepository customerRepository) {
+    public OrderDetailView(
+            OrderService orderService,
+            CustomerRepository customerRepository,
+            PredefinedTagRepository predefinedTagRepository) {
         this.orderService = orderService;
         this.customerRepository = customerRepository;
+        this.predefinedTagRepository = predefinedTagRepository;
         setPadding(false);
         setSpacing(false);
         setWidthFull();
@@ -88,7 +94,9 @@ public class OrderDetailView extends VerticalLayout implements BeforeEnterObserv
     private void buildNewOrderView() {
         removeAll();
         add(createBackRow(getTranslation("order.new")));
-        OrderFormPanel form = new OrderFormPanel(order, customerRepository, this::getTranslation);
+        OrderFormPanel form =
+                new OrderFormPanel(
+                        order, customerRepository, predefinedTagRepository, this::getTranslation);
         add(form);
 
         Button save = new Button(getTranslation("common.save"), VaadinIcon.CHECK.create());
@@ -243,7 +251,9 @@ public class OrderDetailView extends VerticalLayout implements BeforeEnterObserv
         dialog.setHeaderTitle(getTranslation("order.edit") + " — " + order.getOrderNumber());
         dialog.setWidth("800px");
 
-        OrderFormPanel form = new OrderFormPanel(order, customerRepository, this::getTranslation);
+        OrderFormPanel form =
+                new OrderFormPanel(
+                        order, customerRepository, predefinedTagRepository, this::getTranslation);
         dialog.add(form);
 
         Button cancel = new Button(getTranslation("common.cancel"));

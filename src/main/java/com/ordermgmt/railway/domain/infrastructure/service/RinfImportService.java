@@ -7,7 +7,9 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -15,7 +17,7 @@ import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionOperations;
 
 import com.ordermgmt.railway.domain.infrastructure.model.ImportLog;
 import com.ordermgmt.railway.domain.infrastructure.model.OperationalPoint;
@@ -39,6 +41,7 @@ public class RinfImportService {
     private final OperationalPointRepository opRepo;
     private final SectionOfLineRepository solRepo;
     private final ImportLogRepository logRepo;
+    private final TransactionOperations transactionOperations;
 
     public List<ImportLog> getImportHistory() {
         return logRepo.findAllByOrderByStartedAtDesc();
@@ -60,7 +63,7 @@ public class RinfImportService {
         try {
             List<String[]> rows = parseCsv(csvStream);
             List<OperationalPoint> items = toOperationalPoints(rows, country);
-            int count = doImportOps(items, country);
+            int count = replaceOperationalPoints(items, country);
             return saveLog("RINF_OP", country, "SUCCESS", count,
                     count + " operational points imported for " + country);
         } catch (Exception e) {
@@ -76,7 +79,7 @@ public class RinfImportService {
         try {
             List<String[]> rows = parseCsv(csvStream);
             List<SectionOfLine> items = toSectionsOfLine(rows, country);
-            int count = doImportSols(items, country);
+            int count = replaceSectionsOfLine(items, country);
             return saveLog("RINF_SOL", country, "SUCCESS", count,
                     count + " sections of line imported for " + country);
         } catch (Exception e) {
@@ -86,20 +89,24 @@ public class RinfImportService {
     }
 
     /** Atomic delete+insert in a single transaction. Rolls back on any error. */
-    @Transactional
-    protected int doImportOps(List<OperationalPoint> items, String country) {
-        opRepo.deleteByCountry(country);
-        saveInBatches(items, opRepo::saveAll);
-        log.info("Imported {} OPs for {}", items.size(), country);
-        return items.size();
+    protected int replaceOperationalPoints(List<OperationalPoint> items, String country) {
+        Integer count = transactionOperations.execute(status -> {
+            opRepo.deleteByCountry(country);
+            saveInBatches(items, opRepo::saveAll);
+            log.info("Imported {} OPs for {}", items.size(), country);
+            return items.size();
+        });
+        return count != null ? count : 0;
     }
 
-    @Transactional
-    protected int doImportSols(List<SectionOfLine> items, String country) {
-        solRepo.deleteByCountry(country);
-        saveInBatches(items, solRepo::saveAll);
-        log.info("Imported {} SoLs for {}", items.size(), country);
-        return items.size();
+    protected int replaceSectionsOfLine(List<SectionOfLine> items, String country) {
+        Integer count = transactionOperations.execute(status -> {
+            solRepo.deleteByCountry(country);
+            saveInBatches(items, solRepo::saveAll);
+            log.info("Imported {} SoLs for {}", items.size(), country);
+            return items.size();
+        });
+        return count != null ? count : 0;
     }
 
     private ImportLog saveLog(String source, String country, String status,
@@ -126,12 +133,20 @@ public class RinfImportService {
     // --- CSV parsing and mapping (no DB access, no transaction needed) ---
 
     private List<OperationalPoint> toOperationalPoints(List<String[]> rows, String country) {
-        List<OperationalPoint> items = new ArrayList<>();
+        Map<String, OperationalPoint> itemsByUopid = new LinkedHashMap<>();
+        int duplicateCount = 0;
         for (String[] row : rows) {
             if (row.length < 2) continue;
-            items.add(toOperationalPoint(row, country));
+            OperationalPoint item = toOperationalPoint(row, country);
+            OperationalPoint existing = itemsByUopid.putIfAbsent(item.getUopid(), item);
+            if (existing != null) {
+                duplicateCount++;
+            }
         }
-        return items;
+        if (duplicateCount > 0) {
+            log.warn("Skipped {} duplicate operational point rows for {}", duplicateCount, country);
+        }
+        return new ArrayList<>(itemsByUopid.values());
     }
 
     private OperationalPoint toOperationalPoint(String[] row, String country) {
@@ -149,12 +164,20 @@ public class RinfImportService {
     }
 
     private List<SectionOfLine> toSectionsOfLine(List<String[]> rows, String country) {
-        List<SectionOfLine> items = new ArrayList<>();
+        Map<String, SectionOfLine> itemsBySolId = new LinkedHashMap<>();
+        int duplicateCount = 0;
         for (String[] row : rows) {
             if (row.length < 3) continue;
-            items.add(toSectionOfLine(row, country));
+            SectionOfLine item = toSectionOfLine(row, country);
+            SectionOfLine existing = itemsBySolId.putIfAbsent(item.getSolId(), item);
+            if (existing != null) {
+                duplicateCount++;
+            }
         }
-        return items;
+        if (duplicateCount > 0) {
+            log.warn("Skipped {} duplicate section-of-line rows for {}", duplicateCount, country);
+        }
+        return new ArrayList<>(itemsBySolId.values());
     }
 
     private SectionOfLine toSectionOfLine(String[] row, String country) {

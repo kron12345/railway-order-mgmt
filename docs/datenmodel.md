@@ -143,7 +143,7 @@ classDiagram
 | name | string | ja | Auftragsname |
 | customerId | UUID? | nein | FK zum Kunden |
 | comment | string? | nein | Kommentar (max. 2000 Zeichen) |
-| tags | string? | nein | Schlagwoerter |
+| tags | string? | nein | Kommagetrennte, zugewiesene Schlagwoerter; Auswahl im UI aus vordefiniertem Katalog |
 | validFrom | date | ja | Gueltig ab (Pflichtfeld) |
 | validTo | date | ja | Gueltig bis (Pflichtfeld, muss >= validFrom sein) |
 | processStatus | enum | ja | Prozessstatus, Default: `AUFTRAG`. Werte: `AUFTRAG`, `PLANUNG`, `PRODUKT_LEISTUNG`, `PRODUKTION`, `ABRECHNUNG_NACHBEREITUNG`. Wird automatisch gesetzt, nicht vom Benutzer beim Anlegen. |
@@ -167,7 +167,7 @@ Die aktuelle Feldliste der `Auftragsposition` mischt fachliche Kernattribute mit
 | orderId | string | ja | Kern | FK zum Auftrag |
 | name | string | ja | Kern | Positionsname |
 | type | string | ja | Kern | Typ: Leistung oder Fahrplan |
-| tags | string[] | ja | Kern | Schlagwoerter |
+| tags | string? | nein | Kern | Kommagetrennte, zugewiesene Schlagwoerter; Auswahl im UI aus vordefiniertem Katalog |
 | start | datetime? | nein | Kern | Startzeitpunkt |
 | end | datetime? | nein | Kern | Endzeitpunkt |
 | serviceType | string? | nein | Kern | Leistungsart |
@@ -193,6 +193,24 @@ Die aktuelle Feldliste der `Auftragsposition` mischt fachliche Kernattribute mit
 | version | int | ja | Technische Metadaten | Versionszaehler |
 | createdAt | datetime | ja | Technische Metadaten | Erstellungszeitpunkt |
 | updatedAt | datetime | ja | Technische Metadaten | Letzter Aenderungszeitpunkt |
+
+### Vordefinierte Schlagwoerter
+
+Der Schlagwort-Katalog wird als eigene Stammdatenliste in `predefined_tags` gepflegt. Die Datengrundlage liegt als CSV in `data/seeds/predefined-tags.csv` und wird ueber den Settings-Bereich importiert. Die Kategorien steuern, wo ein Schlagwort im UI angeboten wird:
+
+- `ORDER`: im Auftragsdialog
+- `POSITION`: im Dialog fuer Auftragspositionen
+- `GENERAL`: in beiden Dialogen
+
+Die konkrete Zuordnung bleibt aus Kompatibilitaetsgruenden als kommagetrennter String in `orders.tags` bzw. `order_positions.tags` gespeichert.
+
+| Attribut | Typ | Pflicht | Beschreibung |
+| --- | --- | --- | --- |
+| name | string | ja | Anzeigename des Schlagworts |
+| category | enum | ja | `ORDER`, `POSITION`, `GENERAL` |
+| color | string? | nein | Optionale UI-Farbe |
+| sortOrder | int | nein | Sortierung im Katalog |
+| active | boolean | ja | Steuert, ob das Schlagwort im UI angeboten wird |
 
 ### Ressourcenbedarf
 
@@ -297,6 +315,9 @@ Eine `Bestellposition` deckt einen extern zu beschaffenden `Ressourcenbedarf`. D
 - Eine Bestellung darf erst ausgelost werden, wenn die erforderlichen Bestelldaten in der Bestellposition gepflegt sind.
 - `debicode` ist fuer eine externe Bestellung von `capacity` ein Pflichtattribut.
 - Der Rueckmeldestatus des Infrastrukturbetreibers wird in `bestellstatus` der Bestellposition gespeichert.
+- Der Katalog vordefinierter Schlagwoerter wird als Stammdatenliste in `predefined_tags` gepflegt.
+- Die Kategorien `ORDER`, `POSITION` und `GENERAL` steuern, in welchem Dialog ein Schlagwort angeboten wird.
+- Die konkrete Zuordnung von Schlagwoertern bleibt an Auftrag und Auftragsposition als kommagetrennter String gespeichert.
 - Ein Geschaeft kann allein stehen und muss keiner Auftragsposition zugeordnet sein.
 - Zwischen Geschaeft und Auftragsposition besteht nach aktuellem Modell eine m:n-Beziehung.
 - Die direkte Verknuepfung von Geschaeft zu Bestellposition ist in der aktuell gelieferten Attributliste nicht explizit modelliert und bleibt fachlich offen.

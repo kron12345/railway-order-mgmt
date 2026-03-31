@@ -20,299 +20,247 @@ import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
+import com.vaadin.flow.component.tabs.Tab;
+import com.vaadin.flow.component.tabs.Tabs;
 import com.vaadin.flow.component.upload.Upload;
 import com.vaadin.flow.component.upload.receivers.MemoryBuffer;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 
 import com.ordermgmt.railway.domain.infrastructure.model.ImportLog;
+import com.ordermgmt.railway.domain.infrastructure.repository.OperationalPointRepository;
+import com.ordermgmt.railway.domain.infrastructure.repository.PredefinedTagRepository;
+import com.ordermgmt.railway.domain.infrastructure.service.PredefinedTagImportService;
 import com.ordermgmt.railway.domain.infrastructure.service.RinfImportService;
 import com.ordermgmt.railway.ui.layout.MainLayout;
 
-/** Administrative view for importing infrastructure data and reviewing import history. */
+/** Admin settings with tabs: Infrastructure, Topology, Tags. */
 @Route(value = "settings", layout = MainLayout.class)
 @PageTitle("Settings")
 @RolesAllowed("ADMIN")
 public class SettingsView extends VerticalLayout {
 
     private final RinfImportService importService;
-    private final Grid<ImportLog> historyGrid = new Grid<>(ImportLog.class, false);
-    private Span opsCountCh;
-    private Span opsCountDe;
-    private Span solsCountCh;
-    private Span solsCountDe;
+    private final OperationalPointRepository opRepo;
+    private final PredefinedTagRepository tagRepo;
+    private final PredefinedTagImportService tagImportService;
+
+    private final Div tabContent = new Div();
 
     private static final DateTimeFormatter DT =
             DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss").withZone(ZoneId.systemDefault());
 
-    public SettingsView(RinfImportService importService) {
+    public SettingsView(
+            RinfImportService importService,
+            OperationalPointRepository opRepo,
+            PredefinedTagRepository tagRepo,
+            PredefinedTagImportService tagImportService) {
         this.importService = importService;
+        this.opRepo = opRepo;
+        this.tagRepo = tagRepo;
+        this.tagImportService = tagImportService;
+
         setPadding(false);
         setWidthFull();
+        setSizeFull();
         getStyle()
                 .set("background", "var(--rom-bg-primary)")
                 .set("padding", "var(--lumo-space-xs) var(--lumo-space-m)")
                 .set("overflow-x", "hidden")
                 .set("box-sizing", "border-box");
 
-        configureHistoryGrid();
-        add(createHeader());
-        add(createStatsPanel());
-        add(createImportPanel());
-        add(createHistoryPanel());
-        refreshStats();
-        refreshHistory();
-    }
-
-    private H2 createHeader() {
         H2 title = new H2(getTranslation("settings.title"));
         title.getStyle()
                 .set("color", "var(--rom-text-primary)")
                 .set("font-weight", "600")
                 .set("margin", "0 0 var(--lumo-space-s) 0");
-        return title;
+        add(title);
+
+        Tab infraTab = new Tab(VaadinIcon.DATABASE.create(),
+                new Span(getTranslation("settings.infrastructure")));
+        Tab topoTab = new Tab(VaadinIcon.MAP_MARKER.create(),
+                new Span(getTranslation("settings.topology")));
+        Tab tagsTab = new Tab(VaadinIcon.TAGS.create(),
+                new Span(getTranslation("settings.tags")));
+
+        Tabs tabs = new Tabs(infraTab, topoTab, tagsTab);
+        tabs.setWidthFull();
+        tabs.addSelectedChangeListener(e -> {
+            if (e.getSelectedTab() == infraTab) showInfraTab();
+            else if (e.getSelectedTab() == topoTab) showTopoTab();
+            else if (e.getSelectedTab() == tagsTab) showTagsTab();
+        });
+        add(tabs);
+
+        tabContent.setWidthFull();
+        tabContent.getStyle()
+                .set("background", "var(--rom-bg-card)")
+                .set("border", "1px solid var(--rom-border)")
+                .set("border-radius", "0 0 6px 6px")
+                .set("padding", "var(--lumo-space-m) var(--lumo-space-l)")
+                .set("box-sizing", "border-box")
+                .set("flex", "1")
+                .set("overflow", "auto");
+        add(tabContent);
+
+        showInfraTab();
     }
 
-    private Div createStatsPanel() {
-        Div panel = card();
-        H3 title = sectionTitle(getTranslation("settings.stats"));
-        panel.add(title);
+    private void showInfraTab() {
+        tabContent.removeAll();
 
-        HorizontalLayout stats = new HorizontalLayout();
-        stats.setWidthFull();
-        stats.getStyle().set("gap", "24px").set("flex-wrap", "wrap");
+        // Stats
+        H3 statsTitle = sectionTitle(getTranslation("settings.stats"));
+        tabContent.add(statsTitle);
 
-        StatCard opsChCard = createStatCard("CH " + getTranslation("settings.stats.ops"), "0");
-        StatCard opsDeCard = createStatCard("DE " + getTranslation("settings.stats.ops"), "0");
-        StatCard solsChCard = createStatCard("CH " + getTranslation("settings.stats.sols"), "0");
-        StatCard solsDeCard = createStatCard("DE " + getTranslation("settings.stats.sols"), "0");
+        Div stats = new Div();
+        stats.getStyle()
+                .set("display", "flex")
+                .set("gap", "16px")
+                .set("flex-wrap", "wrap")
+                .set("margin-bottom", "var(--lumo-space-m)");
+        stats.add(statBox("CH OPs", String.valueOf(importService.countOps("CHE"))));
+        stats.add(statBox("DE OPs", String.valueOf(importService.countOps("DEU"))));
+        stats.add(statBox("CH SoLs", String.valueOf(importService.countSols("CHE"))));
+        stats.add(statBox("DE SoLs", String.valueOf(importService.countSols("DEU"))));
+        tabContent.add(stats);
 
-        opsCountCh = opsChCard.valueSpan();
-        opsCountDe = opsDeCard.valueSpan();
-        solsCountCh = solsChCard.valueSpan();
-        solsCountDe = solsDeCard.valueSpan();
-
-        stats.add(
-                opsChCard.container(),
-                opsDeCard.container(),
-                solsChCard.container(),
-                solsDeCard.container());
-        panel.add(stats);
-        return panel;
-    }
-
-    private Div createImportPanel() {
-        Div panel = card();
-        H3 title = sectionTitle(getTranslation("settings.infrastructure"));
+        // Import
+        H3 importTitle = sectionTitle(getTranslation("settings.infrastructure"));
         Span desc = new Span(getTranslation("settings.infrastructure.desc"));
         desc.getStyle()
                 .set("color", "var(--rom-text-muted)")
-                .set("font-size", "12px")
+                .set("font-size", "11px")
                 .set("display", "block")
-                .set("margin-bottom", "var(--lumo-space-m)");
-        panel.add(title, desc);
+                .set("margin-bottom", "var(--lumo-space-s)");
+        tabContent.add(importTitle, desc);
 
-        ComboBox<String> countrySelect = createCountrySelect();
-        ComboBox<String> typeSelect = createImportTypeSelect();
-        MemoryBuffer buffer = new MemoryBuffer();
-        Upload upload = createUpload(buffer, countrySelect, typeSelect);
-
-        HorizontalLayout importRow = new HorizontalLayout(countrySelect, typeSelect, upload);
-        importRow.setAlignItems(FlexComponent.Alignment.END);
-        importRow.getStyle().set("flex-wrap", "wrap").set("gap", "12px");
-        panel.add(importRow);
-        return panel;
-    }
-
-    private Div createHistoryPanel() {
-        Div panel = card();
-        H3 title = sectionTitle(getTranslation("settings.import.history"));
-        panel.add(title);
-        panel.add(historyGrid);
-        return panel;
-    }
-
-    private ComboBox<String> createCountrySelect() {
         ComboBox<String> countrySelect = new ComboBox<>(getTranslation("settings.import.country"));
         countrySelect.setItems("CHE", "DEU");
         countrySelect.setItemLabelGenerator(
-                country ->
-                        "CHE".equals(country)
-                                ? getTranslation("settings.country.che")
-                                : getTranslation("settings.country.deu"));
+                c -> "CHE".equals(c) ? "Schweiz (CH)" : "Deutschland (DE)");
         countrySelect.setValue("CHE");
-        countrySelect.setWidth("200px");
-        return countrySelect;
-    }
+        countrySelect.setWidth("180px");
 
-    private ComboBox<String> createImportTypeSelect() {
         ComboBox<String> typeSelect = new ComboBox<>(getTranslation("settings.import.type"));
         typeSelect.setItems("OP", "SOL");
-        typeSelect.setItemLabelGenerator(
-                type ->
-                        "OP".equals(type)
-                                ? getTranslation("settings.import.ops")
-                                : getTranslation("settings.import.sols"));
+        typeSelect.setItemLabelGenerator(tp -> "OP".equals(tp)
+                ? getTranslation("settings.import.ops")
+                : getTranslation("settings.import.sols"));
         typeSelect.setValue("OP");
-        typeSelect.setWidth("200px");
-        return typeSelect;
-    }
+        typeSelect.setWidth("180px");
 
-    private Upload createUpload(
-            MemoryBuffer buffer, ComboBox<String> countrySelect, ComboBox<String> typeSelect) {
+        MemoryBuffer buffer = new MemoryBuffer();
         Upload upload = new Upload(buffer);
         upload.setAcceptedFileTypes(".csv");
         upload.setMaxFiles(1);
         upload.setMaxFileSize(50 * 1024 * 1024);
-        upload.setDropLabel(new Span(getTranslation("settings.import.upload")));
         upload.setUploadButton(
                 new Button(getTranslation("settings.import.upload"), VaadinIcon.UPLOAD.create()));
-        upload.addSucceededListener(
-                event -> handleImport(countrySelect.getValue(), typeSelect.getValue(), buffer));
-        return upload;
-    }
+        upload.addSucceededListener(event -> {
+            InputStream is = buffer.getInputStream();
+            ImportLog result = "OP".equals(typeSelect.getValue())
+                    ? importService.importOperationalPoints(is, countrySelect.getValue())
+                    : importService.importSectionsOfLine(is, countrySelect.getValue());
+            if ("SUCCESS".equals(result.getStatus())) {
+                Notification.show(
+                        getTranslation("settings.import.success",
+                                String.valueOf(result.getRecordCount())),
+                        5000, Notification.Position.BOTTOM_END)
+                        .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+            } else {
+                Notification.show(
+                        getTranslation("settings.import.error") + ": " + result.getMessage(),
+                        5000, Notification.Position.BOTTOM_END)
+                        .addThemeVariants(NotificationVariant.LUMO_ERROR);
+            }
+            showInfraTab(); // refresh stats
+        });
 
-    private void handleImport(String country, String type, MemoryBuffer buffer) {
-        InputStream inputStream = buffer.getInputStream();
-        ImportLog result = importFile(type, inputStream, country);
+        Div importRow = new Div(countrySelect, typeSelect, upload);
+        importRow.getStyle()
+                .set("display", "flex")
+                .set("gap", "var(--lumo-space-s)")
+                .set("flex-wrap", "wrap")
+                .set("align-items", "end")
+                .set("margin-bottom", "var(--lumo-space-m)");
+        tabContent.add(importRow);
 
-        if ("SUCCESS".equals(result.getStatus())) {
-            Notification.show(
-                            getTranslation(
-                                    "settings.import.success",
-                                    String.valueOf(result.getRecordCount())),
-                            5000,
-                            Notification.Position.BOTTOM_END)
-                    .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
-        } else {
-            Notification.show(
-                            getTranslation("settings.import.error") + ": " + result.getMessage(),
-                            5000,
-                            Notification.Position.BOTTOM_END)
-                    .addThemeVariants(NotificationVariant.LUMO_ERROR);
-        }
-        refreshStats();
-        refreshHistory();
-    }
+        // History
+        H3 histTitle = sectionTitle(getTranslation("settings.import.history"));
+        tabContent.add(histTitle);
 
-    private ImportLog importFile(String type, InputStream inputStream, String country) {
-        if ("OP".equals(type)) {
-            return importService.importOperationalPoints(inputStream, country);
-        }
-        return importService.importSectionsOfLine(inputStream, country);
-    }
-
-    private void configureHistoryGrid() {
-        historyGrid
-                .addColumn(ImportLog::getSource)
-                .setHeader(getTranslation("settings.history.source"))
-                .setWidth("100px");
-        historyGrid
-                .addColumn(ImportLog::getCountry)
-                .setHeader(getTranslation("settings.history.country"))
-                .setWidth("60px");
-        historyGrid
-                .addColumn(ImportLog::getRecordCount)
-                .setHeader(getTranslation("settings.history.records"))
-                .setWidth("80px");
-        historyGrid
-                .addColumn(this::formatStartedAt)
-                .setHeader(getTranslation("settings.history.started"))
-                .setWidth("160px");
-        historyGrid
-                .addComponentColumn(this::createHistoryStatusBadge)
-                .setHeader(getTranslation("settings.history.status"))
-                .setWidth("100px");
-        historyGrid
-                .addColumn(ImportLog::getMessage)
-                .setHeader(getTranslation("settings.history.details"))
-                .setFlexGrow(1);
+        Grid<ImportLog> historyGrid = new Grid<>(ImportLog.class, false);
+        historyGrid.addColumn(ImportLog::getSource).setHeader("Source").setWidth("90px");
+        historyGrid.addColumn(ImportLog::getCountry).setHeader("Land").setWidth("50px");
+        historyGrid.addColumn(ImportLog::getRecordCount).setHeader("Records").setWidth("70px");
+        historyGrid.addColumn(l -> l.getStartedAt() != null ? DT.format(l.getStartedAt()) : "—")
+                .setHeader("Gestartet").setWidth("150px");
+        historyGrid.addComponentColumn(l -> {
+            String color = switch (l.getStatus()) {
+                case "SUCCESS" -> "var(--rom-status-active)";
+                case "ERROR" -> "var(--rom-status-danger)";
+                default -> "var(--rom-status-info)";
+            };
+            Span badge = new Span(l.getStatus());
+            badge.getStyle()
+                    .set("font-family", "'JetBrains Mono', monospace")
+                    .set("font-size", "10px").set("font-weight", "600")
+                    .set("color", color)
+                    .set("background", "color-mix(in srgb, " + color + " 12%, transparent)")
+                    .set("padding", "2px 6px").set("border-radius", "3px");
+            return badge;
+        }).setHeader("Status").setWidth("90px");
+        historyGrid.addColumn(ImportLog::getMessage).setHeader("Details").setFlexGrow(1);
         historyGrid.addThemeVariants(GridVariant.LUMO_NO_BORDER, GridVariant.LUMO_COMPACT);
-        historyGrid.setAllRowsVisible(true);
-    }
-
-    private String formatStartedAt(ImportLog importLog) {
-        return importLog.getStartedAt() != null ? DT.format(importLog.getStartedAt()) : "—";
-    }
-
-    private Span createHistoryStatusBadge(ImportLog importLog) {
-        String color =
-                switch (importLog.getStatus()) {
-                    case "SUCCESS" -> "var(--rom-status-active)";
-                    case "ERROR" -> "var(--rom-status-danger)";
-                    default -> "var(--rom-status-info)";
-                };
-        Span badge = new Span(importLog.getStatus());
-        badge.getStyle()
-                .set("font-family", "'JetBrains Mono', monospace")
-                .set("font-size", "10px")
-                .set("font-weight", "600")
-                .set("color", color)
-                .set("background", "color-mix(in srgb, " + color + " 12%, transparent)")
-                .set("padding", "2px 6px")
-                .set("border-radius", "3px");
-        return badge;
-    }
-
-    private void refreshStats() {
-        opsCountCh.setText(String.valueOf(importService.countOps("CHE")));
-        opsCountDe.setText(String.valueOf(importService.countOps("DEU")));
-        solsCountCh.setText(String.valueOf(importService.countSols("CHE")));
-        solsCountDe.setText(String.valueOf(importService.countSols("DEU")));
-    }
-
-    private void refreshHistory() {
         historyGrid.setItems(importService.getImportHistory());
+        historyGrid.setAllRowsVisible(true);
+        tabContent.add(historyGrid);
     }
 
-    private Div card() {
-        Div div = new Div();
-        div.setWidthFull();
-        div.getStyle()
-                .set("background", "var(--rom-bg-card)")
-                .set("border", "1px solid var(--rom-border)")
-                .set("border-radius", "6px")
-                .set("padding", "var(--lumo-space-m) var(--lumo-space-l)")
-                .set("margin-bottom", "var(--lumo-space-s)")
-                .set("box-sizing", "border-box");
-        return div;
+    private void showTopoTab() {
+        tabContent.removeAll();
+        tabContent.add(new TopologyTab(opRepo, this::getTranslation));
+    }
+
+    private void showTagsTab() {
+        tabContent.removeAll();
+        tabContent.add(new TagsTab(tagRepo, tagImportService, this::getTranslation));
     }
 
     private H3 sectionTitle(String text) {
         H3 h = new H3(text);
         h.getStyle()
                 .set("color", "var(--rom-text-primary)")
-                .set("margin", "0 0 var(--lumo-space-s) 0")
+                .set("margin", "0 0 var(--lumo-space-xs) 0")
                 .set("font-size", "var(--lumo-font-size-m)");
         return h;
     }
 
-    private StatCard createStatCard(String label, String value) {
+    private Div statBox(String label, String value) {
         Div box = new Div();
         box.getStyle()
                 .set("background", "var(--rom-bg-primary)")
                 .set("border", "1px solid var(--rom-border)")
                 .set("border-radius", "6px")
-                .set("padding", "12px 16px")
-                .set("min-width", "140px");
+                .set("padding", "10px 14px")
+                .set("min-width", "120px");
 
         Span val = new Span(value);
         val.getStyle()
                 .set("font-family", "'JetBrains Mono', monospace")
-                .set("font-size", "20px")
+                .set("font-size", "18px")
                 .set("font-weight", "700")
                 .set("color", "var(--rom-accent)")
                 .set("display", "block");
 
         Span lbl = new Span(label);
         lbl.getStyle()
-                .set("font-size", "11px")
+                .set("font-size", "10px")
                 .set("color", "var(--rom-text-muted)")
                 .set("display", "block");
 
         box.add(val, lbl);
-        return new StatCard(box, val);
+        return box;
     }
-
-    private record StatCard(Div container, Span valueSpan) {}
 }

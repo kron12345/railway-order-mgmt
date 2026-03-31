@@ -4,7 +4,7 @@
 
 ```mermaid
 graph LR
-    Browser["Browser"] -->|HTTPS| App["Vaadin Flow App<br/>:8080"]
+    Browser["Browser"] -->|HTTPS| App["Vaadin Flow App<br/>:8085"]
     App -->|JDBC| DB["PostgreSQL<br/>:5432"]
     App -->|OIDC| KC["Keycloak<br/>:8180"]
     App -->|WebSocket| Browser

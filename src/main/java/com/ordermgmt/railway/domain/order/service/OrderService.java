@@ -38,12 +38,16 @@ public class OrderService {
 
     @Transactional(readOnly = true)
     public List<Order> findByProcessStatus(ProcessStatus status) {
-        return orderRepository.findByProcessStatus(status);
+        List<Order> orders = orderRepository.findByProcessStatus(status);
+        initializePositions(orders);
+        return orders;
     }
 
     @Transactional(readOnly = true)
     public List<Order> search(String query) {
-        return orderRepository.findByNameContainingIgnoreCase(query);
+        List<Order> orders = orderRepository.findByNameContainingIgnoreCase(query);
+        initializePositions(orders);
+        return orders;
     }
 
     public Order save(Order order) {
@@ -75,7 +79,11 @@ public class OrderService {
     }
 
     private void initializePositions(List<Order> orders) {
-        orders.forEach(order -> order.getPositions().size());
+        orders.forEach(
+                order -> {
+                    order.getPositions().size();
+                    initializePurchasePositions(order.getPositions());
+                });
     }
 
     private void initializePurchasePositions(List<OrderPosition> positions) {

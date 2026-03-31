@@ -1,7 +1,14 @@
 package com.ordermgmt.railway.ui.component.order;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.function.BiFunction;
 
+import com.vaadin.flow.component.checkbox.CheckboxGroup;
 import com.vaadin.flow.component.combobox.ComboBox;
 import com.vaadin.flow.component.datepicker.DatePicker;
 import com.vaadin.flow.component.formlayout.FormLayout;
@@ -12,6 +19,8 @@ import com.vaadin.flow.component.textfield.TextField;
 
 import com.ordermgmt.railway.domain.customer.model.Customer;
 import com.ordermgmt.railway.domain.customer.repository.CustomerRepository;
+import com.ordermgmt.railway.domain.infrastructure.model.PredefinedTag;
+import com.ordermgmt.railway.domain.infrastructure.repository.PredefinedTagRepository;
 import com.ordermgmt.railway.domain.order.model.Order;
 
 /**
@@ -26,15 +35,19 @@ public class OrderFormPanel extends Div {
     private final ComboBox<Customer> customerCombo = new ComboBox<>();
     private final DatePicker validFrom = new DatePicker();
     private final DatePicker validTo = new DatePicker();
-    private final TextField tags = new TextField();
+    private final CheckboxGroup<PredefinedTag> tags = new CheckboxGroup<>();
     private final TextArea comment = new TextArea();
     private final BiFunction<String, Object[], String> translator;
+    private final List<PredefinedTag> availableTags;
+    private final LinkedHashSet<String> unmatchedTags = new LinkedHashSet<>();
 
     public OrderFormPanel(
             Order order,
             CustomerRepository customerRepository,
+            PredefinedTagRepository predefinedTagRepository,
             BiFunction<String, Object[], String> translator) {
         this.translator = translator;
+        this.availableTags = loadAvailableTags(predefinedTagRepository);
 
         setWidthFull();
         getStyle()
@@ -83,8 +96,10 @@ public class OrderFormPanel extends Div {
         validTo.setWidthFull();
 
         tags.setLabel(t("order.tags"));
-        tags.setHelperText(t("order.tags.help"));
+        tags.setItems(availableTags);
+        tags.setItemLabelGenerator(this::tagLabel);
         tags.setWidthFull();
+        updateTagsHelperText();
 
         comment.setLabel(t("order.comment"));
         comment.setMaxLength(2000);
@@ -99,7 +114,9 @@ public class OrderFormPanel extends Div {
                 new FormLayout.ResponsiveStep("800px", 3));
 
         form.add(orderNumber, name, customerCombo);
-        form.add(validFrom, validTo, tags);
+        form.add(validFrom, validTo);
+        form.setColspan(tags, 3);
+        form.add(tags);
         form.setColspan(comment, 3);
         form.add(comment);
 
@@ -113,7 +130,7 @@ public class OrderFormPanel extends Div {
         customerCombo.setValue(order.getCustomer());
         validFrom.setValue(order.getValidFrom());
         validTo.setValue(order.getValidTo());
-        tags.setValue(nvl(order.getTags()));
+        readTags(order.getTags());
         comment.setValue(nvl(order.getComment()));
     }
 
@@ -123,7 +140,7 @@ public class OrderFormPanel extends Div {
         order.setCustomer(customerCombo.getValue());
         order.setValidFrom(validFrom.getValue());
         order.setValidTo(validTo.getValue());
-        order.setTags(blankToNull(tags.getValue()));
+        order.setTags(joinSelectedTags());
         order.setComment(blankToNull(comment.getValue()));
     }
 
@@ -156,6 +173,100 @@ public class OrderFormPanel extends Div {
 
     private String t(String key) {
         return translator.apply(key, new Object[0]);
+    }
+
+    private String t(String key, Object... params) {
+        return translator.apply(key, params);
+    }
+
+    private List<PredefinedTag> loadAvailableTags(PredefinedTagRepository predefinedTagRepository) {
+        return predefinedTagRepository.findAllByOrderByCategoryAscSortOrderAsc().stream()
+                .filter(PredefinedTag::isActive)
+                .filter(tag -> "ORDER".equals(tag.getCategory()) || "GENERAL".equals(tag.getCategory()))
+                .sorted(Comparator.comparingInt(this::categoryRank)
+                        .thenComparingInt(PredefinedTag::getSortOrder)
+                        .thenComparing(PredefinedTag::getName, String.CASE_INSENSITIVE_ORDER))
+                .toList();
+    }
+
+    private void readTags(String storedTags) {
+        Map<String, PredefinedTag> tagsByName = new LinkedHashMap<>();
+        for (PredefinedTag tag : availableTags) {
+            tagsByName.put(normalizeTagName(tag.getName()), tag);
+        }
+
+        unmatchedTags.clear();
+        LinkedHashSet<PredefinedTag> selected = new LinkedHashSet<>();
+        for (String token : splitTags(storedTags)) {
+            PredefinedTag match = tagsByName.get(normalizeTagName(token));
+            if (match != null) {
+                selected.add(match);
+            } else {
+                unmatchedTags.add(token);
+            }
+        }
+
+        tags.setValue(selected);
+        updateTagsHelperText();
+    }
+
+    private String joinSelectedTags() {
+        LinkedHashSet<String> values = new LinkedHashSet<>();
+        LinkedHashSet<PredefinedTag> selectedTags = new LinkedHashSet<>(tags.getValue());
+        for (PredefinedTag tag : availableTags) {
+            if (selectedTags.contains(tag)) {
+                values.add(tag.getName());
+            }
+        }
+        values.addAll(unmatchedTags);
+        return blankToNull(String.join(", ", values));
+    }
+
+    private List<String> splitTags(String storedTags) {
+        List<String> values = new ArrayList<>();
+        if (storedTags == null || storedTags.isBlank()) {
+            return values;
+        }
+
+        for (String token : storedTags.split(",")) {
+            String normalized = token.trim();
+            if (!normalized.isBlank()) {
+                values.add(normalized);
+            }
+        }
+        return values;
+    }
+
+    private void updateTagsHelperText() {
+        String helper = t("order.tags.help");
+        if (!unmatchedTags.isEmpty()) {
+            helper = helper + " " + t("order.tags.legacy", String.join(", ", unmatchedTags));
+        }
+        tags.setHelperText(helper);
+    }
+
+    private String tagLabel(PredefinedTag tag) {
+        return "[" + categoryLabel(tag.getCategory()) + "] " + tag.getName();
+    }
+
+    private String categoryLabel(String category) {
+        return switch (category) {
+            case "ORDER" -> t("settings.tags.cat.order");
+            case "GENERAL" -> t("settings.tags.cat.general");
+            default -> category;
+        };
+    }
+
+    private int categoryRank(PredefinedTag tag) {
+        return switch (tag.getCategory()) {
+            case "ORDER" -> 0;
+            case "GENERAL" -> 1;
+            default -> 99;
+        };
+    }
+
+    private String normalizeTagName(String value) {
+        return value.trim().toLowerCase();
     }
 
     private static String nvl(String s) {

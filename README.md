@@ -2,23 +2,35 @@
 
 Order management system for railway operations, built with Vaadin Flow, Spring Boot, and PostgreSQL.
 
+## Current Capabilities
+
+- `/orders`: compact accordion overview with summary metrics, inline comment preview, status chips with counters, and per-order position filtering
+- `/orders/new` and edit dialog: predefined tag selection from the catalog (`ORDER` / `GENERAL`), while existing free-form legacy tags remain intact
+- `/settings`: topology CSV import for CHE/DE plus CSV import for the predefined tag catalog
+
 ## Prerequisites
 
 - Java 21
-- Maven 3.9+
-- Docker & Docker Compose (for PostgreSQL + Keycloak)
+- Maven 3.9+ or `./mvnw`
+- PostgreSQL 16
+- Keycloak 26
+- Optional: Docker & Docker Compose for local PostgreSQL + Keycloak
 
 ## Quick Start
 
 ```bash
-# Start infrastructure (PostgreSQL + Keycloak)
+# Create local environment file
+cp .env.example .env
+
+# Option A: use existing local PostgreSQL + Keycloak from .env
+# Option B: start helper containers
 docker compose -f docker/docker-compose.yml up -d
 
 # Run the application
-mvn spring-boot:run
+./mvnw spring-boot:run
 ```
 
-The app starts at http://localhost:8080.
+The app starts at http://localhost:8085.
 Keycloak admin console at http://localhost:8180 (admin/admin).
 
 ### Test Users
@@ -32,15 +44,22 @@ Keycloak admin console at http://localhost:8180 (admin/admin).
 
 ```bash
 # Development
-mvn clean compile
+./mvnw clean compile
 
 # Production
-mvn -Pproduction clean package
+./mvnw -Pproduction clean package
 ```
+
+## Seed and Import Data
+
+| Purpose | Path | Usage |
+|---|---|---|
+| Predefined tag catalog | `data/seeds/predefined-tags.csv` | Import via `Settings -> Tags`; no SQL seed inserts are kept in the migration |
+| ERA RINF topology | `data/rinf/*.csv` | Import via `Settings -> Topology`; DE operational points are deduplicated by `uopid` during import |
 
 ## Tech Stack
 
-- **Vaadin Flow 24.6** — Server-side UI framework with Tailwind CSS
+- **Vaadin Flow 24.7.4** — Server-side UI framework
 - **Spring Boot 3.4** — Application framework
 - **Spring Security** — OAuth2/OIDC authentication with Keycloak
 - **PostgreSQL 16** — Database

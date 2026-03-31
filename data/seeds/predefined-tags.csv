@@ -1,0 +1,13 @@
+name,category,color,sort_order,active
+Gueterverkehr,ORDER,#FFB800,1,true
+Personenverkehr,ORDER,#448AFF,2,true
+Sondertransport,ORDER,#FF5252,3,true
+Nachtverkehr,ORDER,#7A8B9E,4,true
+Express,ORDER,#00E676,5,true
+Fahrplan,POSITION,#448AFF,1,true
+Leistung,POSITION,#FFB800,2,true
+Rangierung,POSITION,#7A8B9E,3,true
+Gefahrgut,POSITION,#FF5252,4,true
+Intermodal,GENERAL,#00E676,1,true
+RFC,GENERAL,#448AFF,2,true
+Baustellenumleitung,GENERAL,#FF5252,3,true
