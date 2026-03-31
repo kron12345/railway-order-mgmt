@@ -61,3 +61,7 @@ docker/postgres-data/
 *.pem
 *.key
 credentials*.json
+
+# Private documents - local only, never committed
+docs/private/
+!docs/private/README.md
