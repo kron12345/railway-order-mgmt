@@ -35,9 +35,12 @@ public class OrderPosition {
     @JoinColumn(name = "order_id", nullable = false)
     private Order order;
 
+    @jakarta.validation.constraints.NotBlank
+    @jakarta.validation.constraints.Size(max = 255)
     @Column(nullable = false)
     private String name;
 
+    @jakarta.validation.constraints.NotNull
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private PositionType type;

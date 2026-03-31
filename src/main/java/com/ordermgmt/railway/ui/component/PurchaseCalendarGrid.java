@@ -258,14 +258,17 @@ public class PurchaseCalendarGrid extends Div {
                         if (startNode == null || endNode == null) continue;
                         LocalDate start = LocalDate.parse(startNode.asText());
                         LocalDate end = LocalDate.parse(endNode.asText());
-                        if (end.isBefore(start) || start.until(end).getDays() > 366) continue;
+                        if (end.isBefore(start)
+                                || java.time.temporal.ChronoUnit.DAYS.between(start, end) > 366)
+                            continue;
                         for (LocalDate d = start; !d.isAfter(end); d = d.plusDays(1)) {
                             dates.add(d);
                         }
                     }
                 }
-            } catch (Exception ignored) {
-                // Malformed JSON — skip silently
+            } catch (Exception e) {
+                org.slf4j.LoggerFactory.getLogger(PurchaseCalendarGrid.class)
+                        .debug("Failed to parse validity JSON", e);
             }
         }
         // Fallback: use orderedAt if no validity segments

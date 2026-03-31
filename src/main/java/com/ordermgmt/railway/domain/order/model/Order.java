@@ -35,9 +35,13 @@ public class Order {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
+    @jakarta.validation.constraints.NotBlank
+    @jakarta.validation.constraints.Size(max = 50)
     @Column(nullable = false, unique = true, length = 50)
     private String orderNumber;
 
+    @jakarta.validation.constraints.NotBlank
+    @jakarta.validation.constraints.Size(max = 255)
     @Column(nullable = false)
     private String name;
 
@@ -45,6 +49,7 @@ public class Order {
     @JoinColumn(name = "customer_id")
     private Customer customer;
 
+    @jakarta.validation.constraints.Size(max = 2000)
     @Column(length = 2000)
     private String comment;
 
