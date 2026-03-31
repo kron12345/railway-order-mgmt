@@ -44,17 +44,20 @@ public class MainLayout extends AppLayout
 
         LanguageSwitcher languageSwitcher = new LanguageSwitcher();
 
-        HorizontalLayout header =
-                new HorizontalLayout(new DrawerToggle(), title, languageSwitcher);
-        header.setDefaultVerticalComponentAlignment(FlexComponent.Alignment.CENTER);
-        header.expand(title);
-        header.setWidthFull();
-        header.getStyle()
+        breadcrumb = new Div();
+        breadcrumb.addClassName("breadcrumb");
+
+        HorizontalLayout topRow =
+                new HorizontalLayout(new DrawerToggle(), title, breadcrumb, languageSwitcher);
+        topRow.setDefaultVerticalComponentAlignment(FlexComponent.Alignment.CENTER);
+        topRow.expand(breadcrumb);
+        topRow.setWidthFull();
+        topRow.getStyle()
                 .set("padding", "0 var(--lumo-space-m)")
                 .set("background", "var(--rom-bg-secondary)")
                 .set("border-bottom", "1px solid var(--rom-border)");
 
-        addToNavbar(header);
+        addToNavbar(topRow);
     }
 
     private void createDrawer() {
@@ -118,12 +121,7 @@ public class MainLayout extends AppLayout
     }
 
     private void updateBreadcrumb(String path) {
-        if (breadcrumb != null) {
-            breadcrumb.removeFromParent();
-        }
-        breadcrumb = new Div();
-        breadcrumb.addClassName("breadcrumb");
-        breadcrumb.setWidthFull();
+        breadcrumb.removeAll();
 
         Anchor home = new Anchor("", "Dashboard");
         breadcrumb.add(home);
@@ -134,19 +132,16 @@ public class MainLayout extends AppLayout
             for (String part : parts) {
                 if (part.isBlank()) continue;
                 href.append(part);
-                breadcrumb.add(new Span("›"));
-                breadcrumb.getChildren()
-                        .filter(c -> c instanceof Span s && "›".equals(s.getText()))
-                        .forEach(c -> c.getElement().getClassList().add("sep"));
 
-                String label = formatBreadcrumbLabel(part);
-                Anchor link = new Anchor(href.toString(), label);
+                Span sep = new Span("›");
+                sep.addClassName("sep");
+                breadcrumb.add(sep);
+
+                Anchor link = new Anchor(href.toString(), formatBreadcrumbLabel(part));
                 breadcrumb.add(link);
                 href.append("/");
             }
         }
-
-        addToNavbar(breadcrumb);
     }
 
     private String formatBreadcrumbLabel(String segment) {

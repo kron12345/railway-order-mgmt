@@ -85,7 +85,17 @@ vaadin-side-nav-item {
     --lumo-primary-text-color: var(--rom-accent);
 }
 
-/* === Terminal-dense Grid rows === */
+/* === Terminal-dense Grid === */
+vaadin-grid::part(header-cell) {
+    background: var(--rom-bg-secondary);
+    color: var(--rom-accent);
+    font-family: 'JetBrains Mono', monospace;
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    font-weight: 600;
+    padding: 4px 8px;
+}
 vaadin-grid::part(row) {
     min-height: 32px;
 }
