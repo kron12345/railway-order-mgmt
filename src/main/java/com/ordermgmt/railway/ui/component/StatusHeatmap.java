@@ -38,7 +38,12 @@ public class StatusHeatmap extends Div {
         CellStyle style = cellStyle(status);
 
         Div cell = new Div();
+        cell.addClassName("heatmap-cell");
         cell.setText(style.icon);
+        cell.getElement().setAttribute("tabindex", "0");
+        cell.getElement().setAttribute("role", "img");
+        String ariaLabel = pos.getName() + " — " + statusLabel(status);
+        cell.getElement().setAttribute("aria-label", ariaLabel);
         cell.getStyle()
                 .set("width", "28px")
                 .set("height", "28px")
@@ -55,9 +60,8 @@ public class StatusHeatmap extends Div {
                 .set("border", "1px solid " + style.color)
                 .set("transition", "transform 0.15s");
 
-        // Rich tooltip via Vaadin Tooltip
         com.vaadin.flow.component.shared.Tooltip.forComponent(cell)
-                .withText(pos.getName() + " — " + statusLabel(status))
+                .withText(ariaLabel)
                 .withPosition(com.vaadin.flow.component.shared.Tooltip.TooltipPosition.TOP);
         return cell;
     }

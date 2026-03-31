@@ -131,7 +131,11 @@ public class PurchaseCalendarGrid extends Div {
             int day, PurchaseStatus status, boolean weekend, boolean fpjLine, LocalDate date) {
         Div cell = new Div();
         cell.addClassName("cal-cell");
-        cell.setText(String.valueOf(day));
+        cell.getElement().setAttribute("tabindex", "0");
+        cell.getElement().setAttribute("role", "gridcell");
+        // Show day number + status symbol for color-blind users
+        String symbol = statusSymbol(status, weekend);
+        cell.setText(day + symbol);
 
         String bg;
         String color;
@@ -177,6 +181,7 @@ public class PurchaseCalendarGrid extends Div {
 
         String statusText = status != null ? status.name() : (weekend ? "WE" : "—");
         String tip = String.format("%02d.%02d.%d %s", day, date.getMonthValue(), date.getYear(), statusText);
+        cell.getElement().setAttribute("aria-label", tip);
         com.vaadin.flow.component.shared.Tooltip.forComponent(cell)
                 .withText(tip)
                 .withPosition(com.vaadin.flow.component.shared.Tooltip.TooltipPosition.TOP);
@@ -205,6 +210,18 @@ public class PurchaseCalendarGrid extends Div {
                 .set("border-bottom", "1px solid var(--rom-border)")
                 .set("text-transform", "uppercase");
         return h;
+    }
+
+    private String statusSymbol(PurchaseStatus status, boolean weekend) {
+        if (weekend && status == null) return "";
+        if (status == null) return "";
+        return switch (status) {
+            case BESTAETIGT -> "✓";
+            case BESTELLT -> "→";
+            case OFFEN -> "";
+            case ABGELEHNT -> "✗";
+            case STORNIERT -> "–";
+        };
     }
 
     private Div weekSep(boolean isHeader) {

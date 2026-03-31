@@ -46,6 +46,8 @@ public class MainLayout extends AppLayout
 
         breadcrumb = new Div();
         breadcrumb.addClassName("breadcrumb");
+        breadcrumb.getElement().setAttribute("role", "navigation");
+        breadcrumb.getElement().setAttribute("aria-label", "Breadcrumb");
 
         HorizontalLayout topRow =
                 new HorizontalLayout(new DrawerToggle(), title, breadcrumb, languageSwitcher);

@@ -18,6 +18,10 @@ public class PositionTile extends Div {
     private static final DateTimeFormatter DT_FMT = DateTimeFormatter.ofPattern("dd.MM. HH:mm");
 
     public PositionTile(OrderPosition pos) {
+        addClassName("position-tile");
+        getElement().setAttribute("tabindex", "0");
+        getElement().setAttribute("role", "button");
+        getElement().setAttribute("aria-label", pos.getName());
         getStyle()
                 .set("background", "var(--rom-bg-primary)")
                 .set("border", "1px solid var(--rom-border-subtle, var(--rom-border))")
@@ -29,7 +33,6 @@ public class PositionTile extends Div {
                 .set("cursor", "pointer")
                 .set("transition", "border-color 0.15s, transform 0.15s");
 
-        // Hover effect via CSS class instead of inline JS
         getElement()
                 .executeJs(
                         "this.addEventListener('mouseover', function(){this.style.borderColor='var(--rom-accent)'});"
@@ -104,16 +107,18 @@ public class PositionTile extends Div {
     private Div createResources() {
         Div resources = new Div();
         resources.getStyle().set("display", "flex").set("gap", "4px");
-        resources.add(createResourceIcon("V", "rgba(96,165,250,0.12)", "var(--rom-status-info)"));
-        resources.add(
-                createResourceIcon("P", "rgba(251,191,36,0.12)", "var(--rom-status-warning)"));
-        resources.add(createResourceIcon("C", "rgba(52,211,153,0.12)", "var(--rom-status-active)"));
+        resources.add(createResourceIcon("V", "rgba(96,165,250,0.12)", "var(--rom-status-info)", "Vehicle"));
+        resources.add(createResourceIcon("P", "rgba(251,191,36,0.12)", "var(--rom-status-warning)", "Personnel"));
+        resources.add(createResourceIcon("C", "rgba(52,211,153,0.12)", "var(--rom-status-active)", "Capacity"));
         return resources;
     }
 
-    private Div createResourceIcon(String label, String bg, String color) {
+    private Div createResourceIcon(String label, String bg, String color, String ariaLabel) {
         Div icon = new Div();
         icon.setText(label);
+        icon.getElement().setAttribute("aria-label", ariaLabel);
+        com.vaadin.flow.component.shared.Tooltip.forComponent(icon)
+                .withText(ariaLabel);
         icon.getStyle()
                 .set("width", "22px")
                 .set("height", "22px")
