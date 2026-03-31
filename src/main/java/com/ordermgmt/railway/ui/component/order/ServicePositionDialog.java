@@ -13,7 +13,7 @@ import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.checkbox.CheckboxGroup;
 import com.vaadin.flow.component.combobox.ComboBox;
-import com.vaadin.flow.component.datepicker.DatePicker;
+import com.ordermgmt.railway.ui.component.ValidityCalendar;
 import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.formlayout.FormLayout;
 import com.vaadin.flow.component.html.Div;
@@ -51,8 +51,7 @@ public class ServicePositionDialog extends Dialog {
     private final TextField serviceType = new TextField();
     private final ComboBox<OperationalPoint> fromOp = new ComboBox<>();
     private final ComboBox<OperationalPoint> toOp = new ComboBox<>();
-    private final DatePicker validFrom = new DatePicker();
-    private final DatePicker validTo = new DatePicker();
+    private ValidityCalendar validityCalendar;
     private final CheckboxGroup<PredefinedTag> tags = new CheckboxGroup<>();
     private final TextArea comment = new TextArea();
 
@@ -107,30 +106,10 @@ public class ServicePositionDialog extends Dialog {
         toOp.setHelperText(t("position.to.help"));
         toOp.setWidthFull();
 
-        // Validity constrained to parent order dates
-        LocalDate orderFrom = order.getValidFrom();
-        LocalDate orderTo = order.getValidTo();
-
-        validFrom.setLabel(t("position.validFrom"));
-        validFrom.setRequired(true);
-        if (orderFrom != null) validFrom.setMin(orderFrom);
-        if (orderTo != null) validFrom.setMax(orderTo);
-        validFrom.setHelperText(t("position.validFrom.help",
-                orderFrom != null ? orderFrom.toString() : "—",
-                orderTo != null ? orderTo.toString() : "—"));
-        validFrom.setWidthFull();
-
-        validTo.setLabel(t("position.validTo"));
-        validTo.setRequired(true);
-        if (orderFrom != null) validTo.setMin(orderFrom);
-        if (orderTo != null) validTo.setMax(orderTo);
-        validTo.setHelperText(t("position.validTo.help"));
-        validTo.setWidthFull();
-
-        // Link pickers: from constrains to
-        validFrom.addValueChangeListener(e -> {
-            if (e.getValue() != null) validTo.setMin(e.getValue());
-        });
+        // Validity calendar — multi-date selection within order range
+        LocalDate orderFrom = order.getValidFrom() != null ? order.getValidFrom() : LocalDate.now();
+        LocalDate orderTo = order.getValidTo() != null ? order.getValidTo() : orderFrom.plusMonths(3);
+        validityCalendar = new ValidityCalendar(orderFrom, orderTo);
 
         tags.setLabel(t("order.tags"));
         tags.setItems(availableTags);
@@ -151,7 +130,28 @@ public class ServicePositionDialog extends Dialog {
 
         form.add(name, serviceType);
         form.add(fromOp, toOp);
-        form.add(validFrom, validTo);
+
+        // Validity calendar spans full width
+        Div calSection = new Div();
+        Span calLabel = new Span(t("position.validity"));
+        calLabel.getStyle()
+                .set("font-weight", "600")
+                .set("font-size", "12px")
+                .set("color", "var(--rom-text-primary)")
+                .set("display", "block")
+                .set("margin-bottom", "6px");
+        Span calHelper = new Span(t("position.validity.help",
+                orderFrom.toString(), orderTo.toString()));
+        calHelper.getStyle()
+                .set("font-size", "10px")
+                .set("font-family", "'JetBrains Mono', monospace")
+                .set("color", "var(--rom-text-muted)")
+                .set("display", "block")
+                .set("margin-bottom", "8px");
+        calSection.add(calLabel, calHelper, validityCalendar);
+        form.setColspan(calSection, 2);
+        form.add(calSection);
+
         form.setColspan(tags, 2);
         form.add(tags);
         form.setColspan(comment, 2);
@@ -180,25 +180,26 @@ public class ServicePositionDialog extends Dialog {
         serviceType.setValue(nvl(position.getServiceType()));
         comment.setValue(nvl(position.getComment()));
 
-        // Parse validity JSON → dates
-        if (position.getStart() != null) {
-            validFrom.setValue(position.getStart().toLocalDate());
+        // Parse validity JSON → calendar dates
+        List<LocalDate> dates = parseValidityDates(position.getValidity());
+        if (dates.isEmpty() && position.getStart() != null) {
+            // Fallback: use start/end as range
+            LocalDate d = position.getStart().toLocalDate();
+            LocalDate end = position.getEnd() != null ? position.getEnd().toLocalDate() : d;
+            while (!d.isAfter(end)) { dates.add(d); d = d.plusDays(1); }
         }
-        if (position.getEnd() != null) {
-            validTo.setValue(position.getEnd().toLocalDate());
-        }
-
-        // Match fromLocation/toLocation to OPs
-        // For now store as string, match by name
+        validityCalendar.setSelectedDates(dates);
         readTags(position.getTags());
     }
 
     private void savePosition() {
         if (name.getValue().isBlank()) { name.setInvalid(true); return; }
-        if (validFrom.getValue() == null) { validFrom.setInvalid(true); return; }
-        if (validTo.getValue() == null) { validTo.setInvalid(true); return; }
-        if (validTo.getValue().isBefore(validFrom.getValue())) {
-            validTo.setInvalid(true);
+
+        List<LocalDate> selectedDates = validityCalendar.getSelectedDates();
+        if (selectedDates.isEmpty()) {
+            Notification.show(t("position.validity.required"), 3000,
+                            Notification.Position.BOTTOM_END)
+                    .addThemeVariants(NotificationVariant.LUMO_ERROR);
             return;
         }
 
@@ -209,8 +210,11 @@ public class ServicePositionDialog extends Dialog {
         position.setFromLocation(fromOp.getValue() != null ? fromOp.getValue().getName() : null);
         position.setToLocation(toOp.getValue() != null ? toOp.getValue().getName() : null);
 
-        position.setStart(validFrom.getValue().atStartOfDay());
-        position.setEnd(validTo.getValue().atTime(23, 59));
+        // Store first/last as start/end for backwards compat
+        position.setStart(selectedDates.getFirst().atStartOfDay());
+        position.setEnd(selectedDates.getLast().atTime(23, 59));
+        // Store all dates as validity JSON
+        position.setValidity(toValidityJson(selectedDates));
 
         position.setTags(joinSelectedTags());
         position.setComment(blankToNull(comment.getValue()));
@@ -259,6 +263,52 @@ public class ServicePositionDialog extends Dialog {
 
     private String opLabel(OperationalPoint op) {
         return op.getName() + " (" + op.getUopid() + ")";
+    }
+
+    // --- Validity JSON ---
+
+    private String toValidityJson(List<LocalDate> dates) {
+        // Group consecutive dates into segments
+        StringBuilder sb = new StringBuilder("[");
+        LocalDate rangeStart = null;
+        LocalDate prev = null;
+        boolean first = true;
+        for (LocalDate d : dates) {
+            if (rangeStart == null) {
+                rangeStart = d;
+            } else if (!d.equals(prev.plusDays(1))) {
+                if (!first) sb.append(",");
+                sb.append("{\"startDate\":\"").append(rangeStart).append("\",\"endDate\":\"").append(prev).append("\"}");
+                first = false;
+                rangeStart = d;
+            }
+            prev = d;
+        }
+        if (rangeStart != null) {
+            if (!first) sb.append(",");
+            sb.append("{\"startDate\":\"").append(rangeStart).append("\",\"endDate\":\"").append(prev).append("\"}");
+        }
+        sb.append("]");
+        return sb.toString();
+    }
+
+    private List<LocalDate> parseValidityDates(String json) {
+        List<LocalDate> dates = new ArrayList<>();
+        if (json == null || json.isBlank()) return dates;
+        try {
+            var array = new com.fasterxml.jackson.databind.ObjectMapper().readTree(json);
+            if (array.isArray()) {
+                for (var seg : array) {
+                    var sn = seg.get("startDate");
+                    var en = seg.get("endDate");
+                    if (sn == null || en == null) continue;
+                    LocalDate s = LocalDate.parse(sn.asText());
+                    LocalDate e = LocalDate.parse(en.asText());
+                    for (LocalDate d = s; !d.isAfter(e); d = d.plusDays(1)) dates.add(d);
+                }
+            }
+        } catch (Exception ignored) {}
+        return dates;
     }
 
     // --- Events ---
