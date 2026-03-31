@@ -4,7 +4,7 @@ import java.io.InputStream;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 
-import jakarta.annotation.security.PermitAll;
+import jakarta.annotation.security.RolesAllowed;
 
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.combobox.ComboBox;
@@ -32,7 +32,7 @@ import com.ordermgmt.railway.ui.layout.MainLayout;
 /** Administrative view for importing infrastructure data and reviewing import history. */
 @Route(value = "settings", layout = MainLayout.class)
 @PageTitle("Settings")
-@PermitAll // TODO: restrict to @RolesAllowed("ADMIN") once Keycloak role mapping verified
+@RolesAllowed("ADMIN")
 public class SettingsView extends VerticalLayout {
 
     private final RinfImportService importService;
