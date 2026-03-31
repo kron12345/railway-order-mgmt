@@ -411,6 +411,7 @@ public class OrderListView extends VerticalLayout {
             Button editButton = new Button(VaadinIcon.EDIT.create());
             editButton.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
             editButton.getStyle().set("color", "var(--rom-text-muted)");
+            editButton.getElement().setAttribute("aria-label", getTranslation("common.edit"));
             editButton.addClickListener(e -> UI.getCurrent().navigate("orders/" + order.getId()));
             preventSummaryToggle(editButton);
 

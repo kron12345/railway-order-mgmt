@@ -1,10 +1,15 @@
 package com.ordermgmt.railway.ui.component.order;
 
+import java.time.Duration;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.function.BiFunction;
 
 import com.vaadin.flow.component.ComponentEvent;
@@ -22,6 +27,7 @@ import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.textfield.TextArea;
 import com.vaadin.flow.component.textfield.TextField;
+import com.vaadin.flow.component.timepicker.TimePicker;
 import com.vaadin.flow.shared.Registration;
 
 import com.ordermgmt.railway.domain.infrastructure.model.OperationalPoint;
@@ -46,11 +52,15 @@ public class ServicePositionDialog extends Dialog {
     private final OrderPosition position;
     private final boolean isNew;
     private final List<PredefinedTag> availableTags;
+    private final List<OperationalPoint> availableOperationalPoints = new ArrayList<>();
+    private final LinkedHashSet<String> unmatchedTags = new LinkedHashSet<>();
 
     private final TextField name = new TextField();
     private final TextField serviceType = new TextField();
     private final ComboBox<OperationalPoint> fromOp = new ComboBox<>();
     private final ComboBox<OperationalPoint> toOp = new ComboBox<>();
+    private final TimePicker startTime = new TimePicker();
+    private final TimePicker endTime = new TimePicker();
     private ValidityCalendar validityCalendar;
     private final CheckboxGroup<PredefinedTag> tags = new CheckboxGroup<>();
     private final TextArea comment = new TextArea();
@@ -78,6 +88,8 @@ public class ServicePositionDialog extends Dialog {
     }
 
     private void buildForm(OperationalPointRepository opRepo) {
+        Locale locale = getLocale() != null ? getLocale() : Locale.GERMANY;
+
         name.setLabel(t("position.name"));
         name.setRequired(true);
         name.setMaxLength(255);
@@ -89,22 +101,60 @@ public class ServicePositionDialog extends Dialog {
         serviceType.setWidthFull();
 
         // OP-based location selection
-        List<OperationalPoint> ops = opRepo.findAll();
-        ops.sort(Comparator.comparing(OperationalPoint::getName, String.CASE_INSENSITIVE_ORDER));
+        availableOperationalPoints.clear();
+        availableOperationalPoints.addAll(opRepo.findAll());
+        availableOperationalPoints.sort(
+                Comparator.comparing(OperationalPoint::getName, String.CASE_INSENSITIVE_ORDER));
 
         fromOp.setLabel(t("position.from"));
-        fromOp.setItems(ops);
+        fromOp.setItems(availableOperationalPoints);
         fromOp.setItemLabelGenerator(this::opLabel);
         fromOp.setClearButtonVisible(true);
         fromOp.setHelperText(t("position.from.help"));
         fromOp.setWidthFull();
 
         toOp.setLabel(t("position.to"));
-        toOp.setItems(ops);
+        toOp.setItems(availableOperationalPoints);
         toOp.setItemLabelGenerator(this::opLabel);
         toOp.setClearButtonVisible(true);
         toOp.setHelperText(t("position.to.help"));
         toOp.setWidthFull();
+
+        startTime.setLabel(t("position.startTime"));
+        startTime.setHelperText(t("position.startTime.help"));
+        startTime.setWidthFull();
+        startTime.setRequired(true);
+        startTime.setStep(Duration.ofMinutes(1));
+        startTime.setClearButtonVisible(false);
+        startTime.setAllowedCharPattern("[0-9:]");
+        startTime.setPlaceholder("HH:mm");
+        startTime.setLocale(locale);
+        startTime.setI18n(new TimePicker.TimePickerI18n()
+                .setRequiredErrorMessage(t("position.startTime.required"))
+                .setBadInputErrorMessage(t("position.time.format")));
+        startTime.addValueChangeListener(event -> {
+            if (event.getValue() != null) {
+                startTime.setInvalid(false);
+            }
+        });
+
+        endTime.setLabel(t("position.endTime"));
+        endTime.setHelperText(t("position.endTime.help"));
+        endTime.setWidthFull();
+        endTime.setRequired(true);
+        endTime.setStep(Duration.ofMinutes(1));
+        endTime.setClearButtonVisible(false);
+        endTime.setAllowedCharPattern("[0-9:]");
+        endTime.setPlaceholder("HH:mm");
+        endTime.setLocale(locale);
+        endTime.setI18n(new TimePicker.TimePickerI18n()
+                .setRequiredErrorMessage(t("position.endTime.required"))
+                .setBadInputErrorMessage(t("position.time.format")));
+        endTime.addValueChangeListener(event -> {
+            if (event.getValue() != null) {
+                endTime.setInvalid(false);
+            }
+        });
 
         // Validity calendar — multi-date selection within order range
         LocalDate orderFrom = order.getValidFrom() != null ? order.getValidFrom() : LocalDate.now();
@@ -115,7 +165,7 @@ public class ServicePositionDialog extends Dialog {
         tags.setItems(availableTags);
         tags.setItemLabelGenerator(PredefinedTag::getName);
         tags.setWidthFull();
-        tags.setHelperText(t("position.tags.help"));
+        updateTagsHelperText();
 
         comment.setLabel(t("order.comment"));
         comment.setMaxLength(2000);
@@ -130,6 +180,7 @@ public class ServicePositionDialog extends Dialog {
 
         form.add(name, serviceType);
         form.add(fromOp, toOp);
+        form.add(startTime, endTime);
 
         // Validity calendar spans full width
         Div calSection = new Div();
@@ -179,6 +230,12 @@ public class ServicePositionDialog extends Dialog {
         name.setValue(nvl(position.getName()));
         serviceType.setValue(nvl(position.getServiceType()));
         comment.setValue(nvl(position.getComment()));
+        fromOp.setValue(findOperationalPoint(position.getFromLocation()));
+        toOp.setValue(findOperationalPoint(position.getToLocation()));
+        startTime.setValue(position.getStart() != null ? position.getStart().toLocalTime() : null);
+        endTime.setValue(position.getEnd() != null ? position.getEnd().toLocalTime() : null);
+        startTime.setInvalid(false);
+        endTime.setInvalid(false);
 
         // Parse validity JSON → calendar dates
         List<LocalDate> dates = parseValidityDates(position.getValidity());
@@ -195,6 +252,20 @@ public class ServicePositionDialog extends Dialog {
     private void savePosition() {
         if (name.getValue().isBlank()) { name.setInvalid(true); return; }
 
+        if (startTime.getValue() == null) {
+            startTime.setInvalid(true);
+            startTime.setErrorMessage(t("position.startTime.required"));
+            return;
+        }
+        startTime.setInvalid(false);
+
+        if (endTime.getValue() == null) {
+            endTime.setInvalid(true);
+            endTime.setErrorMessage(t("position.endTime.required"));
+            return;
+        }
+        endTime.setInvalid(false);
+
         List<LocalDate> selectedDates = validityCalendar.getSelectedDates();
         if (selectedDates.isEmpty()) {
             Notification.show(t("position.validity.required"), 3000,
@@ -202,6 +273,17 @@ public class ServicePositionDialog extends Dialog {
                     .addThemeVariants(NotificationVariant.LUMO_ERROR);
             return;
         }
+
+        LocalTime resolvedStartTime = startTime.getValue();
+        LocalTime resolvedEndTime = endTime.getValue();
+        if (selectedDates.size() == 1 && resolvedEndTime.isBefore(resolvedStartTime)) {
+            endTime.setInvalid(true);
+            endTime.setErrorMessage(t("position.time.invalid"));
+            Notification.show(t("position.time.invalid"), 3000, Notification.Position.BOTTOM_END)
+                    .addThemeVariants(NotificationVariant.LUMO_ERROR);
+            return;
+        }
+        endTime.setInvalid(false);
 
         position.setName(name.getValue().trim());
         position.setType(PositionType.LEISTUNG);
@@ -211,8 +293,8 @@ public class ServicePositionDialog extends Dialog {
         position.setToLocation(toOp.getValue() != null ? toOp.getValue().getName() : null);
 
         // Store first/last as start/end for backwards compat
-        position.setStart(selectedDates.getFirst().atStartOfDay());
-        position.setEnd(selectedDates.getLast().atTime(23, 59));
+        position.setStart(selectedDates.getFirst().atTime(resolvedStartTime));
+        position.setEnd(selectedDates.getLast().atTime(resolvedEndTime));
         // Store all dates as validity JSON
         position.setValidity(toValidityJson(selectedDates));
 
@@ -241,28 +323,73 @@ public class ServicePositionDialog extends Dialog {
     }
 
     private void readTags(String stored) {
-        if (stored == null || stored.isBlank()) return;
+        Map<String, PredefinedTag> tagsByName = new LinkedHashMap<>();
+        for (PredefinedTag tag : availableTags) {
+            tagsByName.put(normalizeTagName(tag.getName()), tag);
+        }
+
+        unmatchedTags.clear();
         LinkedHashSet<PredefinedTag> selected = new LinkedHashSet<>();
-        for (String token : stored.split(",")) {
-            String name = token.trim();
-            availableTags.stream()
-                    .filter(t -> t.getName().equalsIgnoreCase(name))
-                    .findFirst()
-                    .ifPresent(selected::add);
+        for (String token : splitTags(stored)) {
+            PredefinedTag match = tagsByName.get(normalizeTagName(token));
+            if (match != null) {
+                selected.add(match);
+            } else {
+                unmatchedTags.add(token);
+            }
         }
         tags.setValue(selected);
+        updateTagsHelperText();
     }
 
     private String joinSelectedTags() {
-        List<String> names = new ArrayList<>();
+        LinkedHashSet<String> names = new LinkedHashSet<>();
         for (PredefinedTag tag : availableTags) {
             if (tags.getValue().contains(tag)) names.add(tag.getName());
         }
+        names.addAll(unmatchedTags);
         return names.isEmpty() ? null : String.join(", ", names);
     }
 
     private String opLabel(OperationalPoint op) {
         return op.getName() + " (" + op.getUopid() + ")";
+    }
+
+    private OperationalPoint findOperationalPoint(String name) {
+        if (name == null || name.isBlank()) {
+            return null;
+        }
+        return availableOperationalPoints.stream()
+                .filter(op -> name.equalsIgnoreCase(op.getName()))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private List<String> splitTags(String storedTags) {
+        List<String> values = new ArrayList<>();
+        if (storedTags == null || storedTags.isBlank()) {
+            return values;
+        }
+
+        for (String token : storedTags.split(",")) {
+            String normalized = token.trim();
+            if (!normalized.isBlank()) {
+                values.add(normalized);
+            }
+        }
+        return values;
+    }
+
+    private void updateTagsHelperText() {
+        String helper = t("position.tags.help");
+        if (!unmatchedTags.isEmpty()) {
+            helper = helper + " " + t("position.tags.legacy", String.join(", ", unmatchedTags));
+        }
+        tags.setHelperText(helper);
+    }
+
+    private String normalizeTagName(String name) {
+        return name == null ? "" : name.trim().toLowerCase(Locale.ROOT);
     }
 
     // --- Validity JSON ---

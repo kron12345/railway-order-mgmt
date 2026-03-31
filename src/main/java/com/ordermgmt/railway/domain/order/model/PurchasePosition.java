@@ -5,7 +5,9 @@ import java.util.UUID;
 
 import jakarta.persistence.*;
 
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.envers.Audited;
+import org.hibernate.type.SqlTypes;
 
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -35,6 +37,7 @@ public class PurchasePosition {
     @JoinColumn(name = "resource_need_id", nullable = false)
     private ResourceNeed resourceNeed;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     private String validity;
 

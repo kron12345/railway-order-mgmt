@@ -12,26 +12,47 @@ import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.sidenav.SideNav;
 import com.vaadin.flow.component.sidenav.SideNavItem;
+import com.vaadin.flow.component.UI;
 import com.vaadin.flow.i18n.LocaleChangeEvent;
 import com.vaadin.flow.i18n.LocaleChangeObserver;
 import com.vaadin.flow.router.AfterNavigationEvent;
 import com.vaadin.flow.router.AfterNavigationObserver;
 import com.vaadin.flow.router.RouterLayout;
 
+import com.ordermgmt.railway.infrastructure.keycloak.CurrentUserHelper;
+import com.ordermgmt.railway.infrastructure.keycloak.KeycloakUserService;
+import com.ordermgmt.railway.ui.theme.UiThemeUtil;
 import com.ordermgmt.railway.ui.component.LanguageSwitcher;
 
 /** Shared application shell with navigation, breadcrumbs, and locale switching. */
 public class MainLayout extends AppLayout
         implements RouterLayout, LocaleChangeObserver, AfterNavigationObserver {
 
+    private final KeycloakUserService keycloakUserService;
     private H1 title;
     private SideNav sideNav;
     private Div breadcrumb;
 
-    public MainLayout() {
+    public MainLayout(KeycloakUserService keycloakUserService) {
+        this.keycloakUserService = keycloakUserService;
         setPrimarySection(Section.DRAWER);
+        applyCurrentUserTheme();
         createHeader();
         createDrawer();
+    }
+
+    private void applyCurrentUserTheme() {
+        String userId = CurrentUserHelper.getUserId();
+        if (userId == null) {
+            UiThemeUtil.apply(UI.getCurrent(), UiThemeUtil.DEFAULT_THEME);
+            return;
+        }
+
+        String themeName =
+                keycloakUserService
+                        .getUserAttributes(userId)
+                        .getOrDefault("theme", UiThemeUtil.DEFAULT_THEME);
+        UiThemeUtil.apply(UI.getCurrent(), themeName);
     }
 
     private void createHeader() {
@@ -155,6 +176,7 @@ public class MainLayout extends AppLayout
             case "settings" -> getTranslation("nav.settings");
             case "customers" -> getTranslation("nav.customers");
             case "new" -> getTranslation("order.new");
+            case "timetable-builder" -> getTranslation("timetable.builder.title");
             default -> {
                 if (segment.matches("[0-9a-f\\-]{36}")) {
                     yield segment.substring(0, 8) + "…";

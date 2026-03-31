@@ -8,7 +8,9 @@ import java.util.UUID;
 
 import jakarta.persistence.*;
 
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.envers.Audited;
+import org.hibernate.type.SqlTypes;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -49,6 +51,7 @@ public class OrderPosition {
 
     private LocalDateTime start;
 
+    @Column(name = "\"end\"")
     private LocalDateTime end;
 
     @Column(length = 100)
@@ -61,6 +64,7 @@ public class OrderPosition {
     @Column(length = 2000)
     private String comment;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     private String validity;
 

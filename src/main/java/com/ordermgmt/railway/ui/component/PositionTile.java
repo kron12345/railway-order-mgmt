@@ -43,6 +43,10 @@ public class PositionTile extends Div {
 
         add(createHeader(pos));
         add(createRoute(pos));
+        Div comment = createComment(pos);
+        if (comment != null) {
+            add(comment);
+        }
         Div meta = createMeta(pos);
         if (meta.getComponentCount() > 0) {
             add(meta);
@@ -88,6 +92,24 @@ public class PositionTile extends Div {
         }
 
         return route;
+    }
+
+    private Div createComment(OrderPosition pos) {
+        if (pos.getComment() == null || pos.getComment().isBlank()) {
+            return null;
+        }
+
+        Div comment = new Div();
+        comment.setText(pos.getComment());
+        comment.getStyle()
+                .set("font-size", "11px")
+                .set("line-height", "1.4")
+                .set("color", "var(--rom-text-muted)")
+                .set("display", "-webkit-box")
+                .set("-webkit-line-clamp", "2")
+                .set("-webkit-box-orient", "vertical")
+                .set("overflow", "hidden");
+        return comment;
     }
 
     private Div createMeta(OrderPosition pos) {

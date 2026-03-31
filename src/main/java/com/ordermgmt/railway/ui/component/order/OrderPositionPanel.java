@@ -2,6 +2,7 @@ package com.ordermgmt.railway.ui.component.order;
 
 import java.util.function.BiFunction;
 
+import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.confirmdialog.ConfirmDialog;
@@ -9,8 +10,6 @@ import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.H3;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.icon.VaadinIcon;
-import com.vaadin.flow.component.notification.Notification;
-import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
@@ -84,10 +83,7 @@ public class OrderPositionPanel extends Div {
                 .set("color", "var(--rom-status-info)")
                 .set("border", "1px solid var(--rom-status-info)")
                 .set("background", "rgba(68,138,255,0.08)");
-        addTrain.addClickListener(e ->
-                Notification.show(t("position.fahrplan.coming"), 3000,
-                                Notification.Position.BOTTOM_END)
-                        .addThemeVariants(NotificationVariant.LUMO_CONTRAST));
+        addTrain.addClickListener(e -> openTimetableBuilder(null));
 
         HorizontalLayout buttons = new HorizontalLayout(addService, addTrain);
         buttons.setSpacing(true);
@@ -127,10 +123,7 @@ public class OrderPositionPanel extends Div {
         if (pos.getType() == PositionType.LEISTUNG) {
             openServiceDialog(pos);
         } else {
-            // Fahrplan editor — coming soon
-            Notification.show(t("position.fahrplan.coming"), 3000,
-                            Notification.Position.BOTTOM_END)
-                    .addThemeVariants(NotificationVariant.LUMO_CONTRAST);
+            openTimetableBuilder(pos);
         }
     }
 
@@ -153,6 +146,14 @@ public class OrderPositionPanel extends Div {
             refreshPositions();
         });
         dialog.open();
+    }
+
+    private void openTimetableBuilder(OrderPosition existing) {
+        String target = "orders/" + order.getId() + "/timetable-builder";
+        if (existing != null) {
+            target += "?positionId=" + existing.getId();
+        }
+        UI.getCurrent().navigate(target);
     }
 
     private String t(String key) {

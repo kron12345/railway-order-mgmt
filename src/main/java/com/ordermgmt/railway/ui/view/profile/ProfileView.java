@@ -25,6 +25,7 @@ import com.vaadin.flow.router.Route;
 import com.ordermgmt.railway.infrastructure.keycloak.CurrentUserHelper;
 import com.ordermgmt.railway.infrastructure.keycloak.KeycloakUserService;
 import com.ordermgmt.railway.ui.layout.MainLayout;
+import com.ordermgmt.railway.ui.theme.UiThemeUtil;
 
 /** Personal profile and preferences — data stored in Keycloak user attributes. */
 @Route(value = "profile", layout = MainLayout.class)
@@ -152,7 +153,7 @@ public class ProfileView extends VerticalLayout {
             case "light" -> "Light";
             default -> t;
         });
-        themeSelect.setValue(attrs.getOrDefault("theme", "dark-amber"));
+        themeSelect.setValue(UiThemeUtil.normalize(attrs.getOrDefault("theme", UiThemeUtil.DEFAULT_THEME)));
         themeSelect.setWidth("200px");
 
         fpjSelect = new ComboBox<>(getTranslation("profile.defaultFpj"));
@@ -201,7 +202,7 @@ public class ProfileView extends VerticalLayout {
     private void savePreferences() {
         Map<String, String> prefs = Map.of(
                 "locale", localeSelect.getValue() != null ? localeSelect.getValue() : "de",
-                "theme", themeSelect.getValue() != null ? themeSelect.getValue() : "dark-amber",
+                "theme", UiThemeUtil.normalize(themeSelect.getValue()),
                 "defaultFpj", fpjSelect.getValue() != null ? fpjSelect.getValue() : "",
                 "defaultCountry", countrySelect.getValue() != null ? countrySelect.getValue() : "",
                 "timezone", timezoneSelect.getValue() != null ? timezoneSelect.getValue() : "Europe/Zurich");
@@ -217,6 +218,7 @@ public class ProfileView extends VerticalLayout {
             if (locale != null && !locale.isBlank()) {
                 UI.getCurrent().setLocale(java.util.Locale.forLanguageTag(locale));
             }
+            UiThemeUtil.applyToCurrentUi(prefs.get("theme"));
         } else {
             Notification.show(getTranslation("settings.import.error"), 3000,
                             Notification.Position.BOTTOM_END)

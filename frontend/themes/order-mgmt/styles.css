@@ -4,9 +4,11 @@
 @tailwind components;
 @tailwind utilities;
 
-/* === Railway Order Management — Bloomberg Terminal Dark Theme === */
+/* === Railway Order Management Theme Variables === */
 
-html {
+html,
+html[data-rom-theme='dark-amber'] {
+    color-scheme: dark;
     --rom-bg-primary: #0A0E17;
     --rom-bg-secondary: #0F1520;
     --rom-bg-card: #151C28;
@@ -17,9 +19,8 @@ html {
 
     --rom-text-primary: #D4DCE8;
     --rom-text-secondary: #8899AB;
-    --rom-text-muted: #7A8B9E; /* WCAG AA 4.5:1 on #0A0E17 */
+    --rom-text-muted: #7A8B9E;
 
-    /* Bloomberg-style amber accent */
     --rom-accent: #FFB800;
     --rom-accent-hover: #E5A600;
     --rom-accent-muted: rgba(255, 184, 0, 0.12);
@@ -30,7 +31,76 @@ html {
     --rom-status-info: #448AFF;
     --rom-status-neutral: #78909C;
 
-    /* Lumo Dark overrides */
+    --lumo-contrast-5pct: rgba(255, 255, 255, 0.04);
+    --lumo-contrast-10pct: rgba(255, 255, 255, 0.06);
+    --lumo-contrast-20pct: rgba(255, 255, 255, 0.10);
+    --lumo-shade-5pct: rgba(0, 0, 0, 0.25);
+    --lumo-shade-10pct: rgba(0, 0, 0, 0.40);
+}
+
+html[data-rom-theme='dark-teal'] {
+    color-scheme: dark;
+    --rom-bg-primary: #07131A;
+    --rom-bg-secondary: #0B1A23;
+    --rom-bg-card: #0F2230;
+    --rom-bg-hover: #143040;
+    --rom-bg-selected: #113847;
+    --rom-border: #184052;
+    --rom-border-subtle: #133344;
+
+    --rom-text-primary: #D4E5EA;
+    --rom-text-secondary: #8BA6AF;
+    --rom-text-muted: #78949D;
+
+    --rom-accent: #2DD4BF;
+    --rom-accent-hover: #1FB7A4;
+    --rom-accent-muted: rgba(45, 212, 191, 0.14);
+
+    --rom-status-active: #22C55E;
+    --rom-status-warning: #F59E0B;
+    --rom-status-danger: #F87171;
+    --rom-status-info: #38BDF8;
+    --rom-status-neutral: #7C98A1;
+
+    --lumo-contrast-5pct: rgba(255, 255, 255, 0.04);
+    --lumo-contrast-10pct: rgba(255, 255, 255, 0.06);
+    --lumo-contrast-20pct: rgba(255, 255, 255, 0.10);
+    --lumo-shade-5pct: rgba(0, 0, 0, 0.25);
+    --lumo-shade-10pct: rgba(0, 0, 0, 0.40);
+}
+
+html[data-rom-theme='light'] {
+    color-scheme: light;
+    --rom-bg-primary: #F4F7FB;
+    --rom-bg-secondary: #FFFFFF;
+    --rom-bg-card: #FFFFFF;
+    --rom-bg-hover: #EAF0F7;
+    --rom-bg-selected: #DFE8F4;
+    --rom-border: #D3DDE9;
+    --rom-border-subtle: #E2EAF3;
+
+    --rom-text-primary: #112235;
+    --rom-text-secondary: #516274;
+    --rom-text-muted: #6D8094;
+
+    --rom-accent: #0F6CBD;
+    --rom-accent-hover: #0B5AA0;
+    --rom-accent-muted: rgba(15, 108, 189, 0.12);
+
+    --rom-status-active: #0F9D58;
+    --rom-status-warning: #C27803;
+    --rom-status-danger: #D14343;
+    --rom-status-info: #0F6CBD;
+    --rom-status-neutral: #73879B;
+
+    --lumo-contrast-5pct: rgba(17, 34, 53, 0.05);
+    --lumo-contrast-10pct: rgba(17, 34, 53, 0.08);
+    --lumo-contrast-20pct: rgba(17, 34, 53, 0.14);
+    --lumo-shade-5pct: rgba(17, 34, 53, 0.08);
+    --lumo-shade-10pct: rgba(17, 34, 53, 0.14);
+}
+
+html {
     --lumo-base-color: var(--rom-bg-primary);
     --lumo-body-text-color: var(--rom-text-primary);
     --lumo-header-text-color: var(--rom-text-primary);
@@ -38,20 +108,15 @@ html {
     --lumo-tertiary-text-color: var(--rom-text-muted);
     --lumo-primary-color: var(--rom-accent);
     --lumo-primary-text-color: var(--rom-accent);
-    --lumo-contrast-5pct: rgba(255, 255, 255, 0.04);
-    --lumo-contrast-10pct: rgba(255, 255, 255, 0.06);
-    --lumo-contrast-20pct: rgba(255, 255, 255, 0.10);
-    --lumo-shade-5pct: rgba(0, 0, 0, 0.25);
-    --lumo-shade-10pct: rgba(0, 0, 0, 0.40);
+    --lumo-error-color: var(--rom-status-danger);
+    --lumo-success-color: var(--rom-status-active);
 
     --lumo-font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    /* Tighter font sizing for terminal density */
     --lumo-font-size-s: 0.75rem;
     --lumo-font-size-m: 0.8125rem;
     --lumo-font-size-l: 0.9375rem;
     --lumo-font-size-xl: 1.125rem;
     --lumo-font-size-xxl: 1.375rem;
-    /* Tighter spacing */
     --lumo-space-xs: 0.2rem;
     --lumo-space-s: 0.4rem;
     --lumo-space-m: 0.7rem;
@@ -123,6 +188,7 @@ vaadin-details::part(summary) {
 vaadin-text-field::part(label),
 vaadin-text-area::part(label),
 vaadin-combo-box::part(label),
+vaadin-time-picker::part(label),
 vaadin-date-picker::part(label),
 vaadin-date-time-picker::part(label) {
     color: var(--rom-text-primary);
@@ -136,6 +202,7 @@ vaadin-date-time-picker::part(label) {
 vaadin-text-field[required]::part(required-indicator),
 vaadin-text-area[required]::part(required-indicator),
 vaadin-combo-box[required]::part(required-indicator),
+vaadin-time-picker[required]::part(required-indicator),
 vaadin-date-picker[required]::part(required-indicator) {
     color: var(--rom-accent);
 }
@@ -144,6 +211,7 @@ vaadin-date-picker[required]::part(required-indicator) {
 vaadin-text-field::part(helper-text),
 vaadin-text-area::part(helper-text),
 vaadin-combo-box::part(helper-text),
+vaadin-time-picker::part(helper-text),
 vaadin-date-picker::part(helper-text) {
     color: var(--rom-text-muted);
     font-size: 10px;
@@ -153,7 +221,7 @@ vaadin-date-picker::part(helper-text) {
 }
 
 /* === Compact form fields === */
-vaadin-text-field, vaadin-text-area, vaadin-combo-box, vaadin-date-picker, vaadin-date-time-picker {
+vaadin-text-field, vaadin-text-area, vaadin-combo-box, vaadin-time-picker, vaadin-date-picker, vaadin-date-time-picker {
     --lumo-text-field-size: var(--lumo-size-s);
 }
 

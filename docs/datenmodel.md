@@ -2,27 +2,16 @@
 
 ## Ziel und Scope
 
-Dieses Dokument beschreibt zentral das fachliche Datenmodell fuer Auftraege, Auftragspositionen, Ressourcenplanung und externe Bestellung im Umfeld des Fahrplans.
+Dieses Dokument beschreibt das aktuelle fachliche und technische Datenmodell fuer Auftraege, Auftragspositionen, Ressourcenplanung, Fahrplanarchiv und externe Bestellung.
 
-Beispiel:
-Ein externer Kunde wie Qnamic moechte einen Zug fahren. Das Business bzw. SOB nimmt den Bedarf entgegen und legt Kunde, Auftrag und Auftragsposition an. Danach uebernimmt der Planer die fachliche Planung des Fahrplans und die Bestellung.
+Im aktuellen Stand gibt es genau zwei produktive Auftragspositionstypen:
 
-Eine `Auftragsposition` kann fachlich unterschiedliche Typen haben. Im aktuellen Modell werden insbesondere zwei Typen betrachtet:
+- `LEISTUNG`: sonstige fachliche Leistung mit Zeitraum, Orten, Gueltigkeit, Tags und Kommentar
+- `FAHRPLAN`: Zugfahrt mit vollstaendigem Fahrplan, Routing ueber Topologiedaten und Archivierung im Fahrplanarchiv
 
-- `Fahrplan`: Position fuer die Planung und Bestellung einer Zugfahrt
-- `Leistung`: Position fuer sonstige fachliche Leistungen ohne den hier beschriebenen Fahrplanprozess
-
-Unabhaengig vom Positionstyp kann eine `Auftragsposition` einen oder mehrere flexible `Ressourcenbedarfe` enthalten. Im aktuellen Modell werden insbesondere drei Ressourcentypen betrachtet:
-
-- `vehicle`
-- `personnel`
-- `capacity`
-
-Jeder Ressourcenbedarf wird entweder intern in der Planung abgedeckt oder extern ueber eine `Bestellposition` beschafft. Der Ressourcentyp `capacity` entspricht der Kapazitaet im Netz und wird fachlich ueber einen `Fahrplan` im `Fahrplanarchiv` abgebildet.
+Der Schwerpunkt dieses Dokuments liegt bewusst auf allen Auftragspositionstypen und ihrer heutigen Persistenz.
 
 ## Zentrales fachliches Datenmodell
-
-Im Diagramm sind fuer die `Auftragsposition` nur die wichtigsten Kernattribute dargestellt. Die vollstaendige aktuelle Feldliste mit Varianten-, Merge- und Referenzfeldern steht weiter unten.
 
 ```mermaid
 classDiagram
@@ -42,11 +31,10 @@ classDiagram
         customerId
         comment
         tags
-        validFrom*
-        validTo*
+        validFrom
+        validTo
         processStatus
         internalStatus
-        version
         createdAt
         updatedAt
     }
@@ -56,14 +44,15 @@ classDiagram
         orderId
         name
         type
-        validity
-        start
-        end
-        serviceType
+        tags
         fromLocation
         toLocation
+        start
+        end
+        validity
+        serviceType
+        comment
         internalStatus
-        version
     }
 
     class Ressourcenbedarf {
@@ -74,23 +63,22 @@ classDiagram
         linkedFahrplanId
     }
 
-    class Fahrplanarchiv
-
-    class Fahrplan {
+    class Fahrplanarchiv {
         id
-        fahrplanNummer
-        typ
+        timetableNumber
+        timetableType
+        routeSummary
         tableData
     }
 
     class Bestellposition {
-        positionsnummer
-        resourceNeedId
+        id
+        positionNumber
         validity
         debicode
-        bestellstatus
-        bestelltAm
-        statusZeitpunkt
+        purchaseStatus
+        orderedAt
+        statusTimestamp
     }
 
     class Geschaeft {
@@ -102,25 +90,16 @@ classDiagram
         team
         validFrom
         validTo
-        dueDate
-        documents
         tags
-        linkedOrderItemIds
-        version
-        createdAt
-        updatedAt
     }
 
     Kunde "1" --> "0..*" Auftrag : beauftragt
-    Auftrag "1" *-- "1..*" Auftragsposition : enthaelt
-    Auftragsposition "1" *-- "1..*" Ressourcenbedarf : benoetigt
+    Auftrag "1" *-- "0..*" Auftragsposition : enthaelt
+    Auftragsposition "1" *-- "0..*" Ressourcenbedarf : benoetigt
     Auftragsposition "1" *-- "0..*" Bestellposition : enthaelt
-    Fahrplanarchiv "1" *-- "0..*" Fahrplan : speichert
-    Ressourcenbedarf "0..*" --> "0..1" Fahrplan : referenziert bei capacity
+    Ressourcenbedarf "0..*" --> "0..1" Fahrplanarchiv : referenziert bei CAPACITY
     Bestellposition "0..*" --> "1" Ressourcenbedarf : deckt extern
     Geschaeft "0..*" --> "0..*" Auftragsposition : verknuepft
-    Auftragsposition "0..*" --> "0..1" Auftragsposition : Variante von
-    Auftragsposition "0..*" --> "0..1" Auftragsposition : Merge-Ziel
 ```
 
 ## Objektattribute
@@ -139,70 +118,137 @@ classDiagram
 | Attribut | Typ | Pflicht | Beschreibung |
 | --- | --- | --- | --- |
 | id | UUID | ja | Eindeutige ID |
-| orderNumber | string | ja | Eindeutige Auftragsnummer (max. 50 Zeichen, alphanumerisch) |
+| orderNumber | string | ja | Eindeutige Auftragsnummer (max. 50 Zeichen) |
 | name | string | ja | Auftragsname |
 | customerId | UUID? | nein | FK zum Kunden |
 | comment | string? | nein | Kommentar (max. 2000 Zeichen) |
-| tags | string? | nein | Kommagetrennte, zugewiesene Schlagwoerter; Auswahl im UI aus vordefiniertem Katalog |
-| validFrom | date | ja | Gueltig ab (Pflichtfeld) |
-| validTo | date | ja | Gueltig bis (Pflichtfeld, muss >= validFrom sein) |
-| processStatus | enum | ja | Prozessstatus, Default: `AUFTRAG`. Werte: `AUFTRAG`, `PLANUNG`, `PRODUKT_LEISTUNG`, `PRODUKTION`, `ABRECHNUNG_NACHBEREITUNG`. Wird automatisch gesetzt, nicht vom Benutzer beim Anlegen. |
-| internalStatus | string? | nein | Interner Bearbeitungsstatus. Wird spaeter im Prozess gesetzt, nicht beim Anlegen. |
-| version | int | ja | Versionszaehler (optimistic locking) |
-| createdAt | datetime | ja | Erstellungszeitpunkt (automatisch) |
-| updatedAt | datetime | ja | Letzter Aenderungszeitpunkt (automatisch) |
-| createdBy | string? | ja | Erstellt von (aus Keycloak, automatisch) |
-| updatedBy | string? | ja | Geaendert von (aus Keycloak, automatisch) |
-| items | OrderItem[] | ja | Liste der Auftragspositionen; fachlich ueber die Beziehung `Auftrag -> Auftragsposition` modelliert |
+| tags | string? | nein | Kommagetrennte Schlagwoerter; Auswahl im UI aus dem Katalog |
+| validFrom | date | ja | Gueltig ab |
+| validTo | date | ja | Gueltig bis |
+| processStatus | enum | ja | `AUFTRAG`, `PLANUNG`, `PRODUKT_LEISTUNG`, `PRODUKTION`, `ABRECHNUNG_NACHBEREITUNG` |
+| internalStatus | string? | nein | Interner Bearbeitungsstatus auf Auftragsebene |
+| version | int | ja | Optimistic Locking |
+| createdAt / updatedAt | datetime | ja | Technische Zeitstempel |
+| createdBy / updatedBy | string? | ja | Fachlicher Benutzerkontext |
 
-> **Hinweis:** `timetableYearLabel` wurde entfernt. Die zeitliche Zuordnung erfolgt ausschliesslich ueber `validFrom` und `validTo`. Das Fahrplanjahr ergibt sich daraus implizit (2. Samstag Dezember bis 2. Samstag Dezember Folgejahr).
+## Auftragsposition
 
-### Auftragsposition
+Alle Auftragspositionen liegen physisch in `order_positions`. Der Typ wird ueber `PositionType` unterschieden. Gemeinsame Felder, UI-Verhalten und Persistenz sind unten getrennt nach Basis und Typ beschrieben.
 
-Die aktuelle Feldliste der `Auftragsposition` mischt fachliche Kernattribute mit Variantenlogik, Merge-Informationen und technischen Referenzen. Eine `Auftragsposition` kann vom Typ `Fahrplan` oder vom Typ `Leistung` sein. Zusaetzlich enthaelt sie einen oder mehrere `Ressourcenbedarfe`. Im Zielmodell enthaelt die `Auftragsposition` keinen Fahrplan selbst, sondern referenziert bei `capacity`-Bedarfen einen Fahrplan ueber den jeweiligen `Ressourcenbedarf`. Fuer das Zielmodell sollte geprueft werden, welche bisherigen Fahrplan-Referenzfelder aus der Position in den archivierten Fahrplan oder in den Ressourcenbedarf verschoben werden.
+### Gemeinsame Basisfelder
 
-| Attribut | Typ | Pflicht | Bereich | Beschreibung |
-| --- | --- | --- | --- | --- |
-| id | string | ja | Kern | Eindeutige ID |
-| orderId | string | ja | Kern | FK zum Auftrag |
-| name | string | ja | Kern | Positionsname |
-| type | string | ja | Kern | Typ: Leistung oder Fahrplan |
-| tags | string? | nein | Kern | Kommagetrennte, zugewiesene Schlagwoerter; Auswahl im UI aus vordefiniertem Katalog |
-| start | datetime? | nein | Kern | Startzeitpunkt |
-| end | datetime? | nein | Kern | Endzeitpunkt |
-| serviceType | string? | nein | Kern | Leistungsart |
-| fromLocation | string? | nein | Kern | Startort |
-| toLocation | string? | nein | Kern | Zielort |
-| validity | json? | nein | Kern | Gueltigkeitssegmente als `startDate`/`endDate`-Paare |
-| resourceNeeds | ResourceNeed[] | ja im Zielmodell | Fachmodell | Liste flexibler Ressourcenbedarfe; fachlich ueber die Beziehung `Auftragsposition -> Ressourcenbedarf` modelliert |
-| linkedTemplateId | string? | nein | Fahrplan-Verknuepfung im Bestandsmodell | FK zur `ScheduleTemplate`; im Zielmodell fachlich eher am archivierten Fahrplan |
-| linkedTrainPlanId | string? | nein | Fahrplan-Verknuepfung im Bestandsmodell | FK zum `TrainPlan`; im Zielmodell fachlich eher am archivierten Fahrplan |
-| generatedTimetableRefId | string? | nein | Fahrplan-Verknuepfung im Bestandsmodell | Referenz auf generierten Fahrplan; im Zielmodell fachlich eher am archivierten Fahrplan |
-| variantType | string? | nein | Variantenmodell | `productive` oder `simulation` |
-| variantOfItemId | string? | nein | Variantenmodell | FK zur Ursprungsvariante |
-| variantGroupId | string? | nein | Variantenmodell | Gruppen-ID fuer zusammengehoerige Varianten |
-| variantLabel | string? | nein | Variantenmodell | Varianten-Label |
-| simulationId | string? | nein | Variantenmodell | Simulations-ID |
-| simulationLabel | string? | nein | Variantenmodell | Simulations-Label |
-| mergeStatus | string? | nein | Merge | `open`, `applied`, `proposed` |
-| mergeTargetId | string? | nein | Merge | Ziel-Position fuer Merge |
-| originalTimetable | json? | nein | Merge | Snapshot des originalen Fahrplans vor Aenderungen |
-| internalStatus | string? | nein | Status | `in_bearbeitung`, `freigegeben`, `ueberarbeiten`, `uebermittelt`, `beantragt`, `abgeschlossen`, `annulliert` |
-| businessLinks | pivot | nein | Geschaeftsverknuepfung | Technische m:n-Verknuepfung zu Geschaeften ueber `business_order_items` |
-| linkedBusinessIds | string[]? | nein | Geschaeftsverknuepfung | IDs verknuepfter Geschaefte im Frontend oder DTO |
-| version | int | ja | Technische Metadaten | Versionszaehler |
-| createdAt | datetime | ja | Technische Metadaten | Erstellungszeitpunkt |
-| updatedAt | datetime | ja | Technische Metadaten | Letzter Aenderungszeitpunkt |
+| Attribut | Typ | Pflicht | Beschreibung |
+| --- | --- | --- | --- |
+| id | UUID | ja | Eindeutige ID |
+| orderId | UUID | ja | FK zum Auftrag |
+| name | string | ja | Positionsname |
+| type | enum | ja | `FAHRPLAN` oder `LEISTUNG` |
+| tags | string? | nein | Kommagetrennte Schlagwoerter; Auswahl im UI aus `POSITION` / `GENERAL` |
+| fromLocation | string? | nein | Fachlicher Startort; bei `FAHRPLAN` aus erster Archivzeile gespiegelt |
+| toLocation | string? | nein | Fachlicher Zielort; bei `FAHRPLAN` aus letzter Archivzeile gespiegelt |
+| start | datetime? | nein | Startzeitpunkt; bei `FAHRPLAN` aus erster relevanter Zeit abgeleitet |
+| end | datetime? | nein | Endzeitpunkt; bei `FAHRPLAN` aus letzter relevanter Zeit abgeleitet |
+| validity | jsonb? | nein | Gueltigkeit als Segmente `[{startDate,endDate}, ...]` |
+| serviceType | string? | nein | Leistungsart; vor allem fuer `LEISTUNG` relevant |
+| comment | string? | nein | Freitext (max. 2000 Zeichen) |
+| internalStatus | enum | nein | `IN_BEARBEITUNG`, `FREIGEGEBEN`, `UEBERARBEITEN`, `UEBERMITTELT`, `BEANTRAGT`, `ABGESCHLOSSEN`, `ANNULLIERT` |
+| variantOf / mergeTarget | FK? | nein | Vorbereitete Varianten-/Merge-Beziehungen |
+| resourceNeeds | `ResourceNeed[]` | nein | Ressourcenbedarfe zur Position |
+| purchasePositions | `PurchasePosition[]` | nein | Zugeordnete Bestellpositionen |
+| version | int | ja | Optimistic Locking |
+| createdAt / updatedAt | datetime | ja | Technische Zeitstempel |
 
-### Vordefinierte Schlagwoerter
+### Typ `LEISTUNG`
 
-Der Schlagwort-Katalog wird als eigene Stammdatenliste in `predefined_tags` gepflegt. Die Datengrundlage liegt als CSV in `data/seeds/predefined-tags.csv` und wird ueber den Settings-Bereich importiert. Die Kategorien steuern, wo ein Schlagwort im UI angeboten wird:
+`LEISTUNG`-Positionen werden im `ServicePositionDialog` bearbeitet. Die Position speichert ihre Fachdaten direkt in `order_positions`; ein separates Archiv existiert hier nicht.
 
-- `ORDER`: im Auftragsdialog
-- `POSITION`: im Dialog fuer Auftragspositionen
-- `GENERAL`: in beiden Dialogen
+| Feld / Verhalten | Aktueller Stand |
+| --- | --- |
+| Name | Pflichtfeld |
+| Service-Typ | Freies Fachfeld `serviceType` |
+| Von / Nach | Auswahl aus importierten `OperationalPoint`-Stammdaten |
+| Startzeit / Endzeit | Pflichtfelder als `TimePicker` im Format `HH:mm` |
+| Gueltigkeit | Auswahl einzelner Tage innerhalb der Auftragsgueltigkeit; Speicherung als JSON-Segmente |
+| Start / Ende in DB | Kombination aus erstem/letztem Gueltigkeitstag und eingegebener Uhrzeit |
+| Schlagwoerter | Auswahl aus `POSITION` und `GENERAL` |
+| Kommentar | Optional, wird in Listen und Bearbeitungsansicht sichtbar angezeigt |
 
-Die konkrete Zuordnung bleibt aus Kompatibilitaetsgruenden als kommagetrennter String in `orders.tags` bzw. `order_positions.tags` gespeichert.
+Fachliche Regeln fuer `LEISTUNG`:
+
+- Ohne Start- und Endzeit kann die Position im UI nicht gespeichert werden
+- `Von` und `Nach` werden aus den Infrastruktur-Stammdaten gewaehlt, aber aktuell nicht erzwungen
+- Die Position hat heute keinen automatisch angelegten Ressourcenbedarf
+
+### Typ `FAHRPLAN`
+
+`FAHRPLAN`-Positionen werden nicht im Standarddialog, sondern im Full-screen `TimetableBuilderView` gepflegt.
+
+#### Schritt 1: Route festlegen
+
+| Feld / Verhalten | Aktueller Stand |
+| --- | --- |
+| Positionsname | Pflichtfeld |
+| Schlagwoerter | Auswahl aus `POSITION` und `GENERAL` |
+| Kommentar | Optionales Freitextfeld |
+| Von / Nach | Pflichtpunkte aus den importierten `OperationalPoint`-Stammdaten |
+| Ueber | Geordnete Zwangspunkte fuer die Route |
+| Zwischenhalt | Optional pro `Ueber`-Punkt; kann als Halt mit Activity gepflegt werden |
+| Ankerzeit | Entweder exakte Abfahrtszeit am Start oder exakte Ankunftszeit am Ziel |
+| Karte | OpenStreetMap/Leaflet mit geraden Linien zwischen den OP-Koordinaten |
+
+Routing und Schaetzung:
+
+- kuerzester Weg ueber `sections_of_line.length_meters`
+- Graph wird aktuell bidirektional behandelt
+- Geschwindigkeitsannahme: `70 km/h`
+- Wenn fuer ein Segment kein Pfad existiert, blockiert der Builder das Speichern
+- Fuer CH/DE wurden vier synthetische `0m`-Grenzverbinder eingefuehrt, damit relevante Grenzuebergaenge im aktuellen Datenbestand routbar bleiben
+
+#### Schritt 2: Fahrplan nacharbeiten
+
+Schritt 2 zeigt die **komplette berechnete Route** als Tabelle. Nicht nur `von`, `ueber`, `nach`, sondern alle berechneten Betriebspunkte werden als bearbeitbare Zeilen sichtbar.
+
+| Spalte / Verhalten | Aktueller Stand |
+| --- | --- |
+| Betriebspunkt | Name + UOPID des Betriebspunkts |
+| Rollenmodell | `ORIGIN`, `VIA`, `DESTINATION`, `AUTO` |
+| `von` / `nach` | Kontext aus vorherigem bzw. naechstem Betriebspunkt |
+| Geschaetzte Zeiten | Automatisch aus der Route abgeleitet |
+| Halt | Optional pro Zeile |
+| Activity | Pflicht, sobald ein echter Halt gepflegt wird |
+| Haltezeit | `dwellMinutes`, optional aber fachlich fuer Halte relevant |
+| Ankunft / Abfahrt | Jeweils `NONE`, `EXACT`, `WINDOW` |
+| Gueltigkeit | Kalenderauswahl innerhalb der Auftragsgueltigkeit |
+
+TTT-nahe Zeitlogik:
+
+- `NONE`: keine explizite Vorgabe, nur geschaetzte Zeit
+- `EXACT`: exakte Zeit (`ALA` / `ALD`-Denke)
+- `WINDOW`: frueheste/spaeteste Zeit (`ELA`/`LLA`, `ELD`/`LLD`)
+- Zwischenhalte mit `halt = true` brauchen Zeiten und Activity
+- Reine Durchfahrten koennen ohne Activity und ohne explizite Zeitvorgabe bestehen bleiben
+- Eine Zeile wird als `tttRelevant` markiert, sobald explizite fachliche Angaben fuer den spaeteren Export vorhanden sind
+
+#### Persistenz von `FAHRPLAN`
+
+Beim Speichern passiert fachlich und technisch Folgendes:
+
+1. Die vollstaendige Fahrplantabelle wird als JSON in `timetable_archives.table_data` gespeichert
+2. `routeSummary` fasst die Route fachlich zusammen
+3. Die `OrderPosition` bekommt `type = FAHRPLAN`
+4. `fromLocation`, `toLocation`, `start`, `end`, `validity`, `tags`, `comment` werden auf der Position gespiegelt
+5. Genau ein `ResourceNeed` mit `resourceType = CAPACITY` und `coverageType = EXTERNAL` wird erstellt oder wiederverwendet
+6. Dieser Ressourcenbedarf verlinkt ueber `linkedFahrplanId` auf das `TimetableArchive`
+
+Die aktuelle Beziehung ist damit bewusst **1:1**:
+
+- eine `FAHRPLAN`-Position
+- genau ein `CAPACITY`-Ressourcenbedarf
+- genau ein `TimetableArchive`
+
+## Vordefinierte Schlagwoerter
+
+Der Schlagwort-Katalog wird als eigene Stammdatenliste in `predefined_tags` gepflegt. Die Datengrundlage liegt als CSV in `data/seeds/predefined-tags.csv` und wird ueber den Settings-Bereich importiert.
 
 | Attribut | Typ | Pflicht | Beschreibung |
 | --- | --- | --- | --- |
@@ -212,235 +258,175 @@ Die konkrete Zuordnung bleibt aus Kompatibilitaetsgruenden als kommagetrennter S
 | sortOrder | int | nein | Sortierung im Katalog |
 | active | boolean | ja | Steuert, ob das Schlagwort im UI angeboten wird |
 
-### Ressourcenbedarf
+Verwendung:
 
-Ein `Ressourcenbedarf` beschreibt, welche Ressource fuer eine `Auftragsposition` benoetigt wird und ob diese intern in der Planung oder extern ueber eine Bestellung abgedeckt wird. Der Ressourcentyp `capacity` repraesentiert die Kapazitaet im Netz und referenziert daher einen `Fahrplan` aus dem `Fahrplanarchiv`.
+- `ORDER` und `GENERAL` erscheinen im Auftragsdialog
+- `POSITION` und `GENERAL` erscheinen bei allen Auftragspositionstypen
+- Die eigentliche Zuordnung bleibt aus Kompatibilitaetsgruenden als kommagetrennter String in `orders.tags` bzw. `order_positions.tags`
+
+## Ressourcenbedarf
+
+Ein `Ressourcenbedarf` beschreibt, welche Ressource fuer eine Auftragsposition benoetigt wird und wie sie gedeckt wird.
 
 | Attribut | Typ | Pflicht | Beschreibung |
 | --- | --- | --- | --- |
-| id | string | ja | Eindeutige ID des Ressourcenbedarfs |
-| resourceType | enum | ja | Ressourcentyp: `vehicle`, `personnel`, `capacity` |
-| coverageType | enum | ja | Art der Abdeckung: `internal` oder `external` |
-| status | string? | nein | Status der Ressourcenabdeckung |
-| linkedFahrplanId | string? | nein | Referenz auf den Fahrplan im Fahrplanarchiv; nur relevant fuer `resourceType = capacity` |
+| id | UUID | ja | Eindeutige ID |
+| orderPositionId | UUID | ja | FK zur Auftragsposition |
+| resourceType | enum | ja | `VEHICLE`, `PERSONNEL`, `CAPACITY` |
+| coverageType | enum | ja | `INTERNAL`, `EXTERNAL` |
+| status | string? | nein | Fachlicher Status der Ressource |
+| linkedFahrplanId | UUID? | nein | FK auf `timetable_archives`, heute nur fuer `CAPACITY` genutzt |
 
-### Fahrplanarchiv
+Aktueller Anwendungsfall:
 
-Das `Fahrplanarchiv` ist der fachliche Ablageort fuer Fahrplaene im Auftragsmanagement. Auftragspositionen und Bestellpositionen speichern den Fahrplan nicht selbst. Stattdessen referenziert ein `Ressourcenbedarf` vom Typ `capacity` den Fahrplan aus dem Archiv.
+- `FAHRPLAN` erzeugt automatisch einen `CAPACITY`-Bedarf mit externer Deckung
+- `LEISTUNG` legt derzeit keinen automatischen Ressourcenbedarf an
 
-Die konkreten Attribute des `Fahrplanarchiv` sind noch offen. Fuer das Zielmodell ist zunaechst entscheidend, dass das Archiv als eigener fachlicher Container existiert.
+## Fahrplanarchiv
 
-### Fahrplan
+Das Fahrplanarchiv ist heute konkret implementiert und nicht mehr nur Zielbild.
 
-Im Zielmodell wird der `Fahrplan` im `Fahrplanarchiv` gespeichert. Fachlich repraesentiert er den Ressourcentyp `capacity`, also die Kapazitaet im Netz. Die fachliche Gueltigkeit liegt nicht am Fahrplan selbst, sondern an der jeweiligen Auftrags- oder Bestellposition.
+| Attribut | Typ | Pflicht | Beschreibung |
+| --- | --- | --- | --- |
+| id | UUID | ja | Eindeutige Archiv-ID |
+| timetableNumber | string? | nein | Optionale fachliche Kennung |
+| timetableType | string? | nein | Aktuell `FAHRPLAN` |
+| routeSummary | string? | nein | Fachliche Kurzbeschreibung der Route |
+| tableData | jsonb | ja | Vollstaendige Fahrplantabelle |
+| createdAt / updatedAt | datetime | ja | Technische Zeitstempel |
+| version | int | ja | Optimistic Locking |
 
-Fachlich ist der `Fahrplan` keine flache Struktur, sondern tabellarisch aufgebaut. Jede Zeile repraesentiert einen `Betriebspunkt`. Die fachlich relevanten Spalten pro Zeile sind `an`, `ab`, `von`, `nach` und `activity`.
+### Fahrplanzeile im Archiv (`tableData`)
 
-Technisch kann diese tabellarische Struktur gut als `json` gespeichert werden. Im Datenmodell wird das ueber `tableData` am `Fahrplan` beschrieben. Damit bleibt fachlich sichtbar, dass es sich um eine Tabelle handelt, waehrend die technische Speicherung flexibel bleibt.
+Jede JSON-Zeile entspricht einem Betriebspunkt der berechneten Route.
 
-| Attribut | Pflicht | Beschreibung |
+| Attribut | Typ | Beschreibung |
 | --- | --- | --- |
-| id | ja | Eindeutige ID des archivierten Fahrplans |
-| fahrplanNummer | nein | Fachliche oder technische Kennung des Fahrplans |
-| typ | nein | Kennzeichnung des Fahrplantyps oder der fachlichen Auspraegung |
-| tableData | ja im Zielmodell | JSON-Struktur der Fahrplantabelle mit Zeilen je Betriebspunkt und Spalten wie `an`, `ab`, `von`, `nach`, `activity` |
+| sequence | int | Laufende Reihenfolge |
+| uopid | string | Referenz auf den Betriebspunkt |
+| name | string | Anzeigename |
+| country | string | Laendercode |
+| routePointRole | enum | `ORIGIN`, `VIA`, `DESTINATION`, `AUTO` |
+| journeyLocationType | string | TTT-nahe Rollenklassifikation |
+| fromName / toName | string | Vorheriger bzw. naechster Betriebspunkt |
+| segmentLengthMeters | number | Kantenlaenge vom Vorgaenger |
+| distanceFromStartMeters | number | Kumulierte Distanz |
+| halt | boolean | Echte Haltmarkierung |
+| tttRelevant | boolean | Fuer spaeteren TTT-Versand relevant |
+| activityCode | string? | TTT-Activity / Haltegrund |
+| dwellMinutes | int? | Haltezeit |
+| estimatedArrival / estimatedDeparture | string? | Geschaetzte Zeiten `HH:mm` |
+| arrivalMode / departureMode | enum | `NONE`, `EXACT`, `WINDOW` |
+| arrivalExact / departureExact | string? | Exakte Zeit |
+| arrivalEarliest / arrivalLatest | string? | Zeitfenster Ankunft |
+| departureEarliest / departureLatest | string? | Zeitfenster Abfahrt |
 
-### Bestellposition
+## Bestellposition
 
-Eine `Bestellposition` deckt einen extern zu beschaffenden `Ressourcenbedarf`. Die fachliche Gueltigkeit der Bestellung wird an der `Bestellposition` gespeichert. Bei `resourceType = capacity` wird ueber den referenzierten Fahrplan im `Fahrplanarchiv` bestellt. Bei `vehicle` und `personnel` repraesentiert die Bestellposition eine generische externe Beschaffung; der unten dargestellte Integrationsablauf ueber `Fahrplanmanagement` und `Infrastrukturbetreiber` betrifft fachlich vor allem `capacity`.
+Eine `Bestellposition` deckt einen extern zu beschaffenden Ressourcenbedarf.
 
-| Attribut | Pflicht | Beschreibung |
-| --- | --- | --- |
-| positionsnummer | ja | Eindeutige ID der Bestellposition |
-| resourceNeedId | ja im Zielmodell | Referenz auf den extern zu deckenden Ressourcenbedarf |
-| validity | ja im Zielmodell | Gueltigkeitssegmente der Bestellung; die Gueltigkeit liegt fachlich an der Bestellposition |
-| debicode | ja fuer externe `capacity`-Bestellung | Bestellrelevantes Attribut fuer die externe Bestellung von Netzkapazitaet |
-| bestellstatus | ja | Aktueller Status der Bestellung |
-| bestelltAm | nein | Zeitpunkt der Bestellung |
-| statusZeitpunkt | nein | Zeitpunkt der letzten Rueckmeldung |
+| Attribut | Typ | Pflicht | Beschreibung |
+| --- | --- | --- | --- |
+| id | UUID | ja | Eindeutige ID |
+| positionNumber | string | ja | Eindeutige Bestellnummer |
+| orderPositionId | UUID | ja | FK zur Auftragsposition |
+| resourceNeedId | UUID | ja | FK zum Ressourcenbedarf |
+| validity | jsonb? | nein | Gueltigkeit der Bestellung |
+| debicode | string? | nein | Bestellrelevant fuer Netzkapazitaet |
+| purchaseStatus | enum | ja | `OFFEN`, `BESTELLT`, `BESTAETIGT`, `ABGELEHNT`, `STORNIERT` |
+| orderedAt | datetime? | nein | Bestellzeitpunkt |
+| statusTimestamp | datetime? | nein | Zeitpunkt der letzten Rueckmeldung |
 
-### Geschaeft
+## Geschaeft
 
 | Attribut | Typ | Pflicht | Beschreibung |
 | --- | --- | --- | --- |
 | id | string | ja | Eindeutige ID |
-| title | string | ja | Titel des Geschaefts |
+| title | string | ja | Titel |
 | description | string | ja | Beschreibung |
-| status | enum | ja | `in_bearbeitung`, `freigegeben`, `ueberarbeiten`, `abgeschlossen`, `annulliert` |
-| assignment | object | ja | Zuordnung mit `type` (`group` oder `person`) und `name` |
+| status | enum | ja | `IN_BEARBEITUNG`, `FREIGEGEBEN`, `UEBERARBEITEN`, `ABGESCHLOSSEN`, `ANNULLIERT` |
+| assignment | object | ja | Zuordnung mit `type` und `name` |
 | team | string? | nein | Team-Zuordnung |
-| validFrom | date? | nein | Gueltig ab |
-| validTo | date? | nein | Gueltig bis |
-| dueDate | date? | nein | Faelligkeitsdatum, deprecated fuer Migration |
-| documents | array? | nein | Dokumente mit `name` und `url` |
+| validFrom / validTo | date? | nein | Gueltigkeit |
+| documents | array? | nein | Dokumente |
 | tags | string[]? | nein | Schlagwoerter |
 | linkedOrderItemIds | string[]? | nein | Verknuepfte Auftragspositionen |
-| version | int | ja | Versionszaehler |
-| createdAt | datetime | ja | Erstellungszeitpunkt |
-| updatedAt | datetime | ja | Letzter Aenderungszeitpunkt |
 
 ## Beziehungen und Kardinalitaeten
 
 | Von | Nach | Kardinalitaet | Art | Bedeutung |
 | --- | --- | --- | --- | --- |
-| Kunde | Auftrag | 1 zu 0..* | Assoziation | Ein Kunde kann keinen, einen oder mehrere Auftraege haben. |
-| Auftrag | Auftragsposition | 1 zu 1..* | Komposition | Ein Auftrag enthaelt mindestens eine Auftragsposition. |
-| Auftragsposition | Ressourcenbedarf | 1 zu 1..* | Komposition | Eine Auftragsposition enthaelt einen oder mehrere Ressourcenbedarfe. |
-| Auftragsposition | Bestellposition | 1 zu 0..* | Komposition | Unter einer Auftragsposition koennen keine, eine oder mehrere Bestellpositionen entstehen. |
-| Fahrplanarchiv | Fahrplan | 1 zu 0..* | Komposition | Das Fahrplanarchiv speichert die Fahrplaene des Auftragsmanagements. |
-| Ressourcenbedarf | Fahrplan | 0..* zu 0..1 | Assoziation | Ressourcenbedarfe vom Typ `capacity` referenzieren genau einen Fahrplan aus dem Fahrplanarchiv. |
-| Bestellposition | Ressourcenbedarf | 0..* zu 1 | Assoziation | Jede Bestellposition deckt genau einen externen Ressourcenbedarf. |
-| Geschaeft | Auftragsposition | 0..* zu 0..* | Assoziation | Geschaefte und Auftragspositionen sind fachlich m:n verknuepfbar. |
-| Auftragsposition | Auftragsposition | 0..* zu 0..1 | Selbstbeziehung | Eine Auftragsposition kann Variante einer anderen Auftragsposition sein. |
-| Auftragsposition | Auftragsposition | 0..* zu 0..1 | Selbstbeziehung | Eine Auftragsposition kann auf ein Merge-Ziel zeigen. |
+| Kunde | Auftrag | 1 zu 0..* | Assoziation | Ein Kunde kann mehrere Auftraege haben |
+| Auftrag | Auftragsposition | 1 zu 0..* | Komposition | Ein Auftrag enthaelt seine Positionen |
+| Auftragsposition | Ressourcenbedarf | 1 zu 0..* | Komposition | Ressourcenbedarfe gehoeren zur Position |
+| Auftragsposition | Bestellposition | 1 zu 0..* | Komposition | Bestellpositionen entstehen unter einer Position |
+| Ressourcenbedarf | Fahrplanarchiv | 0..* zu 0..1 | Assoziation | Nur `CAPACITY` verweist auf ein Archiv |
+| Geschaeft | Auftragsposition | 0..* zu 0..* | Assoziation | Fachliche Verknuepfung m:n |
 
 ## Fachliche Regeln des Datenmodells
 
-- Eine Auftragsposition gehoert immer zu genau einem Auftrag.
-- Eine Auftragsposition hat mindestens den fachlichen Typ `Fahrplan` oder `Leistung`.
-- Eine Auftragsposition enthaelt einen oder mehrere Ressourcenbedarfe.
-- Ein Ressourcenbedarf hat genau einen Ressourcentyp: `vehicle`, `personnel` oder `capacity`.
-- Ein Ressourcenbedarf wird entweder intern in der Planung oder extern ueber eine Bestellung abgedeckt.
-- Eine Bestellposition gehoert immer zu genau einer Auftragsposition.
-- Eine Bestellposition deckt genau einen externen Ressourcenbedarf.
-- Ein Fahrplan wird fachlich im Fahrplanarchiv gefuehrt und nicht in Auftrags- oder Bestellposition gespeichert.
-- Ein Fahrplan ist fachlich tabellarisch aufgebaut.
-- Die tabellarische Fahrplanstruktur kann technisch als `json` im Attribut `tableData` gespeichert werden.
-- `tableData` enthaelt fachlich Zeilen je Betriebspunkt mit Spalten wie `an`, `ab`, `von`, `nach` und `activity`.
-- Der Ressourcentyp `capacity` entspricht der Kapazitaet im Netz und wird fachlich ueber einen Fahrplan aus dem Fahrplanarchiv abgebildet.
-- Nur Ressourcenbedarfe vom Typ `capacity` referenzieren einen Fahrplan aus dem Fahrplanarchiv.
-- Die fachliche Gueltigkeit liegt an der Auftragsposition und an der Bestellposition, nicht am Fahrplan.
-- Der Fahrplan wird zuerst fachlich erstellt und erst danach an das Fahrplanmanagement uebergeben.
-- Die externe Fahrplanreferenz sollte im Zielmodell am archivierten Fahrplan oder am `capacity`-Ressourcenbedarf gefuehrt werden und nicht an der Position.
-- Eine Bestellung darf erst ausgelost werden, wenn die erforderlichen Bestelldaten in der Bestellposition gepflegt sind.
-- `debicode` ist fuer eine externe Bestellung von `capacity` ein Pflichtattribut.
-- Der Rueckmeldestatus des Infrastrukturbetreibers wird in `bestellstatus` der Bestellposition gespeichert.
-- Der Katalog vordefinierter Schlagwoerter wird als Stammdatenliste in `predefined_tags` gepflegt.
-- Die Kategorien `ORDER`, `POSITION` und `GENERAL` steuern, in welchem Dialog ein Schlagwort angeboten wird.
-- Die konkrete Zuordnung von Schlagwoertern bleibt an Auftrag und Auftragsposition als kommagetrennter String gespeichert.
-- Ein Geschaeft kann allein stehen und muss keiner Auftragsposition zugeordnet sein.
-- Zwischen Geschaeft und Auftragsposition besteht nach aktuellem Modell eine m:n-Beziehung.
-- Die direkte Verknuepfung von Geschaeft zu Bestellposition ist in der aktuell gelieferten Attributliste nicht explizit modelliert und bleibt fachlich offen.
-- Varianten- und Merge-Felder in der Auftragsposition sind derzeit Teil desselben Objekts, koennten fachlich aber eigene Teilmodelle rechtfertigen.
+- Eine Auftragsposition gehoert immer zu genau einem Auftrag
+- Es gibt aktuell genau zwei aktive Positionstypen: `LEISTUNG` und `FAHRPLAN`
+- Alle Positionstypen koennen Tags, Kommentar, Status, Gueltigkeit und Kauf-/Ressourcenbezug tragen
+- `LEISTUNG` speichert ihre fachlichen Daten direkt auf der Position
+- `FAHRPLAN` speichert die detaillierte Fahrplantabelle ausschliesslich im Fahrplanarchiv
+- `FAHRPLAN` spiegelt nur die wichtigsten Metadaten auf `order_positions`
+- Eine `FAHRPLAN`-Position hat heute genau einen `CAPACITY`-Ressourcenbedarf und genau ein verlinktes Archiv
+- Die fachliche Gueltigkeit liegt an der Position, nicht am Archiv
+- Halte in Fahrplanzeilen brauchen Activity und Zeiten
+- Reine Durchfahrten duerfen ohne Activity bestehen bleiben
+- Der Katalog vordefinierter Schlagwoerter ist Stammdatenbestand; die Zuordnung an Auftrag und Position bleibt String-basiert
+
+## UI-Sicht auf alle Auftragspositionen
+
+Die Daten werden im UI heute an drei Stellen unterschiedlich verdichtet dargestellt:
+
+### 1. Auftragsliste (`/orders`)
+
+- kompakte Kachel-/Accordion-Sicht
+- pro Position sichtbar: Name, Typ, Route, Kommentar, Zeitfenster, Service-Typ, Tags, Bestellanzahl, Status
+- Status-Chips filtern Positionen innerhalb eines Auftrags
+
+### 2. Auftragsdetail (`/orders/{id}`)
+
+- angereicherte Positionszeilen
+- Anzeige von Name, Typ, Status, Route, Zeitfenster, Service-Typ, Tags und Kommentar
+- Kalender-Toggle pro Position
+
+### 3. Bearbeitung
+
+- `LEISTUNG`: Dialog
+- `FAHRPLAN`: Full-screen Builder mit Karte und Tabelleneditor
 
 ## Prozesskontext
 
-Dieses Diagramm ergaenzt das Datenmodell um den fachlichen Ablauf zwischen Business, Planung und externen Systemen.
-
 ```mermaid
 flowchart LR
-    EX[Externer Kunde<br/>z. B. Qnamic]
+    EX[Externer Kunde]
     B[Business / SOB]
     PL[Planer]
 
     subgraph AM[Auftragsmanagement]
         K[Kunde]
-        G[Geschaeft]
-        subgraph FA[Fahrplanarchiv]
-            FP[Fahrplan<br/>capacity]
-        end
-        subgraph A[Auftrag]
-            subgraph AP[Auftragsposition]
-                RB[Ressourcenbedarf<br/>vehicle / personnel / capacity]
-                subgraph BP[Bestellposition]
-                    BD[Bestelldaten<br/>z. B. Debicode]
-                    BS[Bestellstatus]
-                end
-            end
-        end
+        A[Auftrag]
+        AP[Auftragsposition]
+        RB[Ressourcenbedarf]
+        TA[Fahrplanarchiv]
+        BP[Bestellposition]
     end
 
-    subgraph P[Planung]
-        FM[Fahrplanmanagement]
-        PT[Plantafel]
+    subgraph INF[Infrastruktur-Stammdaten]
+        OP[Operational Points]
+        SOL[Sections of Line]
     end
-
-    ISB[Infrastrukturbetreiber]
 
     EX -->|Bedarf melden| B
-    B -->|Kunde anlegen| K
     B -->|Auftrag anlegen| A
-    B -->|Auftragsposition anlegen| AP
-
-    K --> A
-    G -. optional m:n .-> AP
-
-    AP -->|enthaelt| RB
-    PL -->|Ressourcenbedarf planen| RB
-    PL -->|intern abdecken| RB
+    A --> AP
+    AP --> RB
+    AP -->|bei FAHRPLAN| TA
+    AP -->|Routing nutzt| OP
+    AP -->|Routing nutzt| SOL
     RB -->|extern decken| BP
-    RB -. bei capacity .-> FP
-    PL -->|bei capacity Fahrplan im Archiv anlegen| FP
-    FP -->|an Fahrplanmanagement senden| FM
-    FM -->|Referenz am Fahrplan aktualisieren| FP
-
-    PT -->|arbeitet mit capacity / Fahrplan| FM
-
-    BD -->|Bestelldaten ergaenzen| BP
-    BP -->|bei externer capacity bestellen| FM
-    FM -->|Bestellung ausfuehren| ISB
-    ISB -->|Status zurueckmelden| FM
-    FM -->|Status speichern| BS
+    PL -->|Positionen planen| AP
 ```
-
-## Use Cases
-
-Die folgenden Use Cases beschreiben den Ablauf fuer Auftragspositionen mit flexiblen Ressourcenbedarfen. Der Integrationspfad ueber `Fahrplanmanagement` und `Infrastrukturbetreiber` betrifft vor allem Ressourcenbedarfe vom Typ `capacity`.
-
-### 1. Auftrag fuer eine Zugfahrt anlegen
-
-1. Der externe Kunde meldet einen Bedarf fuer eine Zugfahrt.
-2. Das Business bzw. SOB legt den Kunden an oder ordnet einen bestehenden Kunden zu.
-3. Das Business bzw. SOB legt einen Auftrag an.
-4. Innerhalb des Auftrags wird eine Auftragsposition angelegt.
-
-### 2. Ressourcenbedarfe planen
-
-1. Der Planer legt an der Auftragsposition einen oder mehrere Ressourcenbedarfe an.
-2. Fuer jeden Ressourcenbedarf wird festgelegt, ob er intern oder extern abgedeckt wird.
-3. Ressourcenbedarfe vom Typ `vehicle` und `personnel` koennen intern in der Planung disponiert werden.
-4. Ein Ressourcenbedarf vom Typ `capacity` wird fachlich ueber einen Fahrplan im Fahrplanarchiv abgebildet.
-5. Der Fahrplan wird an das Fahrplanmanagement uebergeben.
-6. Das Fahrplanmanagement liefert eine externe Fahrplanreferenz zurueck und aktualisiert den archivierten Fahrplan.
-7. Die Plantafel arbeitet auf Basis des gefuehrten Fahrplans.
-
-### 3. Externen Ressourcenbedarf bestellen
-
-1. Fuer einen extern zu deckenden Ressourcenbedarf wird unter der Auftragsposition eine Bestellposition angelegt.
-2. Die Bestellposition referenziert genau den Ressourcenbedarf, den sie extern deckt.
-3. Bei `capacity` werden in der Bestellposition Bestelldaten wie `debicode` gepflegt.
-4. Bei `capacity` wird der referenzierte Fahrplan dadurch fuer die Bestellung fachlich angereichert.
-5. Das Fahrplanmanagement aktualisiert den Fahrplan und fuehrt die Bestellung gegenueber dem Infrastrukturbetreiber aus.
-6. Der Rueckmeldestatus wird in der Bestellposition gespeichert.
-7. Externe Beschaffungen fuer `vehicle` oder `personnel` sind fachlich ebenfalls Bestellpositionen, werden hier aber nicht weiter integrationsseitig ausgefuehrt.
-
-## Datenfluss
-
-| Schritt | Quelle | Ziel | Fachliche Bedeutung |
-| --- | --- | --- | --- |
-| 1 | Externer Kunde | Business / SOB | Bedarf fuer eine Zugfahrt wird gemeldet. |
-| 2 | Business / SOB | Kunde | Kunde wird angelegt oder zugeordnet. |
-| 3 | Business / SOB | Auftrag | Auftrag wird angelegt. |
-| 4 | Business / SOB | Auftragsposition | Auftragsposition wird angelegt. |
-| 5 | Planer | Ressourcenbedarf | Ressourcenbedarfe `vehicle`, `personnel`, `capacity` werden an der Auftragsposition angelegt. |
-| 6 | Planer | Ressourcenbedarf | Fuer jeden Ressourcenbedarf wird festgelegt, ob er intern oder extern abgedeckt wird. |
-| 7 | Planer | Fahrplanarchiv / Fahrplan | Bei `capacity` wird der fachliche Fahrplan im Archiv angelegt. |
-| 8 | Ressourcenbedarf | Fahrplanarchiv / Fahrplan | Ein `capacity`-Ressourcenbedarf wird mit einem archivierten Fahrplan verknuepft. |
-| 9 | Fahrplanarchiv / Fahrplan | Fahrplanmanagement | Der Fahrplan wird an das Planungssystem uebergeben. |
-| 10 | Fahrplanmanagement | Fahrplanarchiv / Fahrplan | Eine externe Fahrplanreferenz wird am archivierten Fahrplan gespeichert. |
-| 11 | Planer | Bestellposition | Fuer extern zu deckende Ressourcenbedarfe wird eine Bestellposition angelegt. |
-| 12 | Bestellposition | Ressourcenbedarf | Die Bestellposition referenziert den externen Ressourcenbedarf. |
-| 13 | Bestellposition | Fahrplanmanagement | Bei externer `capacity` wird der referenzierte Fahrplan mit Bestelldaten aktualisiert. |
-| 14 | Fahrplanmanagement | Infrastrukturbetreiber | Die Bestellung von Netzkapazitaet wird extern ausgefuehrt. |
-| 15 | Infrastrukturbetreiber | Fahrplanmanagement | Der Rueckmeldestatus wird zurueckgemeldet. |
-| 16 | Fahrplanmanagement | Bestellposition | Der Rueckmeldestatus wird fachlich gespeichert. |
-
-## Einordnung
-
-Dieses Dokument ist jetzt primaer ein fachliches Datenmodell mit ergaenzendem Prozesskontext.
-
-State of the art fuer solche Beschreibungen ist meist:
-
-- ein zentrales fachliches Datenmodell mit Objekten, Attributen, Beziehungen und Kardinalitaeten
-- ein separates Prozessdiagramm fuer den Ablauf
-- optional ein Sequenzdiagramm fuer die Systemkommunikation

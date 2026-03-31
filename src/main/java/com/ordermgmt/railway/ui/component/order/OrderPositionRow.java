@@ -1,5 +1,6 @@
 package com.ordermgmt.railway.ui.component.order;
 
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BiFunction;
@@ -21,6 +22,8 @@ import com.ordermgmt.railway.ui.component.StatusBadge;
 /** Single position row with summary info and toggleable purchase calendar. */
 public class OrderPositionRow extends Div {
 
+    private static final DateTimeFormatter DT_FMT = DateTimeFormatter.ofPattern("dd.MM. HH:mm");
+    private static final int MAX_TAGS = 3;
     private final OrderPosition position;
     private final BiFunction<String, Object[], String> translator;
     private final Div calendarSlot = new Div();
@@ -57,23 +60,7 @@ public class OrderPositionRow extends Div {
             Consumer<OrderPosition> onEdit,
             Consumer<OrderPosition> onDelete) {
 
-        Span name = new Span(position.getName());
-        name.getStyle()
-                .set("font-weight", "600")
-                .set("font-size", "13px")
-                .set("color", "var(--rom-text-primary)")
-                .set("min-width", "150px");
-
-        StatusBadge typeBadge = createTypeBadge(t);
-
-        Span route = new Span(formatRoute());
-        route.getStyle()
-                .set("font-family", "'JetBrains Mono', monospace")
-                .set("font-size", "12px")
-                .set("color", "var(--rom-text-secondary)")
-                .set("flex", "1");
-
-        StatusBadge statusBadge = createStatusBadge(t);
+        Div info = createInfoBlock(t);
 
         // Purchase calendar toggle — prominent button
         long purchaseCount =
@@ -114,14 +101,89 @@ public class OrderPositionRow extends Div {
         delBtn.getStyle().set("color", "var(--rom-status-danger)");
         delBtn.addClickListener(e -> onDelete.accept(position));
 
-        HorizontalLayout row =
-                new HorizontalLayout(name, typeBadge, route, statusBadge, calBtn, editBtn, delBtn);
+        HorizontalLayout actions = new HorizontalLayout(calBtn, editBtn, delBtn);
+        actions.setSpacing(true);
+        actions.setAlignItems(FlexComponent.Alignment.START);
+
+        HorizontalLayout row = new HorizontalLayout(info, actions);
         row.setWidthFull();
-        row.setAlignItems(FlexComponent.Alignment.CENTER);
+        row.setAlignItems(FlexComponent.Alignment.START);
         row.getStyle().set("padding", "10px 12px").set("gap", "12px").set("cursor", "default");
-        row.expand(route);
+        row.expand(info);
 
         return row;
+    }
+
+    private Div createInfoBlock(BiFunction<String, Object[], String> t) {
+        Div info = new Div();
+        info.getStyle()
+                .set("display", "flex")
+                .set("flex-direction", "column")
+                .set("gap", "6px")
+                .set("min-width", "0");
+
+        HorizontalLayout header = new HorizontalLayout();
+        header.setSpacing(true);
+        header.setPadding(false);
+        header.setMargin(false);
+        header.setAlignItems(FlexComponent.Alignment.CENTER);
+        header.getStyle().set("flex-wrap", "wrap");
+
+        Span name = new Span(position.getName());
+        name.getStyle()
+                .set("font-weight", "600")
+                .set("font-size", "13px")
+                .set("color", "var(--rom-text-primary)")
+                .set("min-width", "150px");
+
+        header.add(name, createTypeBadge(t), createStatusBadge(t));
+        info.add(header);
+
+        Div meta = new Div();
+        meta.getStyle()
+                .set("display", "flex")
+                .set("flex-wrap", "wrap")
+                .set("gap", "6px");
+
+        String route = formatRoute();
+        if (!"—".equals(route)) {
+            meta.add(createMetaBadge(route, "var(--rom-text-secondary)"));
+        }
+        String timeWindow = formatTimeWindow();
+        if (timeWindow != null) {
+            meta.add(createMetaBadge(timeWindow, "var(--rom-status-info)"));
+        }
+        if (hasText(position.getServiceType())) {
+            meta.add(createMetaBadge(position.getServiceType(), "var(--rom-status-warning)"));
+        }
+
+        List<String> tags = splitTags(position.getTags());
+        for (int i = 0; i < Math.min(tags.size(), MAX_TAGS); i++) {
+            meta.add(createMetaBadge("#" + tags.get(i), "var(--rom-text-muted)"));
+        }
+        if (tags.size() > MAX_TAGS) {
+            meta.add(createMetaBadge("+" + (tags.size() - MAX_TAGS), "var(--rom-text-muted)"));
+        }
+
+        if (meta.getComponentCount() > 0) {
+            info.add(meta);
+        }
+
+        if (hasText(position.getComment())) {
+            Span comment = new Span(position.getComment());
+            comment.getStyle()
+                    .set("display", "block")
+                    .set("color", "var(--rom-text-muted)")
+                    .set("font-size", "11px")
+                    .set("line-height", "1.35")
+                    .set("white-space", "nowrap")
+                    .set("overflow", "hidden")
+                    .set("text-overflow", "ellipsis")
+                    .set("max-width", "100%");
+            info.add(comment);
+        }
+
+        return info;
     }
 
     private void toggleCalendar() {
@@ -169,5 +231,49 @@ public class OrderPositionRow extends Div {
         String to = position.getToLocation();
         if (from == null && to == null) return "—";
         return (from != null ? from : "?") + " → " + (to != null ? to : "?");
+    }
+
+    private String formatTimeWindow() {
+        if (position.getStart() == null && position.getEnd() == null) {
+            return null;
+        }
+        String start = position.getStart() != null ? position.getStart().format(DT_FMT) : "—";
+        String end = position.getEnd() != null ? position.getEnd().format(DT_FMT) : "—";
+        if (position.getStart() != null && position.getEnd() != null) {
+            return start + " → " + end;
+        }
+        return position.getStart() != null ? start : end;
+    }
+
+    private Span createMetaBadge(String text, String color) {
+        Span badge = new Span(text);
+        badge.getStyle()
+                .set("font-size", "10px")
+                .set("font-family", "'JetBrains Mono', monospace")
+                .set("font-weight", "500")
+                .set("padding", "2px 6px")
+                .set("border-radius", "4px")
+                .set("color", color)
+                .set("background", "color-mix(in srgb, " + color + " 10%, transparent)")
+                .set("border", "1px solid color-mix(in srgb, " + color + " 20%, transparent)");
+        return badge;
+    }
+
+    private List<String> splitTags(String rawTags) {
+        List<String> values = new ArrayList<>();
+        if (!hasText(rawTags)) {
+            return values;
+        }
+        for (String token : rawTags.split(",")) {
+            String normalized = token.trim();
+            if (!normalized.isBlank()) {
+                values.add(normalized);
+            }
+        }
+        return values;
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 }

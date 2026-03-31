@@ -37,6 +37,16 @@ public class OrderService {
     }
 
     @Transactional(readOnly = true)
+    public Optional<OrderPosition> findPositionById(UUID id) {
+        return positionRepository.findById(id).map(
+                position -> {
+                    position.getResourceNeeds().size();
+                    initializePurchasePositions(List.of(position));
+                    return position;
+                });
+    }
+
+    @Transactional(readOnly = true)
     public List<Order> findByProcessStatus(ProcessStatus status) {
         List<Order> orders = orderRepository.findByProcessStatus(status);
         initializePositions(orders);
@@ -87,6 +97,10 @@ public class OrderService {
     }
 
     private void initializePurchasePositions(List<OrderPosition> positions) {
-        positions.forEach(position -> position.getPurchasePositions().size());
+        positions.forEach(
+                position -> {
+                    position.getPurchasePositions().size();
+                    position.getResourceNeeds().size();
+                });
     }
 }
