@@ -37,13 +37,13 @@ classDiagram
 
     class Auftrag {
         id
+        orderNumber
         name
         customerId
         comment
         tags
-        validFrom
-        validTo
-        timetableYearLabel
+        validFrom*
+        validTo*
         processStatus
         internalStatus
         version
@@ -138,20 +138,24 @@ classDiagram
 
 | Attribut | Typ | Pflicht | Beschreibung |
 | --- | --- | --- | --- |
-| id | string | ja | Eindeutige ID |
+| id | UUID | ja | Eindeutige ID |
+| orderNumber | string | ja | Eindeutige Auftragsnummer (max. 50 Zeichen, alphanumerisch) |
 | name | string | ja | Auftragsname |
-| customerId | string? | nein | FK zum Kunden |
-| comment | string? | nein | Kommentar |
-| tags | string[] | ja | Schlagwoerter |
-| validFrom | date? | nein | Gueltig ab |
-| validTo | date? | nein | Gueltig bis |
-| timetableYearLabel | string? | nein | Fahrplanjahr-Label |
-| processStatus | enum? | nein | Prozessstatus: `auftrag`, `planung`, `produkt_leistung`, `produktion`, `abrechnung_nachbereitung` |
-| internalStatus | string? | nein | Interner Bearbeitungsstatus analog zum Business-Status |
-| version | int | ja | Versionszaehler |
-| createdAt | datetime | ja | Erstellungszeitpunkt |
-| updatedAt | datetime | ja | Letzter Aenderungszeitpunkt |
+| customerId | UUID? | nein | FK zum Kunden |
+| comment | string? | nein | Kommentar (max. 2000 Zeichen) |
+| tags | string? | nein | Schlagwoerter |
+| validFrom | date | ja | Gueltig ab (Pflichtfeld) |
+| validTo | date | ja | Gueltig bis (Pflichtfeld, muss >= validFrom sein) |
+| processStatus | enum | ja | Prozessstatus, Default: `AUFTRAG`. Werte: `AUFTRAG`, `PLANUNG`, `PRODUKT_LEISTUNG`, `PRODUKTION`, `ABRECHNUNG_NACHBEREITUNG`. Wird automatisch gesetzt, nicht vom Benutzer beim Anlegen. |
+| internalStatus | string? | nein | Interner Bearbeitungsstatus. Wird spaeter im Prozess gesetzt, nicht beim Anlegen. |
+| version | int | ja | Versionszaehler (optimistic locking) |
+| createdAt | datetime | ja | Erstellungszeitpunkt (automatisch) |
+| updatedAt | datetime | ja | Letzter Aenderungszeitpunkt (automatisch) |
+| createdBy | string? | ja | Erstellt von (aus Keycloak, automatisch) |
+| updatedBy | string? | ja | Geaendert von (aus Keycloak, automatisch) |
 | items | OrderItem[] | ja | Liste der Auftragspositionen; fachlich ueber die Beziehung `Auftrag -> Auftragsposition` modelliert |
+
+> **Hinweis:** `timetableYearLabel` wurde entfernt. Die zeitliche Zuordnung erfolgt ausschliesslich ueber `validFrom` und `validTo`. Das Fahrplanjahr ergibt sich daraus implizit (2. Samstag Dezember bis 2. Samstag Dezember Folgejahr).
 
 ### Auftragsposition
 
