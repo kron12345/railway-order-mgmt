@@ -13,21 +13,21 @@ import com.vaadin.flow.component.textfield.TextField;
 import com.ordermgmt.railway.domain.customer.model.Customer;
 import com.ordermgmt.railway.domain.customer.repository.CustomerRepository;
 import com.ordermgmt.railway.domain.order.model.Order;
-import com.ordermgmt.railway.domain.order.model.ProcessStatus;
 
-/** Reusable form for editing the core fields of an order. */
+/**
+ * Order form for creation and editing. Only shows fields relevant to the user.
+ * ProcessStatus defaults to AUFTRAG on creation and is not editable here.
+ * InternalStatus and timetableYearLabel are removed.
+ */
 public class OrderFormPanel extends Div {
 
     private final TextField orderNumber = new TextField();
     private final TextField name = new TextField();
     private final ComboBox<Customer> customerCombo = new ComboBox<>();
-    private final ComboBox<ProcessStatus> processStatus = new ComboBox<>();
-    private final TextField internalStatus = new TextField();
-    private final TextArea comment = new TextArea();
-    private final TextField tags = new TextField();
     private final DatePicker validFrom = new DatePicker();
     private final DatePicker validTo = new DatePicker();
-    private final TextField timetableYear = new TextField();
+    private final TextField tags = new TextField();
+    private final TextArea comment = new TextArea();
     private final BiFunction<String, Object[], String> translator;
 
     public OrderFormPanel(
@@ -69,39 +69,29 @@ public class OrderFormPanel extends Div {
         customerCombo.setClearButtonVisible(true);
         customerCombo.setWidthFull();
 
-        processStatus.setLabel(t("order.processStatus"));
-        processStatus.setItems(ProcessStatus.values());
-        processStatus.setItemLabelGenerator(s -> t("process." + s.name()));
-        processStatus.setWidthFull();
+        validFrom.setLabel(t("order.validFrom"));
+        validFrom.setRequired(true);
+        validFrom.setWidthFull();
 
-        internalStatus.setLabel(t("order.internalStatus"));
-        internalStatus.setWidthFull();
-
-        comment.setLabel(t("order.comment"));
-        comment.setMaxLength(2000);
-        comment.setWidthFull();
-        comment.setHeight("100px");
+        validTo.setLabel(t("order.validTo"));
+        validTo.setRequired(true);
+        validTo.setWidthFull();
 
         tags.setLabel(t("order.tags"));
         tags.setWidthFull();
 
-        validFrom.setLabel(t("order.validFrom"));
-        validFrom.setWidthFull();
-
-        validTo.setLabel(t("order.validTo"));
-        validTo.setWidthFull();
-
-        timetableYear.setLabel(t("order.timetableYear"));
-        timetableYear.setWidthFull();
+        comment.setLabel(t("order.comment"));
+        comment.setMaxLength(2000);
+        comment.setWidthFull();
+        comment.setHeight("80px");
 
         FormLayout form = new FormLayout();
         form.setResponsiveSteps(
                 new FormLayout.ResponsiveStep("0", 1),
-                new FormLayout.ResponsiveStep("600px", 2),
-                new FormLayout.ResponsiveStep("900px", 3));
+                new FormLayout.ResponsiveStep("500px", 2),
+                new FormLayout.ResponsiveStep("800px", 3));
 
         form.add(orderNumber, name, customerCombo);
-        form.add(processStatus, internalStatus, timetableYear);
         form.add(validFrom, validTo, tags);
         form.setColspan(comment, 3);
         form.add(comment);
@@ -114,26 +104,20 @@ public class OrderFormPanel extends Div {
         orderNumber.setValue(nvl(order.getOrderNumber()));
         name.setValue(nvl(order.getName()));
         customerCombo.setValue(order.getCustomer());
-        processStatus.setValue(order.getProcessStatus());
-        internalStatus.setValue(nvl(order.getInternalStatus()));
-        comment.setValue(nvl(order.getComment()));
-        tags.setValue(nvl(order.getTags()));
         validFrom.setValue(order.getValidFrom());
         validTo.setValue(order.getValidTo());
-        timetableYear.setValue(nvl(order.getTimetableYearLabel()));
+        tags.setValue(nvl(order.getTags()));
+        comment.setValue(nvl(order.getComment()));
     }
 
     public void writeTo(Order order) {
         order.setOrderNumber(orderNumber.getValue().trim());
         order.setName(name.getValue().trim());
         order.setCustomer(customerCombo.getValue());
-        order.setProcessStatus(processStatus.getValue());
-        order.setInternalStatus(blankToNull(internalStatus.getValue()));
-        order.setComment(blankToNull(comment.getValue()));
-        order.setTags(blankToNull(tags.getValue()));
         order.setValidFrom(validFrom.getValue());
         order.setValidTo(validTo.getValue());
-        order.setTimetableYearLabel(blankToNull(timetableYear.getValue()));
+        order.setTags(blankToNull(tags.getValue()));
+        order.setComment(blankToNull(comment.getValue()));
     }
 
     public boolean validate() {
@@ -144,6 +128,20 @@ public class OrderFormPanel extends Div {
         }
         if (name.getValue().isBlank()) {
             name.setInvalid(true);
+            valid = false;
+        }
+        if (validFrom.getValue() == null) {
+            validFrom.setInvalid(true);
+            valid = false;
+        }
+        if (validTo.getValue() == null) {
+            validTo.setInvalid(true);
+            valid = false;
+        }
+        if (validFrom.getValue() != null && validTo.getValue() != null
+                && validTo.getValue().isBefore(validFrom.getValue())) {
+            validTo.setInvalid(true);
+            validTo.setErrorMessage(t("order.validTo") + " < " + t("order.validFrom"));
             valid = false;
         }
         return valid;

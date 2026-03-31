@@ -55,12 +55,13 @@ public class Order {
 
     private String tags;
 
+    @jakarta.validation.constraints.NotNull
+    @Column(nullable = false)
     private LocalDate validFrom;
 
+    @jakarta.validation.constraints.NotNull
+    @Column(nullable = false)
     private LocalDate validTo;
-
-    @Column(length = 50)
-    private String timetableYearLabel;
 
     @Enumerated(EnumType.STRING)
     @Column(length = 40)

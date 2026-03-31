@@ -40,7 +40,6 @@ public class OrderListView extends VerticalLayout {
     private final VerticalLayout orderList = new VerticalLayout();
     private TextField searchField;
     private ComboBox<ProcessStatus> statusFilter;
-    private ComboBox<String> fpjFilter;
     private Span countLabel;
 
     public OrderListView(OrderService orderService) {
@@ -109,15 +108,7 @@ public class OrderListView extends VerticalLayout {
         statusFilter.setWidth("160px");
         statusFilter.addValueChangeListener(e -> refreshList());
 
-        // FPJ filter
-        fpjFilter = new ComboBox<>();
-        fpjFilter.setPlaceholder(getTranslation("order.timetableYear"));
-        fpjFilter.setItems("FPJ 2025", "FPJ 2026", "FPJ 2027", "FPJ 2028");
-        fpjFilter.setClearButtonVisible(true);
-        fpjFilter.setWidth("140px");
-        fpjFilter.addValueChangeListener(e -> refreshList());
-
-        HorizontalLayout toolbar = new HorizontalLayout(searchField, statusFilter, fpjFilter);
+        HorizontalLayout toolbar = new HorizontalLayout(searchField, statusFilter);
         toolbar.setAlignItems(FlexComponent.Alignment.END);
         toolbar.getStyle()
                 .set("margin-bottom", "var(--lumo-space-s)")
@@ -165,25 +156,14 @@ public class OrderListView extends VerticalLayout {
     private List<Order> loadOrders() {
         ProcessStatus selectedStatus = statusFilter.getValue();
         String query = searchField.getValue();
-        String fpj = fpjFilter.getValue();
 
-        List<Order> orders;
         if (selectedStatus != null) {
-            orders = orderService.findByProcessStatus(selectedStatus);
-        } else if (query != null && !query.isBlank()) {
-            orders = orderService.search(query);
-        } else {
-            orders = orderService.findAllWithPositions();
+            return orderService.findByProcessStatus(selectedStatus);
         }
-
-        // Client-side FPJ filter
-        if (fpj != null && !fpj.isBlank()) {
-            orders = orders.stream()
-                    .filter(o -> fpj.equals(o.getTimetableYearLabel()))
-                    .toList();
+        if (query != null && !query.isBlank()) {
+            return orderService.search(query);
         }
-
-        return orders;
+        return orderService.findAllWithPositions();
     }
 
     private Component createAccordionRow(Order order) {
