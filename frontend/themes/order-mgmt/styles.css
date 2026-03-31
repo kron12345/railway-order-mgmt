@@ -119,6 +119,17 @@ vaadin-details::part(summary) {
     z-index: 2;
 }
 
+/* === Helper text styling === */
+vaadin-text-field::part(helper-text),
+vaadin-text-area::part(helper-text),
+vaadin-combo-box::part(helper-text),
+vaadin-date-picker::part(helper-text) {
+    color: var(--rom-text-muted);
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.01em;
+}
+
 /* === Compact form fields === */
 vaadin-text-field, vaadin-text-area, vaadin-combo-box, vaadin-date-picker, vaadin-date-time-picker {
     --lumo-text-field-size: var(--lumo-size-s);

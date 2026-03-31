@@ -56,32 +56,39 @@ public class OrderFormPanel extends Div {
         orderNumber.setRequired(true);
         orderNumber.setMaxLength(50);
         orderNumber.setAllowedCharPattern("[A-Za-z0-9\\-_]");
+        orderNumber.setHelperText(t("order.number.help"));
         orderNumber.setWidthFull();
 
         name.setLabel(t("order.name"));
         name.setRequired(true);
         name.setMaxLength(255);
+        name.setHelperText(t("order.name.help"));
         name.setWidthFull();
 
         customerCombo.setLabel(t("order.customer"));
         customerCombo.setItems(customerRepository.findAll());
         customerCombo.setItemLabelGenerator(Customer::getName);
         customerCombo.setClearButtonVisible(true);
+        customerCombo.setHelperText(t("order.customer.help"));
         customerCombo.setWidthFull();
 
         validFrom.setLabel(t("order.validFrom"));
         validFrom.setRequired(true);
+        validFrom.setHelperText(t("order.validFrom.help"));
         validFrom.setWidthFull();
 
         validTo.setLabel(t("order.validTo"));
         validTo.setRequired(true);
+        validTo.setHelperText(t("order.validTo.help"));
         validTo.setWidthFull();
 
         tags.setLabel(t("order.tags"));
+        tags.setHelperText(t("order.tags.help"));
         tags.setWidthFull();
 
         comment.setLabel(t("order.comment"));
         comment.setMaxLength(2000);
+        comment.setHelperText(t("order.comment.help"));
         comment.setWidthFull();
         comment.setHeight("80px");
 
