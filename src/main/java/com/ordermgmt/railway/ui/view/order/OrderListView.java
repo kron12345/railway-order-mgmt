@@ -97,7 +97,7 @@ public class OrderListView extends VerticalLayout {
         searchField.setPlaceholder(getTranslation("common.search") + "...");
         searchField.setPrefixComponent(VaadinIcon.SEARCH.create());
         searchField.setValueChangeMode(ValueChangeMode.LAZY);
-        searchField.setWidth("300px");
+        searchField.setWidth("250px");
         searchField.addValueChangeListener(e -> refreshList());
 
         statusFilter = new ComboBox<>();
@@ -105,12 +105,22 @@ public class OrderListView extends VerticalLayout {
         statusFilter.setItems(ProcessStatus.values());
         statusFilter.setItemLabelGenerator(s -> getTranslation("process." + s.name()));
         statusFilter.setClearButtonVisible(true);
-        statusFilter.setWidth("200px");
+        statusFilter.setWidth("160px");
         statusFilter.addValueChangeListener(e -> refreshList());
 
-        HorizontalLayout toolbar = new HorizontalLayout(searchField, statusFilter);
+        // FPJ filter
+        ComboBox<String> fpjFilter = new ComboBox<>();
+        fpjFilter.setPlaceholder(getTranslation("order.timetableYear"));
+        fpjFilter.setItems("FPJ 2025", "FPJ 2026", "FPJ 2027", "FPJ 2028");
+        fpjFilter.setClearButtonVisible(true);
+        fpjFilter.setWidth("140px");
+
+        HorizontalLayout toolbar = new HorizontalLayout(searchField, statusFilter, fpjFilter);
         toolbar.setAlignItems(FlexComponent.Alignment.END);
-        toolbar.getStyle().set("margin-bottom", "var(--lumo-space-m)");
+        toolbar.getStyle()
+                .set("margin-bottom", "var(--lumo-space-s)")
+                .set("gap", "var(--lumo-space-s)")
+                .set("flex-wrap", "wrap");
         return toolbar;
     }
 

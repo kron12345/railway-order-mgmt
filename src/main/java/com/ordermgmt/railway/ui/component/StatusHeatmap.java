@@ -40,21 +40,25 @@ public class StatusHeatmap extends Div {
         Div cell = new Div();
         cell.setText(style.icon);
         cell.getStyle()
-                .set("width", "26px")
-                .set("height", "26px")
+                .set("width", "28px")
+                .set("height", "28px")
                 .set("border-radius", "4px")
                 .set("display", "flex")
                 .set("align-items", "center")
                 .set("justify-content", "center")
                 .set("font-family", "'JetBrains Mono', monospace")
-                .set("font-size", "11px")
-                .set("font-weight", "600")
+                .set("font-size", "13px")
+                .set("font-weight", "700")
                 .set("cursor", "default")
                 .set("background", style.bg)
                 .set("color", style.color)
+                .set("border", "1px solid " + style.color)
                 .set("transition", "transform 0.15s");
 
-        cell.getElement().setAttribute("title", pos.getName() + ": " + statusLabel(status));
+        // Rich tooltip via Vaadin Tooltip
+        com.vaadin.flow.component.shared.Tooltip.forComponent(cell)
+                .withText(pos.getName() + " — " + statusLabel(status))
+                .withPosition(com.vaadin.flow.component.shared.Tooltip.TooltipPosition.TOP);
         return cell;
     }
 

@@ -4,30 +4,31 @@
 @tailwind components;
 @tailwind utilities;
 
-/* === Railway Order Management — Bloomberg-inspired Dark Theme === */
+/* === Railway Order Management — Bloomberg Terminal Dark Theme === */
 
 html {
-    --rom-bg-primary: #0B1120;
-    --rom-bg-secondary: #111827;
-    --rom-bg-card: #1A2332;
-    --rom-bg-hover: #1E293B;
-    --rom-bg-selected: #172A3A;
-    --rom-border: #1E3A5F;
-    --rom-border-subtle: #1C2D42;
+    --rom-bg-primary: #0A0E17;
+    --rom-bg-secondary: #0F1520;
+    --rom-bg-card: #151C28;
+    --rom-bg-hover: #1A2233;
+    --rom-bg-selected: #142230;
+    --rom-border: #1C2D42;
+    --rom-border-subtle: #172536;
 
-    --rom-text-primary: #E2E8F0;
-    --rom-text-secondary: #94A3B8;
-    --rom-text-muted: #64748B;
+    --rom-text-primary: #D4DCE8;
+    --rom-text-secondary: #8899AB;
+    --rom-text-muted: #5A6A7D;
 
-    --rom-accent: #2DD4BF;
-    --rom-accent-hover: #14B8A6;
-    --rom-accent-muted: rgba(45, 212, 191, 0.15);
+    /* Bloomberg-style amber accent */
+    --rom-accent: #FFB800;
+    --rom-accent-hover: #E5A600;
+    --rom-accent-muted: rgba(255, 184, 0, 0.12);
 
-    --rom-status-active: #34D399;
-    --rom-status-warning: #FBBF24;
-    --rom-status-danger: #F87171;
-    --rom-status-info: #60A5FA;
-    --rom-status-neutral: #94A3B8;
+    --rom-status-active: #00E676;
+    --rom-status-warning: #FFB800;
+    --rom-status-danger: #FF5252;
+    --rom-status-info: #448AFF;
+    --rom-status-neutral: #78909C;
 
     /* Lumo Dark overrides */
     --lumo-base-color: var(--rom-bg-primary);
@@ -37,21 +38,29 @@ html {
     --lumo-tertiary-text-color: var(--rom-text-muted);
     --lumo-primary-color: var(--rom-accent);
     --lumo-primary-text-color: var(--rom-accent);
-    --lumo-contrast-5pct: rgba(255, 255, 255, 0.05);
-    --lumo-contrast-10pct: rgba(255, 255, 255, 0.08);
-    --lumo-contrast-20pct: rgba(255, 255, 255, 0.12);
-    --lumo-shade-5pct: rgba(0, 0, 0, 0.2);
-    --lumo-shade-10pct: rgba(0, 0, 0, 0.35);
+    --lumo-contrast-5pct: rgba(255, 255, 255, 0.04);
+    --lumo-contrast-10pct: rgba(255, 255, 255, 0.06);
+    --lumo-contrast-20pct: rgba(255, 255, 255, 0.10);
+    --lumo-shade-5pct: rgba(0, 0, 0, 0.25);
+    --lumo-shade-10pct: rgba(0, 0, 0, 0.40);
 
     --lumo-font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    --lumo-font-size-s: 0.8125rem;
-    --lumo-font-size-m: 0.875rem;
-    --lumo-font-size-l: 1rem;
-    --lumo-font-size-xl: 1.25rem;
-    --lumo-font-size-xxl: 1.5rem;
+    /* Tighter font sizing for terminal density */
+    --lumo-font-size-s: 0.75rem;
+    --lumo-font-size-m: 0.8125rem;
+    --lumo-font-size-l: 0.9375rem;
+    --lumo-font-size-xl: 1.125rem;
+    --lumo-font-size-xxl: 1.375rem;
+    /* Tighter spacing */
+    --lumo-space-xs: 0.2rem;
+    --lumo-space-s: 0.4rem;
+    --lumo-space-m: 0.7rem;
+    --lumo-space-l: 1rem;
+    --lumo-space-xl: 1.5rem;
 
     background-color: var(--rom-bg-primary) !important;
     color: var(--rom-text-primary);
+    font-size: 13px;
 }
 
 /* === Global Dark Background === */
@@ -63,6 +72,7 @@ vaadin-app-layout {
 vaadin-app-layout::part(navbar) {
     background: var(--rom-bg-secondary);
     border-bottom: 1px solid var(--rom-border);
+    min-height: 38px;
 }
 
 vaadin-app-layout::part(drawer) {
@@ -73,4 +83,66 @@ vaadin-app-layout::part(drawer) {
 /* === Side Navigation === */
 vaadin-side-nav-item {
     --lumo-primary-text-color: var(--rom-accent);
+}
+
+/* === Terminal-dense Grid rows === */
+vaadin-grid::part(row) {
+    min-height: 32px;
+}
+vaadin-grid::part(cell) {
+    min-height: 32px;
+    padding: 2px 8px;
+    font-size: 12px;
+}
+
+/* === Vaadin Details — compact accordion === */
+vaadin-details {
+    --vaadin-details-summary-padding: 6px 12px;
+}
+vaadin-details::part(summary) {
+    font-size: 13px;
+}
+
+/* === Crosshair hover on calendar cells (#6) === */
+.cal-cell:hover {
+    box-shadow: inset 0 0 0 2px var(--rom-accent);
+    z-index: 2;
+}
+
+/* === Compact form fields === */
+vaadin-text-field, vaadin-text-area, vaadin-combo-box, vaadin-date-picker, vaadin-date-time-picker {
+    --lumo-text-field-size: var(--lumo-size-s);
+}
+
+/* === Rich Tooltip styling === */
+vaadin-tooltip::part(overlay) {
+    background: var(--rom-bg-secondary);
+    border: 1px solid var(--rom-border);
+    color: var(--rom-text-primary);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 6px 10px;
+    border-radius: 4px;
+}
+
+/* === Breadcrumb bar === */
+.breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--rom-text-muted);
+    padding: 4px 0;
+}
+.breadcrumb a {
+    color: var(--rom-text-secondary);
+    text-decoration: none;
+}
+.breadcrumb a:hover {
+    color: var(--rom-accent);
+}
+.breadcrumb .sep {
+    color: var(--rom-border);
+    margin: 0 2px;
 }

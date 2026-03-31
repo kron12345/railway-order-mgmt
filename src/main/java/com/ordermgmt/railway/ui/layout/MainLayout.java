@@ -2,6 +2,7 @@ package com.ordermgmt.railway.ui.layout;
 
 import com.vaadin.flow.component.applayout.AppLayout;
 import com.vaadin.flow.component.applayout.DrawerToggle;
+import com.vaadin.flow.component.html.Anchor;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.H1;
 import com.vaadin.flow.component.html.Span;
@@ -13,15 +14,19 @@ import com.vaadin.flow.component.sidenav.SideNav;
 import com.vaadin.flow.component.sidenav.SideNavItem;
 import com.vaadin.flow.i18n.LocaleChangeEvent;
 import com.vaadin.flow.i18n.LocaleChangeObserver;
+import com.vaadin.flow.router.AfterNavigationEvent;
+import com.vaadin.flow.router.AfterNavigationObserver;
 import com.vaadin.flow.router.RouterLayout;
 
 import com.ordermgmt.railway.ui.component.LanguageSwitcher;
 
-/** Shared application shell with navigation and locale switching. */
-public class MainLayout extends AppLayout implements RouterLayout, LocaleChangeObserver {
+/** Shared application shell with navigation, breadcrumbs, and locale switching. */
+public class MainLayout extends AppLayout
+        implements RouterLayout, LocaleChangeObserver, AfterNavigationObserver {
 
     private H1 title;
     private SideNav sideNav;
+    private Div breadcrumb;
 
     public MainLayout() {
         setPrimarySection(Section.DRAWER);
@@ -39,7 +44,8 @@ public class MainLayout extends AppLayout implements RouterLayout, LocaleChangeO
 
         LanguageSwitcher languageSwitcher = new LanguageSwitcher();
 
-        HorizontalLayout header = new HorizontalLayout(new DrawerToggle(), title, languageSwitcher);
+        HorizontalLayout header =
+                new HorizontalLayout(new DrawerToggle(), title, languageSwitcher);
         header.setDefaultVerticalComponentAlignment(FlexComponent.Alignment.CENTER);
         header.expand(title);
         header.setWidthFull();
@@ -104,5 +110,57 @@ public class MainLayout extends AppLayout implements RouterLayout, LocaleChangeO
     public void localeChange(LocaleChangeEvent event) {
         title.setText(getTranslation("app.title"));
         updateNavItems();
+    }
+
+    @Override
+    public void afterNavigation(AfterNavigationEvent event) {
+        updateBreadcrumb(event.getLocation().getPath());
+    }
+
+    private void updateBreadcrumb(String path) {
+        if (breadcrumb != null) {
+            breadcrumb.removeFromParent();
+        }
+        breadcrumb = new Div();
+        breadcrumb.addClassName("breadcrumb");
+        breadcrumb.setWidthFull();
+
+        Anchor home = new Anchor("", "Dashboard");
+        breadcrumb.add(home);
+
+        if (path != null && !path.isBlank() && !path.equals("/")) {
+            String[] parts = path.split("/");
+            StringBuilder href = new StringBuilder();
+            for (String part : parts) {
+                if (part.isBlank()) continue;
+                href.append(part);
+                breadcrumb.add(new Span("›"));
+                breadcrumb.getChildren()
+                        .filter(c -> c instanceof Span s && "›".equals(s.getText()))
+                        .forEach(c -> c.getElement().getClassList().add("sep"));
+
+                String label = formatBreadcrumbLabel(part);
+                Anchor link = new Anchor(href.toString(), label);
+                breadcrumb.add(link);
+                href.append("/");
+            }
+        }
+
+        addToNavbar(breadcrumb);
+    }
+
+    private String formatBreadcrumbLabel(String segment) {
+        return switch (segment) {
+            case "orders" -> getTranslation("nav.orders");
+            case "settings" -> getTranslation("nav.settings");
+            case "customers" -> getTranslation("nav.customers");
+            case "new" -> getTranslation("order.new");
+            default -> {
+                if (segment.matches("[0-9a-f\\-]{36}")) {
+                    yield segment.substring(0, 8) + "…";
+                }
+                yield segment;
+            }
+        };
     }
 }

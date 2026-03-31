@@ -130,6 +130,7 @@ public class PurchaseCalendarGrid extends Div {
     private Div dayCell(
             int day, PurchaseStatus status, boolean weekend, boolean fpjLine, LocalDate date) {
         Div cell = new Div();
+        cell.addClassName("cal-cell");
         cell.setText(String.valueOf(day));
 
         String bg;
@@ -175,8 +176,10 @@ public class PurchaseCalendarGrid extends Div {
         }
 
         String statusText = status != null ? status.name() : (weekend ? "WE" : "—");
-        String tip = String.format("%02d.%02d %s", day, date.getMonthValue(), statusText);
-        cell.getElement().setAttribute("title", tip);
+        String tip = String.format("%02d.%02d.%d %s", day, date.getMonthValue(), date.getYear(), statusText);
+        com.vaadin.flow.component.shared.Tooltip.forComponent(cell)
+                .withText(tip)
+                .withPosition(com.vaadin.flow.component.shared.Tooltip.TooltipPosition.TOP);
 
         return cell;
     }
