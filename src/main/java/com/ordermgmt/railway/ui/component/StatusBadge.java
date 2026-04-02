@@ -27,13 +27,8 @@ public class StatusBadge extends Span {
                 .set("text-transform", "uppercase")
                 .set("letter-spacing", "0.03em")
                 .set("color", color)
-                .set("background", color.replace(")", ", 0.12)").replace("var(", "rgba("))
+                .set("background", "color-mix(in srgb, " + color + " 12%, transparent)")
                 .set("border", "1px solid " + color);
-
-        // Simpler approach for CSS variable backgrounds
-        getElement()
-                .getStyle()
-                .set("background", "color-mix(in srgb, " + color + " 12%, transparent)");
     }
 
     public enum StatusType {

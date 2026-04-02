@@ -1,4 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+/* Fonts: JetBrains Mono and Inter are expected to be installed locally.
+   Google CDN import removed for GDPR/privacy compliance. */
 
 @tailwind base;
 @tailwind components;
@@ -111,7 +112,7 @@ html {
     --lumo-error-color: var(--rom-status-danger);
     --lumo-success-color: var(--rom-status-active);
 
-    --lumo-font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    --lumo-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     --lumo-font-size-s: 0.75rem;
     --lumo-font-size-m: 0.8125rem;
     --lumo-font-size-l: 0.9375rem;

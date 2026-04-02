@@ -156,6 +156,17 @@ class RomTimetableMap extends HTMLElement {
     this.resizeObserver = undefined;
   }
 
+  /** Permanently destroy the map and release resources (e.g., when navigating away). */
+  destroy() {
+    this.clearRoute();
+    this.bgMarkers.forEach((m) => m.remove());
+    this.bgMarkers = [];
+    if (this.map) {
+      this.map.remove();
+      this.map = undefined;
+    }
+  }
+
   clearRoute() {
     this.routeLayer?.remove();
     this.routeLayer = undefined;

@@ -41,8 +41,15 @@ public class TimetableRoutingService {
     private static final double ASSUMED_SPEED_METERS_PER_SECOND = 70_000D / 3_600D;
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
 
+    /** TTL for the cached routing graph (5 minutes). */
+    private static final long GRAPH_CACHE_TTL_MS = 300_000L;
+
     private final OperationalPointRepository operationalPointRepository;
     private final SectionOfLineRepository sectionOfLineRepository;
+
+    private Map<String, OperationalPoint> cachedPointsByUopid;
+    private Map<String, List<Edge>> cachedGraph;
+    private long cacheTimestamp;
 
     public List<OperationalPoint> searchOperationalPoints(String filter, int offset, int limit) {
         int pageSize = Math.max(1, Math.min(limit, MAX_SEARCH_RESULTS));
@@ -107,8 +114,9 @@ public class TimetableRoutingService {
             throw new IllegalArgumentException("At least origin and destination are required.");
         }
 
-        Map<String, OperationalPoint> pointsByUopid = loadOperationalPointsByUopid();
-        Map<String, List<Edge>> graph = buildGraph(pointsByUopid);
+        ensureGraphCache();
+        Map<String, OperationalPoint> pointsByUopid = cachedPointsByUopid;
+        Map<String, List<Edge>> graph = cachedGraph;
 
         List<String> fullPath = new ArrayList<>();
         List<Double> segmentLengths = new ArrayList<>();
@@ -169,7 +177,8 @@ public class TimetableRoutingService {
             return new TimetableRouteResult(List.of(), 0D);
         }
 
-        Map<String, OperationalPoint> pointsByUopid = loadOperationalPointsByUopid();
+        ensureGraphCache();
+        Map<String, OperationalPoint> pointsByUopid = cachedPointsByUopid;
         List<TimetableRoutePoint> points = new ArrayList<>();
         double totalDistance = 0D;
         for (TimetableRowData row : rows) {
@@ -245,6 +254,16 @@ public class TimetableRoutingService {
         }
 
         return rows;
+    }
+
+    /** Rebuilds the routing graph if it has not been loaded yet or if the TTL has expired. */
+    private void ensureGraphCache() {
+        long now = System.currentTimeMillis();
+        if (cachedGraph == null || now - cacheTimestamp > GRAPH_CACHE_TTL_MS) {
+            cachedPointsByUopid = loadOperationalPointsByUopid();
+            cachedGraph = buildGraph(cachedPointsByUopid);
+            cacheTimestamp = now;
+        }
     }
 
     private Map<String, OperationalPoint> loadOperationalPointsByUopid() {
