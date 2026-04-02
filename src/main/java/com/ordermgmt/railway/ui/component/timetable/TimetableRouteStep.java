@@ -55,6 +55,7 @@ public class TimetableRouteStep extends Div {
     private final Span routeError = new Span();
     private final TimetableMap routeMap = new TimetableMap();
 
+    private final IntervalTimetablePanel intervalPanel = new IntervalTimetablePanel();
     private Button calcButton;
     private TimetableRouteResult currentRoute = new TimetableRouteResult(List.of(), 0D);
     private Consumer<RouteCalculationResult> onRouteCalculated;
@@ -120,6 +121,7 @@ public class TimetableRouteStep extends Div {
                         routeSummary,
                         routeError,
                         calcButton));
+        left.add(intervalPanel);
 
         Div mapCard = new Div();
         mapCard.setSizeFull();
@@ -215,6 +217,10 @@ public class TimetableRouteStep extends Div {
 
     public Span getRouteSummary() {
         return routeSummary;
+    }
+
+    public IntervalTimetablePanel getIntervalPanel() {
+        return intervalPanel;
     }
 
     public Span getRouteError() {
@@ -404,6 +410,8 @@ public class TimetableRouteStep extends Div {
             routeSummary.setText(routeSummaryText(rows, currentRoute));
             routeError.setText("");
             markCalcButtonSuccess();
+            intervalPanel.setRouteAvailable(true);
+            intervalPanel.setDefaultDeparture(depAnchor);
             if (notifyCallback && onRouteCalculated != null) {
                 onRouteCalculated.accept(new RouteCalculationResult(currentRoute, rows));
             }

@@ -54,6 +54,7 @@ import com.ordermgmt.railway.domain.timetable.model.TimetableActivityOption;
 import com.ordermgmt.railway.domain.timetable.model.TimetableArchive;
 import com.ordermgmt.railway.domain.timetable.model.TimetableRouteResult;
 import com.ordermgmt.railway.domain.timetable.model.TimetableRowData;
+import com.ordermgmt.railway.domain.timetable.service.IntervalTimetableService;
 import com.ordermgmt.railway.domain.timetable.service.TimetableArchiveService;
 import com.ordermgmt.railway.domain.timetable.service.TimetableEditingService;
 import com.ordermgmt.railway.domain.timetable.service.TimetableRoutingService;
@@ -74,6 +75,7 @@ public class TimetableBuilderView extends VerticalLayout implements BeforeEnterO
     private final TimetableRoutingService timetableRoutingService;
     private final TimetableArchiveService timetableArchiveService;
     private final TimetableEditingService timetableEditingService;
+    private final IntervalTimetableService intervalTimetableService;
     private final TextField positionName = new TextField();
     private final TextField otnField = new TextField();
     private final CheckboxGroup<PredefinedTag> tagSelector = new CheckboxGroup<>();
@@ -105,13 +107,15 @@ public class TimetableBuilderView extends VerticalLayout implements BeforeEnterO
             PredefinedTagRepository predefinedTagRepository,
             TimetableRoutingService timetableRoutingService,
             TimetableArchiveService timetableArchiveService,
-            TimetableEditingService timetableEditingService) {
+            TimetableEditingService timetableEditingService,
+            IntervalTimetableService intervalTimetableService) {
         this.orderService = orderService;
         this.operationalPointRepository = operationalPointRepository;
         this.predefinedTagRepository = predefinedTagRepository;
         this.timetableRoutingService = timetableRoutingService;
         this.timetableArchiveService = timetableArchiveService;
         this.timetableEditingService = timetableEditingService;
+        this.intervalTimetableService = intervalTimetableService;
         setPadding(false);
         setSpacing(false);
         setSizeFull();
@@ -208,6 +212,45 @@ public class TimetableBuilderView extends VerticalLayout implements BeforeEnterO
                             NotificationVariant.LUMO_SUCCESS);
                     updateStepControls();
                 });
+        // Wire interval timetable generation
+        routeStep
+                .getIntervalPanel()
+                .setOnGenerate(
+                        config -> {
+                            if (timetableRows.isEmpty()) {
+                                notify(
+                                        t("timetable.interval.noRoute"),
+                                        NotificationVariant.LUMO_ERROR);
+                                return;
+                            }
+                            try {
+                                List<LocalDate> dates =
+                                        validityCalendar != null
+                                                ? validityCalendar.getSelectedDates()
+                                                : List.of();
+                                var positions =
+                                        intervalTimetableService.generateIntervalPositions(
+                                                order,
+                                                config.namePrefix(),
+                                                config.otnStart(),
+                                                new ArrayList<>(timetableRows),
+                                                config.firstDeparture(),
+                                                config.lastDeparture(),
+                                                config.crossMidnight(),
+                                                config.intervalMinutes(),
+                                                dates,
+                                                joinSelectedTags(),
+                                                commentField.getValue());
+                                Notification.show(
+                                                t("timetable.interval.generated", positions.size()),
+                                                3000,
+                                                Notification.Position.BOTTOM_END)
+                                        .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+                                navigateToOrder();
+                            } catch (Exception ex) {
+                                notify(ex.getMessage(), NotificationVariant.LUMO_ERROR);
+                            }
+                        });
         tableStep =
                 new TimetableTableStep(
                         activityOptions, timetableEditingService, availableOperationalPoints);
