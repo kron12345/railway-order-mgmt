@@ -33,6 +33,7 @@ import com.ordermgmt.railway.domain.order.model.ProcessStatus;
 import com.ordermgmt.railway.domain.order.service.OrderService;
 import com.ordermgmt.railway.ui.component.OrderAccordionRow;
 import com.ordermgmt.railway.ui.layout.MainLayout;
+import com.ordermgmt.railway.ui.util.StringUtils;
 
 /** Lists all orders and exposes a compact expandable summary for each one. */
 @Route(value = "orders", layout = MainLayout.class)
@@ -244,22 +245,8 @@ public class OrderListView extends VerticalLayout {
                 : "—";
     }
 
-    private List<String> splitTags(String rawTags) {
-        List<String> values = new ArrayList<>();
-        if (rawTags == null || rawTags.isBlank()) {
-            return values;
-        }
-        for (String token : rawTags.split(",")) {
-            String normalized = token.trim();
-            if (!normalized.isBlank()) {
-                values.add(normalized);
-            }
-        }
-        return values;
-    }
-
     public String previewTags(String rawTags) {
-        List<String> tags = splitTags(rawTags);
+        List<String> tags = StringUtils.splitTags(rawTags);
         if (tags.isEmpty()) {
             return "—";
         }

@@ -38,14 +38,23 @@ import com.ordermgmt.railway.domain.timetable.model.TimetableRouteResult;
 import com.ordermgmt.railway.domain.timetable.model.TimetableRowData;
 import com.ordermgmt.railway.domain.timetable.service.TimetableRoutingService;
 
-/** Route-definition step for the timetable builder. */
+/**
+ * Route-definition step for the timetable builder.
+ *
+ * <p>Allows the user to select origin, destination, and optional via points, then calculates a
+ * route with estimated travel times. The result is displayed on an interactive map.
+ */
 public class TimetableRouteStep extends Div {
+
+    // ── Data records ───────────────────────────────────────────────────
 
     /** Callback payload delivered after a successful route calculation. */
     public record RouteCalculationResult(TimetableRouteResult route, List<TimetableRowData> rows) {}
 
     /** Prefill data for a single via point. */
     public record ViaData(OperationalPoint point, boolean halt, String activityCode) {}
+
+    // ── Route Form ──────────────────────────────────────────────────────
 
     private final List<OperationalPoint> availableOps;
     private final List<TimetableActivityOption> activityOptions;
@@ -185,6 +194,9 @@ public class TimetableRouteStep extends Div {
         return split;
     }
 
+    // ── Public accessors ────────────────────────────────────────────────
+
+    /** Replaces the current route and updates the map display. */
     public void setRoute(TimetableRouteResult route) {
         this.currentRoute = route;
         routeMap.setRoute(route.points());
@@ -256,6 +268,8 @@ public class TimetableRouteStep extends Div {
     public void setOnRouteDirty(Runnable callback) {
         this.onRouteDirty = callback;
     }
+
+    // ── Route manipulation ─────────────────────────────────────────────
 
     private void reverseRoute() {
         OperationalPoint from = fromField.getValue();
@@ -334,6 +348,8 @@ public class TimetableRouteStep extends Div {
                 .orElse(null);
     }
 
+    // ── Route input configuration ──────────────────────────────────────
+
     private void configureRouteInputs() {
         configureOpCombo(fromField, t("position.from"), t("position.from.help"));
         configureOpCombo(toField, t("position.to"), t("position.to.help"));
@@ -367,6 +383,8 @@ public class TimetableRouteStep extends Div {
         combo.setClearButtonVisible(true);
         combo.setHelperText(helper);
     }
+
+    // ── Via point editors ──────────────────────────────────────────────
 
     private void addViaEditor(OperationalPoint point, boolean halt, String activityCode) {
         ViaPointEditor ed = new ViaPointEditor();
@@ -423,8 +441,13 @@ public class TimetableRouteStep extends Div {
         }
     }
 
-    private List<TimetableRowData> doCalculateRoute(
-            LocalTime depAnchor, LocalTime arrAnchor, boolean notifyCallback) {
+    // ── Route calculation ──────────────────────────────────────────────
+
+    /**
+     * Validates route inputs (origin, destination, anchors, via points). Sets error messages on
+     * fields and returns null if validation fails, or the ordered waypoint list on success.
+     */
+    private List<OperationalPoint> validateRouteInputs(LocalTime depAnchor, LocalTime arrAnchor) {
         routeError.setText("");
         fromField.setInvalid(fromField.getValue() == null);
         toField.setInvalid(toField.getValue() == null);
@@ -467,6 +490,28 @@ public class TimetableRouteStep extends Div {
             waypoints.add(viaEd.pointField.getValue());
         }
         waypoints.add(toField.getValue());
+        return waypoints;
+    }
+
+    /**
+     * Validates inputs and executes the route calculation. On success, updates the map, summary,
+     * and notifies the callback if requested.
+     */
+    private List<TimetableRowData> doCalculateRoute(
+            LocalTime depAnchor, LocalTime arrAnchor, boolean notifyCallback) {
+        List<OperationalPoint> waypoints = validateRouteInputs(depAnchor, arrAnchor);
+        if (waypoints == null) {
+            return null;
+        }
+        return executeRouteCalculation(waypoints, depAnchor, arrAnchor, notifyCallback);
+    }
+
+    /** Performs the actual route calculation against the routing service and updates the UI. */
+    private List<TimetableRowData> executeRouteCalculation(
+            List<OperationalPoint> waypoints,
+            LocalTime depAnchor,
+            LocalTime arrAnchor,
+            boolean notifyCallback) {
         try {
             currentRoute = routingService.calculateRoute(waypoints);
             List<TimetableRowData> rows =
@@ -514,6 +559,8 @@ public class TimetableRouteStep extends Div {
             }
         }
     }
+
+    // ── Formatting helpers ─────────────────────────────────────────────
 
     private String activityOptionLabel(TimetableActivityOption o) {
         return o.code() + " \u00b7 " + o.label();

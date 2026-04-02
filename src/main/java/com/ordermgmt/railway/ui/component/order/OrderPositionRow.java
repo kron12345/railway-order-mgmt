@@ -21,6 +21,7 @@ import com.ordermgmt.railway.domain.order.model.PositionType;
 import com.ordermgmt.railway.domain.order.model.PurchasePosition;
 import com.ordermgmt.railway.ui.component.PurchaseCalendarPanel;
 import com.ordermgmt.railway.ui.component.StatusBadge;
+import com.ordermgmt.railway.ui.util.StringUtils;
 
 /** Single position row with summary info and toggleable purchase calendar. */
 public class OrderPositionRow extends Div {
@@ -174,7 +175,7 @@ public class OrderPositionRow extends Div {
             meta.add(createMetaBadge(position.getServiceType(), "var(--rom-status-warning)"));
         }
 
-        List<String> tags = splitTags(position.getTags());
+        List<String> tags = StringUtils.splitTags(position.getTags());
         for (int i = 0; i < Math.min(tags.size(), MAX_TAGS); i++) {
             meta.add(createMetaBadge("#" + tags.get(i), "var(--rom-text-muted)"));
         }
@@ -274,20 +275,6 @@ public class OrderPositionRow extends Div {
                 .set("background", "color-mix(in srgb, " + color + " 10%, transparent)")
                 .set("border", "1px solid color-mix(in srgb, " + color + " 20%, transparent)");
         return badge;
-    }
-
-    private List<String> splitTags(String rawTags) {
-        List<String> values = new ArrayList<>();
-        if (!hasText(rawTags)) {
-            return values;
-        }
-        for (String token : rawTags.split(",")) {
-            String normalized = token.trim();
-            if (!normalized.isBlank()) {
-                values.add(normalized);
-            }
-        }
-        return values;
     }
 
     private Button createPathManagerButton(Consumer<OrderPosition> onSendToPm) {

@@ -39,6 +39,7 @@ import com.ordermgmt.railway.domain.order.model.PositionStatus;
 import com.ordermgmt.railway.domain.order.model.PositionType;
 import com.ordermgmt.railway.domain.order.service.OrderService;
 import com.ordermgmt.railway.ui.component.ValidityCalendar;
+import com.ordermgmt.railway.ui.util.StringUtils;
 
 /**
  * Dialog for creating/editing a "Leistung" (service) order position. Fahrplan positions use a
@@ -88,6 +89,8 @@ public class ServicePositionDialog extends Dialog {
         buildForm(opRepo);
         buildFooter();
     }
+
+    // ── Form construction ──────────────────────────────────────────────
 
     private void buildForm(OperationalPointRepository opRepo) {
         Locale locale = getLocale() != null ? getLocale() : Locale.GERMANY;
@@ -219,6 +222,8 @@ public class ServicePositionDialog extends Dialog {
         add(form);
     }
 
+    // ── Footer / actions ───────────────────────────────────────────────
+
     private void buildFooter() {
         Button cancel = new Button(t("common.cancel"));
         cancel.addClickListener(e -> close());
@@ -234,9 +239,9 @@ public class ServicePositionDialog extends Dialog {
     }
 
     private void readFrom() {
-        name.setValue(nvl(position.getName()));
-        serviceType.setValue(nvl(position.getServiceType()));
-        comment.setValue(nvl(position.getComment()));
+        name.setValue(StringUtils.nvl(position.getName()));
+        serviceType.setValue(StringUtils.nvl(position.getServiceType()));
+        comment.setValue(StringUtils.nvl(position.getComment()));
         fromOp.setValue(findOperationalPoint(position.getFromLocation()));
         toOp.setValue(findOperationalPoint(position.getToLocation()));
         startTime.setValue(position.getStart() != null ? position.getStart().toLocalTime() : null);
@@ -258,6 +263,8 @@ public class ServicePositionDialog extends Dialog {
         validityCalendar.setSelectedDates(dates);
         readTags(position.getTags());
     }
+
+    // ── Validation and save ─────────────────────────────────────────────
 
     private void savePosition() {
         if (name.getValue().isBlank()) {
@@ -300,7 +307,7 @@ public class ServicePositionDialog extends Dialog {
 
         position.setName(name.getValue().trim());
         position.setType(PositionType.LEISTUNG);
-        position.setServiceType(blankToNull(serviceType.getValue()));
+        position.setServiceType(StringUtils.blankToNull(serviceType.getValue()));
 
         position.setFromLocation(fromOp.getValue() != null ? fromOp.getValue().getName() : null);
         position.setToLocation(toOp.getValue() != null ? toOp.getValue().getName() : null);
@@ -312,7 +319,7 @@ public class ServicePositionDialog extends Dialog {
         position.setValidity(toValidityJson(selectedDates));
 
         position.setTags(joinSelectedTags());
-        position.setComment(blankToNull(comment.getValue()));
+        position.setComment(StringUtils.blankToNull(comment.getValue()));
 
         if (isNew) {
             position.setOrder(order);
@@ -326,7 +333,7 @@ public class ServicePositionDialog extends Dialog {
         close();
     }
 
-    // --- Tag handling ---
+    // ── Tag handling ────────────────────────────────────────────────────
 
     private List<PredefinedTag> loadTags(PredefinedTagRepository tagRepo) {
         return tagRepo.findAllByOrderByCategoryAscSortOrderAsc().stream()
@@ -346,7 +353,7 @@ public class ServicePositionDialog extends Dialog {
 
         unmatchedTags.clear();
         LinkedHashSet<PredefinedTag> selected = new LinkedHashSet<>();
-        for (String token : splitTags(stored)) {
+        for (String token : StringUtils.splitTags(stored)) {
             PredefinedTag match = tagsByName.get(normalizeTagName(token));
             if (match != null) {
                 selected.add(match);
@@ -381,21 +388,6 @@ public class ServicePositionDialog extends Dialog {
                 .orElse(null);
     }
 
-    private List<String> splitTags(String storedTags) {
-        List<String> values = new ArrayList<>();
-        if (storedTags == null || storedTags.isBlank()) {
-            return values;
-        }
-
-        for (String token : storedTags.split(",")) {
-            String normalized = token.trim();
-            if (!normalized.isBlank()) {
-                values.add(normalized);
-            }
-        }
-        return values;
-    }
-
     private void updateTagsHelperText() {
         String helper = t("position.tags.help");
         if (!unmatchedTags.isEmpty()) {
@@ -408,7 +400,7 @@ public class ServicePositionDialog extends Dialog {
         return name == null ? "" : name.trim().toLowerCase(Locale.ROOT);
     }
 
-    // --- Validity JSON ---
+    // ── Validity JSON ────────────────────────────────────────────────────
 
     private String toValidityJson(List<LocalDate> dates) {
         // Group consecutive dates into segments
@@ -463,7 +455,7 @@ public class ServicePositionDialog extends Dialog {
         return dates;
     }
 
-    // --- Events ---
+    // ── Events ────────────────────────────────────────────────────────
 
     public Registration addSaveListener(ComponentEventListener<SaveEvent> listener) {
         return addListener(SaveEvent.class, listener);
@@ -475,7 +467,7 @@ public class ServicePositionDialog extends Dialog {
         }
     }
 
-    // --- Helpers ---
+    // ── Helpers ───────────────────────────────────────────────────────
 
     private String t(String key) {
         return translator.apply(key, new Object[0]);
@@ -483,13 +475,5 @@ public class ServicePositionDialog extends Dialog {
 
     private String t(String key, Object... params) {
         return translator.apply(key, params);
-    }
-
-    private static String nvl(String s) {
-        return s != null ? s : "";
-    }
-
-    private static String blankToNull(String s) {
-        return s != null && !s.isBlank() ? s.trim() : null;
     }
 }

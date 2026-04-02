@@ -199,9 +199,27 @@ public class TimetableBuilderView extends VerticalLayout implements BeforeEnterO
 
     private void buildView() {
         removeAll();
+        initializeSteps();
+        wireRouteCallbacks();
+        wireIntervalGeneration();
+        configureMetaFields();
+        configureStepActions();
+        assembleLayout();
+        switchStep(Step.ROUTE);
+    }
+
+    /** Creates route and table step components. */
+    private void initializeSteps() {
         routeStep =
                 new TimetableRouteStep(
                         availableOperationalPoints, activityOptions, timetableRoutingService);
+        tableStep =
+                new TimetableTableStep(
+                        activityOptions, timetableEditingService, availableOperationalPoints);
+    }
+
+    /** Wires the callback for when a route calculation completes or becomes dirty. */
+    private void wireRouteCallbacks() {
         routeStep.setOnRouteCalculated(
                 result -> {
                     currentRoute = result.route();
@@ -231,7 +249,10 @@ public class TimetableBuilderView extends VerticalLayout implements BeforeEnterO
                     refreshStatusBar();
                     updateStepControls();
                 });
-        // Wire interval timetable generation
+    }
+
+    /** Wires the interval panel's generate callback for bulk timetable creation. */
+    private void wireIntervalGeneration() {
         routeStep
                 .getIntervalPanel()
                 .setOnGenerate(
@@ -270,16 +291,14 @@ public class TimetableBuilderView extends VerticalLayout implements BeforeEnterO
                                 notify(ex.getMessage(), NotificationVariant.LUMO_ERROR);
                             }
                         });
-        tableStep =
-                new TimetableTableStep(
-                        activityOptions, timetableEditingService, availableOperationalPoints);
-        configureMetaFields();
-        configureStepActions();
+    }
+
+    /** Assembles the main layout: header, status bar, metadata card, and content slot. */
+    private void assembleLayout() {
         contentSlot.setWidthFull();
         contentSlot.getStyle().set("flex", "1").set("min-height", "0");
         add(createHeader(), createStatusBar(), createMetadataCard(), contentSlot);
         expand(contentSlot);
-        switchStep(Step.ROUTE);
     }
 
     private Component createHeader() {

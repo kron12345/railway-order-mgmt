@@ -1,6 +1,5 @@
 package com.ordermgmt.railway.ui.component.order;
 
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -22,6 +21,7 @@ import com.ordermgmt.railway.domain.customer.repository.CustomerRepository;
 import com.ordermgmt.railway.domain.infrastructure.model.PredefinedTag;
 import com.ordermgmt.railway.domain.infrastructure.repository.PredefinedTagRepository;
 import com.ordermgmt.railway.domain.order.model.Order;
+import com.ordermgmt.railway.ui.util.StringUtils;
 
 /**
  * Order form for creation and editing. Only shows fields relevant to the user. ProcessStatus
@@ -125,13 +125,13 @@ public class OrderFormPanel extends Div {
     }
 
     private void readFrom(Order order) {
-        orderNumber.setValue(nvl(order.getOrderNumber()));
-        name.setValue(nvl(order.getName()));
+        orderNumber.setValue(StringUtils.nvl(order.getOrderNumber()));
+        name.setValue(StringUtils.nvl(order.getName()));
         customerCombo.setValue(order.getCustomer());
         validFrom.setValue(order.getValidFrom());
         validTo.setValue(order.getValidTo());
         readTags(order.getTags());
-        comment.setValue(nvl(order.getComment()));
+        comment.setValue(StringUtils.nvl(order.getComment()));
     }
 
     public void writeTo(Order order) {
@@ -141,7 +141,7 @@ public class OrderFormPanel extends Div {
         order.setValidFrom(validFrom.getValue());
         order.setValidTo(validTo.getValue());
         order.setTags(joinSelectedTags());
-        order.setComment(blankToNull(comment.getValue()));
+        order.setComment(StringUtils.blankToNull(comment.getValue()));
     }
 
     public boolean validate() {
@@ -203,7 +203,7 @@ public class OrderFormPanel extends Div {
 
         unmatchedTags.clear();
         LinkedHashSet<PredefinedTag> selected = new LinkedHashSet<>();
-        for (String token : splitTags(storedTags)) {
+        for (String token : StringUtils.splitTags(storedTags)) {
             PredefinedTag match = tagsByName.get(normalizeTagName(token));
             if (match != null) {
                 selected.add(match);
@@ -225,22 +225,7 @@ public class OrderFormPanel extends Div {
             }
         }
         values.addAll(unmatchedTags);
-        return blankToNull(String.join(", ", values));
-    }
-
-    private List<String> splitTags(String storedTags) {
-        List<String> values = new ArrayList<>();
-        if (storedTags == null || storedTags.isBlank()) {
-            return values;
-        }
-
-        for (String token : storedTags.split(",")) {
-            String normalized = token.trim();
-            if (!normalized.isBlank()) {
-                values.add(normalized);
-            }
-        }
-        return values;
+        return StringUtils.blankToNull(String.join(", ", values));
     }
 
     private void updateTagsHelperText() {
@@ -273,13 +258,5 @@ public class OrderFormPanel extends Div {
 
     private String normalizeTagName(String value) {
         return value.trim().toLowerCase();
-    }
-
-    private static String nvl(String s) {
-        return s != null ? s : "";
-    }
-
-    private static String blankToNull(String s) {
-        return s != null && !s.isBlank() ? s.trim() : null;
     }
 }

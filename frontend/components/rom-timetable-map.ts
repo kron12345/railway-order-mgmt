@@ -108,6 +108,65 @@ function escapeHtml(text: string): string {
   return el.innerHTML;
 }
 
+/** Builds the inner HTML for a route-point marker (badge + label with name/km). */
+function createMarkerHtml(point: RoutePoint): string {
+  const isKeyPoint = point.role !== 'AUTO';
+  const color = ROLE_COLORS[point.role] ?? ROLE_COLORS.AUTO;
+  const distanceKm = (point.distanceFromStartMeters / 1000).toFixed(1);
+  const badge = ROLE_BADGE[point.role] ?? '';
+  const cssClass = isKeyPoint ? 'rtm-marker' : 'rtm-marker rtm-marker--auto';
+  const title = `${point.name} (${distanceKm} km)`;
+
+  return (
+    `<div class="${cssClass}" title="${escapeHtml(title)}">` +
+    `<div class="rtm-marker__badge" style="background:${color};box-shadow:0 0 6px ${color}88">${badge}</div>` +
+    `<div class="rtm-marker__label">` +
+    `<span class="rtm-marker__name">${escapeHtml(point.name)}</span>` +
+    `<span class="rtm-marker__km">${distanceKm} km${point.country ? ' \u00b7 ' + escapeHtml(point.country) : ''}</span>` +
+    `</div></div>`
+  );
+}
+
+/** Creates a Leaflet DivIcon from the marker HTML, sized according to the point role. */
+function createMarkerIcon(point: RoutePoint, html: string): any {
+  const isKeyPoint = point.role !== 'AUTO';
+  return L.divIcon({
+    html,
+    className: '',
+    iconSize: [0, 0],
+    iconAnchor: isKeyPoint ? [-12, 10] : [-5, 4],
+  });
+}
+
+/** Creates a Leaflet Control that displays the route summary overlay (origin -> dest, km, stops). */
+function createOverlayControl(points: RoutePoint[]): any {
+  const origin = points.find((p) => p.role === 'ORIGIN');
+  const destination = points.find((p) => p.role === 'DESTINATION');
+  const totalDistanceKm = destination
+    ? (destination.distanceFromStartMeters / 1000).toFixed(1)
+    : '0';
+  const viaCount = points.filter((p) => p.role === 'VIA').length;
+  const stopCount = points.length;
+
+  return L.Control.extend({
+    options: { position: 'topright' },
+    onAdd() {
+      const el = L.DomUtil.create('div', 'rtm-overlay');
+      el.innerHTML =
+        `<div class="rtm-overlay__header">` +
+        `<span>${escapeHtml(origin?.name ?? '?')}</span>` +
+        `<span class="rtm-overlay__arrow">\u2192</span>` +
+        `<span>${escapeHtml(destination?.name ?? '?')}</span></div>` +
+        `<div class="rtm-overlay__stats">` +
+        `<span>${totalDistanceKm} km</span>` +
+        `<span>${stopCount} OP</span>` +
+        `${viaCount > 0 ? `<span>${viaCount} Via</span>` : ''}` +
+        `</div>`;
+      return el;
+    },
+  });
+}
+
 class RomTimetableMap extends HTMLElement {
   private map?: any;
   private container?: HTMLDivElement;
@@ -182,15 +241,15 @@ class RomTimetableMap extends HTMLElement {
     if (!this.map) return;
     this.clearRoute();
 
-    const valid = points.filter(
+    const validPoints = points.filter(
       (p) => Number.isFinite(p.latitude) && Number.isFinite(p.longitude),
     );
-    if (valid.length === 0) {
+    if (validPoints.length === 0) {
       this.map.setView(DEFAULT_CENTER, DEFAULT_ZOOM);
       return;
     }
 
-    const latLngs = valid.map((p) => L.latLng(p.latitude, p.longitude));
+    const latLngs = validPoints.map((p) => L.latLng(p.latitude, p.longitude));
 
     // Route glow (wide, semi-transparent) for depth
     this.layers.push(
@@ -213,31 +272,16 @@ class RomTimetableMap extends HTMLElement {
     }).addTo(this.map);
 
     // Station markers
-    valid.forEach((point) => {
-      const isKey = point.role !== 'AUTO';
-      const color = ROLE_COLORS[point.role] ?? ROLE_COLORS.AUTO;
-      const km = (point.distanceFromStartMeters / 1000).toFixed(1);
-      const badge = ROLE_BADGE[point.role] ?? '';
-      const cls = isKey ? 'rtm-marker' : 'rtm-marker rtm-marker--auto';
+    validPoints.forEach((point) => {
+      const markerHtml = createMarkerHtml(point);
+      const markerIcon = createMarkerIcon(point, markerHtml);
 
-      const title = `${point.name} (${km} km)`;
-      const html =
-        `<div class="${cls}" title="${escapeHtml(title)}">` +
-        `<div class="rtm-marker__badge" style="background:${color};box-shadow:0 0 6px ${color}88">${badge}</div>` +
-        `<div class="rtm-marker__label">` +
-        `<span class="rtm-marker__name">${escapeHtml(point.name)}</span>` +
-        `<span class="rtm-marker__km">${km} km${point.country ? ' \u00b7 ' + escapeHtml(point.country) : ''}</span>` +
-        `</div></div>`;
-
-      const icon = L.divIcon({
-        html,
-        className: '',
-        iconSize: [0, 0],
-        iconAnchor: isKey ? [-12, 10] : [-5, 4],
-      });
+      const isKeyPoint = point.role !== 'AUTO';
+      const distanceKm = (point.distanceFromStartMeters / 1000).toFixed(1);
+      const title = `${point.name} (${distanceKm} km)`;
 
       const marker = L.marker([point.latitude, point.longitude], {
-        icon,
+        icon: markerIcon,
         alt: title,
       });
       this.layers.push(marker.addTo(this.map!));
@@ -259,11 +303,11 @@ class RomTimetableMap extends HTMLElement {
     this.bgMarkers.forEach((m) => m.remove());
     this.bgMarkers = [];
 
-    const valid = ops.filter(
+    const validPoints = ops.filter(
       (op) => Number.isFinite(op.latitude) && Number.isFinite(op.longitude),
     );
 
-    for (const op of valid) {
+    for (const op of validPoints) {
       const marker = L.circleMarker([op.latitude, op.longitude], {
         radius: 3,
         color: '#94a3b8',
@@ -295,32 +339,7 @@ class RomTimetableMap extends HTMLElement {
   }
 
   private addRouteOverlay(points: RoutePoint[]) {
-    const origin = points.find((p) => p.role === 'ORIGIN');
-    const dest = points.find((p) => p.role === 'DESTINATION');
-    const totalKm = dest
-      ? (dest.distanceFromStartMeters / 1000).toFixed(1)
-      : '0';
-    const viaCount = points.filter((p) => p.role === 'VIA').length;
-    const stopCount = points.length;
-
-    const OverlayControl = L.Control.extend({
-      options: { position: 'topright' },
-      onAdd() {
-        const el = L.DomUtil.create('div', 'rtm-overlay');
-        el.innerHTML =
-          `<div class="rtm-overlay__header">` +
-          `<span>${escapeHtml(origin?.name ?? '?')}</span>` +
-          `<span class="rtm-overlay__arrow">\u2192</span>` +
-          `<span>${escapeHtml(dest?.name ?? '?')}</span></div>` +
-          `<div class="rtm-overlay__stats">` +
-          `<span>${totalKm} km</span>` +
-          `<span>${stopCount} OP</span>` +
-          `${viaCount > 0 ? `<span>${viaCount} Via</span>` : ''}` +
-          `</div>`;
-        return el;
-      },
-    });
-
+    const OverlayControl = createOverlayControl(points);
     this.overlay = new OverlayControl();
     this.overlay.addTo(this.map!);
   }

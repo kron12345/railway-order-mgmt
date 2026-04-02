@@ -38,6 +38,19 @@ public class RinfImportService {
             Pattern.compile("POINT\\(([\\d.\\-]+)\\s+([\\d.\\-]+)\\)");
     private static final int BATCH_SIZE = 500;
 
+    // ── CSV column indices for Operational Points ─────────────────────
+    private static final int OP_COL_UOPID = 0;
+    private static final int OP_COL_NAME = 1;
+    private static final int OP_COL_WKT = 2;
+    private static final int OP_COL_TYPE = 3;
+    private static final int OP_COL_TAF_TAP = 4;
+
+    // ── CSV column indices for Sections of Line ──────────────────────
+    private static final int SOL_COL_ID = 0;
+    private static final int SOL_COL_START_UOPID = 1;
+    private static final int SOL_COL_END_UOPID = 2;
+    private static final int SOL_COL_LENGTH = 3;
+
     private final OperationalPointRepository opRepo;
     private final SectionOfLineRepository solRepo;
     private final ImportLogRepository logRepo;
@@ -160,17 +173,17 @@ public class RinfImportService {
     }
 
     private OperationalPoint toOperationalPoint(String[] row, String country) {
-        OperationalPoint op = new OperationalPoint();
-        op.setUopid(valueAt(row, 0));
-        op.setName(valueAt(row, 1));
-        op.setCountry(country);
-        String wkt = valueAt(row, 2);
-        if (!wkt.isBlank()) parseWkt(wkt, op);
-        Integer opType = parseInteger(row, 3);
-        if (opType != null) op.setOpType(opType);
-        String tafTap = valueAt(row, 4);
-        if (!tafTap.isBlank()) op.setTafTapCode(tafTap);
-        return op;
+        OperationalPoint operationalPoint = new OperationalPoint();
+        operationalPoint.setUopid(valueAt(row, OP_COL_UOPID));
+        operationalPoint.setName(valueAt(row, OP_COL_NAME));
+        operationalPoint.setCountry(country);
+        String wktGeometry = valueAt(row, OP_COL_WKT);
+        if (!wktGeometry.isBlank()) parseWkt(wktGeometry, operationalPoint);
+        Integer opType = parseInteger(row, OP_COL_TYPE);
+        if (opType != null) operationalPoint.setOpType(opType);
+        String tafTapCode = valueAt(row, OP_COL_TAF_TAP);
+        if (!tafTapCode.isBlank()) operationalPoint.setTafTapCode(tafTapCode);
+        return operationalPoint;
     }
 
     private List<SectionOfLine> toSectionsOfLine(List<String[]> rows, String country) {
@@ -191,21 +204,21 @@ public class RinfImportService {
     }
 
     private SectionOfLine toSectionOfLine(String[] row, String country) {
-        SectionOfLine sol = new SectionOfLine();
-        sol.setSolId(valueAt(row, 0));
-        sol.setStartOpUopid(valueAt(row, 1));
-        sol.setEndOpUopid(valueAt(row, 2));
-        sol.setCountry(country);
-        Double len = parseDouble(row, 3);
-        if (len != null) sol.setLengthMeters(len);
-        return sol;
+        SectionOfLine sectionOfLine = new SectionOfLine();
+        sectionOfLine.setSolId(valueAt(row, SOL_COL_ID));
+        sectionOfLine.setStartOpUopid(valueAt(row, SOL_COL_START_UOPID));
+        sectionOfLine.setEndOpUopid(valueAt(row, SOL_COL_END_UOPID));
+        sectionOfLine.setCountry(country);
+        Double lengthMeters = parseDouble(row, SOL_COL_LENGTH);
+        if (lengthMeters != null) sectionOfLine.setLengthMeters(lengthMeters);
+        return sectionOfLine;
     }
 
-    private void parseWkt(String wkt, OperationalPoint op) {
-        Matcher m = WKT_POINT.matcher(wkt);
-        if (m.find()) {
-            op.setLongitude(Double.parseDouble(m.group(1)));
-            op.setLatitude(Double.parseDouble(m.group(2)));
+    private void parseWkt(String wktGeometry, OperationalPoint operationalPoint) {
+        Matcher matcher = WKT_POINT.matcher(wktGeometry);
+        if (matcher.find()) {
+            operationalPoint.setLongitude(Double.parseDouble(matcher.group(1)));
+            operationalPoint.setLatitude(Double.parseDouble(matcher.group(2)));
         }
     }
 
@@ -242,21 +255,21 @@ public class RinfImportService {
     }
 
     private Integer parseInteger(String[] row, int index) {
-        String v = valueAt(row, index);
-        if (v.isBlank()) return null;
+        String value = valueAt(row, index);
+        if (value.isBlank()) return null;
         try {
-            return Integer.parseInt(v);
-        } catch (NumberFormatException e) {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException ignored) {
             return null;
         }
     }
 
     private Double parseDouble(String[] row, int index) {
-        String v = valueAt(row, index);
-        if (v.isBlank()) return null;
+        String value = valueAt(row, index);
+        if (value.isBlank()) return null;
         try {
-            return Double.parseDouble(v);
-        } catch (NumberFormatException e) {
+            return Double.parseDouble(value);
+        } catch (NumberFormatException ignored) {
             return null;
         }
     }

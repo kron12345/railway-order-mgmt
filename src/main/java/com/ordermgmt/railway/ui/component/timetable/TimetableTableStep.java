@@ -347,40 +347,46 @@ public class TimetableTableStep extends Div {
 
     // ── Speed plausibility ─────────────────────────────────────────────
 
+    /** Maximum plausible speed (km/h) for a rail segment; rows exceeding this get a warning. */
     private static final double MAX_SPEED_KMH = 200.0;
 
+    /**
+     * Checks whether the implied speed between the previous row's departure and this row's arrival
+     * exceeds {@link #MAX_SPEED_KMH}, indicating a likely data error.
+     */
     private boolean hasUnrealisticSpeed(TimetableRowData row) {
+        double impliedSpeed = calculateImpliedSpeedKmh(row);
+        return impliedSpeed > MAX_SPEED_KMH;
+    }
+
+    /**
+     * Calculates the implied speed (km/h) for reaching this row from the previous row. Returns 0 if
+     * the calculation is not possible (missing data or first row).
+     */
+    private double calculateImpliedSpeedKmh(TimetableRowData row) {
         if (row.getSegmentLengthMeters() == null || row.getSegmentLengthMeters() <= 0) {
-            return false;
+            return 0;
         }
-        LocalTime arr = parseTime(row.getEstimatedArrival());
-        LocalTime dep = parseTime(row.getEstimatedDeparture());
-        // We need the previous row's departure; approximate from arrival vs departure
-        // For a single row, arrival marks when the train arrives at this point.
-        // Use estimated arrival and the previous point's estimated departure.
-        // Since we only have this row, use the row's own data:
-        // segment was covered between previous departure and this arrival.
-        // We can only check when both arrival and the row index > 0.
-        if (arr == null) {
-            return false;
+        LocalTime arrival = parseTime(row.getEstimatedArrival());
+        if (arrival == null) {
+            return 0;
         }
         int idx = timetableRows.indexOf(row);
         if (idx <= 0) {
-            return false;
+            return 0;
         }
-        TimetableRowData prev = timetableRows.get(idx - 1);
-        LocalTime prevDep = parseTime(prev.getEstimatedDeparture());
-        if (prevDep == null) {
-            return false;
+        TimetableRowData previousRow = timetableRows.get(idx - 1);
+        LocalTime previousDeparture = parseTime(previousRow.getEstimatedDeparture());
+        if (previousDeparture == null) {
+            return 0;
         }
-        long seconds = Duration.between(prevDep, arr).getSeconds();
-        if (seconds <= 0) {
-            return false;
+        long travelTimeSeconds = Duration.between(previousDeparture, arrival).getSeconds();
+        if (travelTimeSeconds <= 0) {
+            return 0;
         }
-        double km = row.getSegmentLengthMeters() / 1000.0;
-        double hours = seconds / 3600.0;
-        double impliedSpeed = km / hours;
-        return impliedSpeed > MAX_SPEED_KMH;
+        double distanceKm = row.getSegmentLengthMeters() / 1000.0;
+        double travelTimeHours = travelTimeSeconds / 3600.0;
+        return distanceKm / travelTimeHours;
     }
 
     // ── UI helpers ────────────────────────────────────────────────────

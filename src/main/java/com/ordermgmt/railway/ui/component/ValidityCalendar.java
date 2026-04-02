@@ -4,18 +4,26 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.format.TextStyle;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.Span;
 
 /**
- * Multi-date picker calendar with single-click toggle, weekday bulk select, and shift-click range
- * selection. Only dates within the allowed range are selectable. Selected dates are visualized with
- * amber highlight.
+ * Multi-date picker calendar with single-click toggle and weekday bulk select. Only dates within
+ * the allowed range (minDate..maxDate) are selectable. Selected dates are visualized with accent
+ * highlight.
  *
- * <p>Architecture: Div-based grid with client-side JS for fast interaction, server-side
- * Set<LocalDate> as source of truth, synced via Element API.
+ * <p>Architecture: server-side {@code Set<LocalDate>} as source of truth; Div-based grid renders
+ * one row per month with a 7-column day grid.
  */
 public class ValidityCalendar extends Div {
 
@@ -200,18 +208,10 @@ public class ValidityCalendar extends Div {
                 .set("padding-right", "8px");
         row.add(label);
 
-        // Build week cells for this month
         int firstDow = ym.atDay(1).getDayOfWeek().getValue(); // Mo=1
         int startCol = firstDow - 1;
         int daysInMonth = ym.lengthOfMonth();
 
-        // We need exactly 7 cells — pad start, fill days, pad end
-        // But one row = one month with ALL days → we need multiple "sub-rows"
-        // Actually for compact: one row per week within the month
-
-        // Simpler: flatten all days into the 7-column grid
-        // First: pad empty cells before day 1
-        // We actually need a sub-grid for the days
         Div daysGrid = new Div();
         daysGrid.getStyle()
                 .set("display", "grid")
@@ -233,8 +233,7 @@ public class ValidityCalendar extends Div {
             daysGrid.add(cell);
         }
 
-        // Actually the layout with "80px label + days sub-grid" won't work well
-        // Let me restructure: remove the sub-grid, use a proper layout
+        // Use flex layout: fixed-width month label + flexible days grid
         row.removeAll();
         row.getStyle()
                 .set("grid-template-columns", "none")

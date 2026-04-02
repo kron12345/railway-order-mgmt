@@ -48,6 +48,16 @@ public class SettingsView extends VerticalLayout {
     private static final DateTimeFormatter DT =
             DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss").withZone(ZoneId.systemDefault());
 
+    /** ISO country codes used for RINF import selection. */
+    private static final String COUNTRY_SWITZERLAND = "CHE";
+
+    private static final String COUNTRY_GERMANY = "DEU";
+
+    /** RINF import type identifiers. */
+    private static final String IMPORT_TYPE_OPERATIONAL_POINTS = "OP";
+
+    private static final String IMPORT_TYPE_SECTIONS_OF_LINE = "SOL";
+
     public SettingsView(
             RinfImportService importService,
             OperationalPointRepository opRepo,
@@ -111,8 +121,12 @@ public class SettingsView extends VerticalLayout {
 
     private void showInfraTab() {
         tabContent.removeAll();
+        buildStatsSection();
+        buildImportSection();
+        buildHistoryGrid();
+    }
 
-        // Stats
+    private void buildStatsSection() {
         H3 statsTitle = sectionTitle(getTranslation("settings.stats"));
         tabContent.add(statsTitle);
 
@@ -122,13 +136,14 @@ public class SettingsView extends VerticalLayout {
                 .set("gap", "16px")
                 .set("flex-wrap", "wrap")
                 .set("margin-bottom", "var(--lumo-space-m)");
-        stats.add(statBox("CH OPs", String.valueOf(importService.countOps("CHE"))));
-        stats.add(statBox("DE OPs", String.valueOf(importService.countOps("DEU"))));
-        stats.add(statBox("CH SoLs", String.valueOf(importService.countSols("CHE"))));
-        stats.add(statBox("DE SoLs", String.valueOf(importService.countSols("DEU"))));
+        stats.add(statBox("CH OPs", String.valueOf(importService.countOps(COUNTRY_SWITZERLAND))));
+        stats.add(statBox("DE OPs", String.valueOf(importService.countOps(COUNTRY_GERMANY))));
+        stats.add(statBox("CH SoLs", String.valueOf(importService.countSols(COUNTRY_SWITZERLAND))));
+        stats.add(statBox("DE SoLs", String.valueOf(importService.countSols(COUNTRY_GERMANY))));
         tabContent.add(stats);
+    }
 
-        // Import
+    private void buildImportSection() {
         H3 importTitle = sectionTitle(getTranslation("settings.infrastructure"));
         Span desc = new Span(getTranslation("settings.infrastructure.desc"));
         desc.getStyle()
@@ -139,20 +154,20 @@ public class SettingsView extends VerticalLayout {
         tabContent.add(importTitle, desc);
 
         ComboBox<String> countrySelect = new ComboBox<>(getTranslation("settings.import.country"));
-        countrySelect.setItems("CHE", "DEU");
+        countrySelect.setItems(COUNTRY_SWITZERLAND, COUNTRY_GERMANY);
         countrySelect.setItemLabelGenerator(
-                c -> "CHE".equals(c) ? "Schweiz (CH)" : "Deutschland (DE)");
-        countrySelect.setValue("CHE");
+                c -> COUNTRY_SWITZERLAND.equals(c) ? "Schweiz (CH)" : "Deutschland (DE)");
+        countrySelect.setValue(COUNTRY_SWITZERLAND);
         countrySelect.setWidth("180px");
 
         ComboBox<String> typeSelect = new ComboBox<>(getTranslation("settings.import.type"));
-        typeSelect.setItems("OP", "SOL");
+        typeSelect.setItems(IMPORT_TYPE_OPERATIONAL_POINTS, IMPORT_TYPE_SECTIONS_OF_LINE);
         typeSelect.setItemLabelGenerator(
                 tp ->
-                        "OP".equals(tp)
+                        IMPORT_TYPE_OPERATIONAL_POINTS.equals(tp)
                                 ? getTranslation("settings.import.ops")
                                 : getTranslation("settings.import.sols"));
-        typeSelect.setValue("OP");
+        typeSelect.setValue(IMPORT_TYPE_OPERATIONAL_POINTS);
         typeSelect.setWidth("180px");
 
         MemoryBuffer buffer = new MemoryBuffer();
@@ -166,7 +181,7 @@ public class SettingsView extends VerticalLayout {
                 event -> {
                     InputStream is = buffer.getInputStream();
                     ImportLog result =
-                            "OP".equals(typeSelect.getValue())
+                            IMPORT_TYPE_OPERATIONAL_POINTS.equals(typeSelect.getValue())
                                     ? importService.importOperationalPoints(
                                             is, countrySelect.getValue())
                                     : importService.importSectionsOfLine(
@@ -200,8 +215,9 @@ public class SettingsView extends VerticalLayout {
                 .set("align-items", "end")
                 .set("margin-bottom", "var(--lumo-space-m)");
         tabContent.add(importRow);
+    }
 
-        // History
+    private void buildHistoryGrid() {
         H3 histTitle = sectionTitle(getTranslation("settings.import.history"));
         tabContent.add(histTitle);
 
@@ -210,7 +226,7 @@ public class SettingsView extends VerticalLayout {
         historyGrid.addColumn(ImportLog::getCountry).setHeader("Land").setWidth("50px");
         historyGrid.addColumn(ImportLog::getRecordCount).setHeader("Records").setWidth("70px");
         historyGrid
-                .addColumn(l -> l.getStartedAt() != null ? DT.format(l.getStartedAt()) : "—")
+                .addColumn(l -> l.getStartedAt() != null ? DT.format(l.getStartedAt()) : "\u2014")
                 .setHeader("Gestartet")
                 .setWidth("150px");
         historyGrid

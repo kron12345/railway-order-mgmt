@@ -17,6 +17,21 @@ import com.ordermgmt.railway.domain.order.model.PurchaseStatus;
  */
 public class PurchaseCalendarPanel extends Div {
 
+    /**
+     * Timetable year change date: the date when FPJ 2027 begins (mid-December timetable switch).
+     * Used for the TTR bar display and calendar range defaults.
+     */
+    private static final String TIMETABLE_YEAR_CHANGE_DATE = "12.12.2026";
+
+    /** Next timetable year label displayed in the TTR bar. */
+    private static final String NEXT_TIMETABLE_YEAR = "2027";
+
+    /** Default calendar preview range start (first month of the upcoming timetable period). */
+    private static final LocalDate CALENDAR_PREVIEW_START = LocalDate.of(2026, 12, 1);
+
+    /** Default calendar preview range end. */
+    private static final LocalDate CALENDAR_PREVIEW_END = LocalDate.of(2027, 3, 31);
+
     private final BiFunction<String, Object[], String> t;
 
     public PurchaseCalendarPanel(
@@ -109,11 +124,11 @@ public class PurchaseCalendarPanel extends Div {
 
         bar.add(
                 ttrBadge(
-                        tr("purchase.calendar.ttr.fpj", "2027"),
+                        tr("purchase.calendar.ttr.fpj", NEXT_TIMETABLE_YEAR),
                         "var(--rom-accent)",
                         "rgba(45,212,191,0.1)"));
         bar.add(ttrBadge(tr("purchase.calendar.ttr.phase5"), "#FBBF24", "rgba(251,191,36,0.1)"));
-        Span info = new Span(tr("purchase.calendar.ttr.change", "12.12.2026"));
+        Span info = new Span(tr("purchase.calendar.ttr.change", TIMETABLE_YEAR_CHANGE_DATE));
         info.getStyle().set("font-family", "'JetBrains Mono', monospace").set("font-size", "10px");
         bar.add(info);
 
@@ -121,8 +136,8 @@ public class PurchaseCalendarPanel extends Div {
     }
 
     private Div createCalendar(List<PurchasePosition> purchases) {
-        LocalDate from = LocalDate.of(2026, 12, 1);
-        LocalDate to = LocalDate.of(2027, 3, 31);
+        LocalDate from = CALENDAR_PREVIEW_START;
+        LocalDate to = CALENDAR_PREVIEW_END;
         Div wrap = new Div();
         wrap.getStyle().set("margin-bottom", "12px");
         wrap.add(new PurchaseCalendarGrid(purchases, from, to));

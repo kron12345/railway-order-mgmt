@@ -25,6 +25,7 @@ import com.ordermgmt.railway.domain.pathmanager.repository.PmReferenceTrainRepos
 import com.ordermgmt.railway.domain.pathmanager.repository.PmRouteRepository;
 import com.ordermgmt.railway.domain.pathmanager.repository.PmTimetableYearRepository;
 import com.ordermgmt.railway.domain.pathmanager.repository.PmTrainVersionRepository;
+import com.ordermgmt.railway.domain.timetable.model.JourneyLocationType;
 import com.ordermgmt.railway.domain.timetable.model.TimetableArchive;
 import com.ordermgmt.railway.domain.timetable.model.TimetableRowData;
 
@@ -37,6 +38,9 @@ import lombok.RequiredArgsConstructor;
 public class PathManagerService {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
+    /** Default label for the first version of a train created from an order position. */
+    private static final String INITIAL_VERSION_LABEL = "Initial v1";
 
     private final PmReferenceTrainRepository referenceTrainRepository;
     private final PmTrainVersionRepository trainVersionRepository;
@@ -234,7 +238,7 @@ public class PathManagerService {
         version.setReferenceTrain(train);
         version.setVersionNumber(1);
         version.setVersionType(VersionType.INITIAL);
-        version.setLabel("Initial v1");
+        version.setLabel(INITIAL_VERSION_LABEL);
         version.setOperationalTrainNumber(train.getOperationalTrainNumber());
         version.setTrainType(train.getTrainType());
         version.setTrafficTypeCode(train.getTrafficTypeCode());
@@ -261,24 +265,11 @@ public class PathManagerService {
         location.setPrimaryLocationName(row.getName());
         location.setUopid(row.getUopid());
         location.setCountryCodeIso(row.getCountry());
-        location.setJourneyLocationType(mapLocationType(row.getJourneyLocationType()));
+        location.setJourneyLocationType(
+                JourneyLocationType.fromString(row.getJourneyLocationType()).code());
         location.setArrivalTime(row.getEstimatedArrival());
         location.setDepartureTime(row.getEstimatedDeparture());
         location.setDwellTime(row.getDwellMinutes());
         return location;
-    }
-
-    private String mapLocationType(String journeyLocationType) {
-        if (journeyLocationType == null) {
-            return "02";
-        }
-        return switch (journeyLocationType.toUpperCase()) {
-            case "ORIGIN" -> "01";
-            case "INTERMEDIATE" -> "02";
-            case "DESTINATION" -> "03";
-            case "HANDOVER" -> "04";
-            case "INTERCHANGE" -> "05";
-            default -> "02";
-        };
     }
 }

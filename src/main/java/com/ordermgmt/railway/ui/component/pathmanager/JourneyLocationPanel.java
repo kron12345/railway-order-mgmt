@@ -18,6 +18,7 @@ import com.vaadin.flow.component.textfield.TextField;
 
 import com.ordermgmt.railway.domain.pathmanager.model.PmJourneyLocation;
 import com.ordermgmt.railway.domain.pathmanager.service.PathManagerService;
+import com.ordermgmt.railway.domain.timetable.model.JourneyLocationType;
 
 /** Editable form for a selected journey location (operational point). */
 public class JourneyLocationPanel extends VerticalLayout {
@@ -27,7 +28,7 @@ public class JourneyLocationPanel extends VerticalLayout {
     private final BiFunction<String, Object[], String> translator;
 
     private TextField locationNameField;
-    private ComboBox<String> locationTypeField;
+    private ComboBox<JourneyLocationType> locationTypeField;
     private TextField arrivalTimeField;
     private TextField departureTimeField;
     private ComboBox<String> arrivalQualifierField;
@@ -106,9 +107,10 @@ public class JourneyLocationPanel extends VerticalLayout {
         locationNameField.setReadOnly(true);
 
         locationTypeField = new ComboBox<>(t("pm.location") + " Type");
-        locationTypeField.setItems("01", "02", "03", "04", "05");
-        locationTypeField.setItemLabelGenerator(this::locationTypeLabel);
-        locationTypeField.setValue(safeString(location.getJourneyLocationType()));
+        locationTypeField.setItems(JourneyLocationType.values());
+        locationTypeField.setItemLabelGenerator(type -> type.code() + " \u2014 " + type.label());
+        locationTypeField.setValue(
+                JourneyLocationType.fromString(location.getJourneyLocationType()));
         locationTypeField.setWidthFull();
 
         arrivalTimeField = new TextField(t("timetable.table.arrival"));
@@ -181,21 +183,10 @@ public class JourneyLocationPanel extends VerticalLayout {
                 arrivalQualifierField.getValue(),
                 departureQualifierField.getValue(),
                 activitiesField.getValue(),
-                locationTypeField.getValue(),
+                locationTypeField.getValue() != null ? locationTypeField.getValue().code() : null,
                 trackField.getValue());
         Notification.show(t("pm.save"), 2000, Notification.Position.BOTTOM_END)
                 .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
-    }
-
-    private String locationTypeLabel(String code) {
-        return switch (code) {
-            case "01" -> "Origin";
-            case "02" -> "Intermediate";
-            case "03" -> "Destination";
-            case "04" -> "Handover";
-            case "05" -> "Interchange";
-            default -> code;
-        };
     }
 
     private void applyMonoStyle(TextField field) {

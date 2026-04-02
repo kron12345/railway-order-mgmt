@@ -38,12 +38,19 @@ import com.ordermgmt.railway.domain.timetable.model.TimetableActivityOption;
 import com.ordermgmt.railway.domain.timetable.model.TimetableRowData;
 
 /**
- * Right-side panel for editing a single timetable row. Extracted from {@link TimetableTableStep} to
- * keep file sizes manageable.
+ * Right-side editor panel for a single timetable row.
+ *
+ * <p>Provides fields for halt/dwell, arrival/departure time constraints (exact, window,
+ * commercial), time propagation mode, and activity selection. Changes are applied back to the
+ * {@link TimetableRowData} via {@link #syncToRow}.
+ *
+ * <p>Extracted from {@link TimetableTableStep} to keep file sizes manageable.
  */
 class TimetableRowEditorPanel extends Div {
 
     private final List<TimetableActivityOption> activityOptions;
+
+    // ── Header fields ────────────────────────────────────────────────────
 
     private final Span titleLabel = new Span();
     private final Span contextLabel = new Span();
@@ -53,24 +60,33 @@ class TimetableRowEditorPanel extends Div {
     private final com.vaadin.flow.component.textfield.IntegerField dwellMinutesField =
             new com.vaadin.flow.component.textfield.IntegerField();
     private final ComboBox<TimetableActivityOption> activityField = new ComboBox<>();
+
+    // ── Arrival Section ──────────────────────────────────────────────────
+
     private final Select<TimeConstraintMode> arrivalModeField = new Select<>();
-    private final Select<TimeConstraintMode> departureModeField = new Select<>();
     private final TimePicker arrivalExactField = createTimePicker();
     private final TimePicker arrivalEarliestField = createTimePicker();
     private final TimePicker arrivalLatestField = createTimePicker();
     private final TimePicker arrivalCommercialField = createTimePicker();
+    private final Div arrivalExactWrapper = new Div();
+    private final Div arrivalWindowWrapper = new Div();
+    private final Div arrivalCommercialWrapper = new Div();
+    private final Div arrivalSection = new Div();
+
+    // ── Departure Section ────────────────────────────────────────────────
+
+    private final Select<TimeConstraintMode> departureModeField = new Select<>();
     private final TimePicker departureExactField = createTimePicker();
     private final TimePicker departureEarliestField = createTimePicker();
     private final TimePicker departureLatestField = createTimePicker();
     private final TimePicker departureCommercialField = createTimePicker();
-    private final Div arrivalExactWrapper = new Div();
-    private final Div arrivalWindowWrapper = new Div();
-    private final Div arrivalCommercialWrapper = new Div();
     private final Div departureExactWrapper = new Div();
     private final Div departureWindowWrapper = new Div();
     private final Div departureCommercialWrapper = new Div();
-    private final Div arrivalSection = new Div();
     private final Div departureSection = new Div();
+
+    // ── Propagation ──────────────────────────────────────────────────────
+
     private final Select<TimePropagationMode> propagationModeField = new Select<>();
     private final Checkbox pinnedField = new Checkbox();
 
@@ -84,6 +100,7 @@ class TimetableRowEditorPanel extends Div {
 
     // ── Public accessors for TimetableTableStep ───────────────────────
 
+    /** Returns the selected time propagation mode (SHIFT or STRETCH). */
     TimePropagationMode getPropagationMode() {
         return propagationModeField.getValue();
     }

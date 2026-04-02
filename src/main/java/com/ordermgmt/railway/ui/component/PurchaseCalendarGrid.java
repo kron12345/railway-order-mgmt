@@ -20,7 +20,9 @@ import com.ordermgmt.railway.domain.order.model.PurchaseStatus;
 public class PurchaseCalendarGrid extends Div {
 
     private static final String[] COL_HEADS = {"Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"};
-    private static final LocalDate FPJ_2027 = LocalDate.of(2026, 12, 12);
+
+    /** Date when FPJ 2027 begins (timetable year boundary). */
+    private static final LocalDate TIMETABLE_YEAR_2027_START = LocalDate.of(2026, 12, 12);
 
     public PurchaseCalendarGrid(List<PurchasePosition> purchases, LocalDate from, LocalDate to) {
         setWidthFull();
@@ -31,10 +33,10 @@ public class PurchaseCalendarGrid extends Div {
 
         Map<LocalDate, PurchaseStatus> statusByDate = mapByDate(purchases);
         List<YearMonth> months = buildMonthList(from, to);
-        int maxWeeks = months.stream().mapToInt(this::weeksNeeded).max().orElse(5);
+        int maxWeeksPerRow = months.stream().mapToInt(this::weeksNeeded).max().orElse(5);
 
         Div table = new Div();
-        int cols = maxWeeks * 7 + maxWeeks - 1;
+        int cols = maxWeeksPerRow * 7 + maxWeeksPerRow - 1;
         table.getStyle()
                 .set("display", "grid")
                 .set("grid-template-columns", "100px repeat(" + cols + ", minmax(24px, 1fr))")
@@ -42,10 +44,10 @@ public class PurchaseCalendarGrid extends Div {
                 .set("font-family", "'JetBrains Mono', monospace")
                 .set("font-size", "11px");
 
-        addHeaderRow(table, maxWeeks);
+        addHeaderRow(table, maxWeeksPerRow);
 
-        for (YearMonth ym : months) {
-            addMonthRow(table, ym, maxWeeks, statusByDate);
+        for (YearMonth yearMonth : months) {
+            addMonthRow(table, yearMonth, maxWeeksPerRow, statusByDate);
         }
 
         add(table);
@@ -72,13 +74,17 @@ public class PurchaseCalendarGrid extends Div {
     }
 
     private void addMonthRow(
-            Div table, YearMonth ym, int maxWeeks, Map<LocalDate, PurchaseStatus> statusByDate) {
-        LocalDate first = ym.atDay(1);
-        int startCol = first.getDayOfWeek().getValue() - 1; // Mo=0
-        int daysInMonth = ym.lengthOfMonth();
+            Div table,
+            YearMonth yearMonth,
+            int maxWeeks,
+            Map<LocalDate, PurchaseStatus> statusByDate) {
+        LocalDate firstOfMonth = yearMonth.atDay(1);
+        int startCol = firstOfMonth.getDayOfWeek().getValue() - 1; // Mo=0
+        int daysInMonth = yearMonth.lengthOfMonth();
 
         // Month label
-        String fpj = first.isBefore(FPJ_2027) ? "FPJ 2026" : "FPJ 2027";
+        String timetableYear =
+                firstOfMonth.isBefore(TIMETABLE_YEAR_2027_START) ? "FPJ 2026" : "FPJ 2027";
         Div label = new Div();
         label.getStyle()
                 .set("background", "var(--rom-bg-secondary)")
@@ -91,34 +97,35 @@ public class PurchaseCalendarGrid extends Div {
                 .set("display", "flex")
                 .set("flex-direction", "column")
                 .set("justify-content", "center");
-        Span mName =
+        Span monthName =
                 new Span(
-                        ym.getMonth().getDisplayName(TextStyle.SHORT, Locale.GERMAN)
+                        yearMonth.getMonth().getDisplayName(TextStyle.SHORT, Locale.GERMAN)
                                 + " "
-                                + ym.getYear());
-        mName.getStyle()
+                                + yearMonth.getYear());
+        monthName
+                .getStyle()
                 .set("font-weight", "600")
                 .set("font-size", "10px")
                 .set("color", "var(--rom-text-secondary)");
-        Span fpjTag = new Span(fpj);
-        fpjTag.getStyle().set("font-size", "8px").set("color", "var(--rom-accent)");
-        label.add(mName, fpjTag);
+        Span timetableYearTag = new Span(timetableYear);
+        timetableYearTag.getStyle().set("font-size", "8px").set("color", "var(--rom-accent)");
+        label.add(monthName, timetableYearTag);
         table.add(label);
 
         int dayIdx = 1;
-        for (int w = 0; w < maxWeeks; w++) {
-            if (w > 0) table.add(weekSep(false));
-            for (int wd = 0; wd < 7; wd++) {
-                int pos = w * 7 + wd;
-                boolean inRange = pos >= startCol && dayIdx <= daysInMonth;
+        for (int week = 0; week < maxWeeks; week++) {
+            if (week > 0) table.add(weekSep(false));
+            for (int weekday = 0; weekday < 7; weekday++) {
+                int position = week * 7 + weekday;
+                boolean inRange = position >= startCol && dayIdx <= daysInMonth;
 
                 if (inRange) {
-                    LocalDate date = ym.atDay(dayIdx);
-                    boolean isWeekend = wd >= 5;
-                    PurchaseStatus st = statusByDate.get(date);
-                    boolean isFpjLine = date.equals(FPJ_2027);
+                    LocalDate date = yearMonth.atDay(dayIdx);
+                    boolean isWeekend = weekday >= 5;
+                    PurchaseStatus status = statusByDate.get(date);
+                    boolean isTimetableYearBoundary = date.equals(TIMETABLE_YEAR_2027_START);
 
-                    table.add(dayCell(dayIdx, st, isWeekend, isFpjLine, date));
+                    table.add(dayCell(dayIdx, status, isWeekend, isTimetableYearBoundary, date));
                     dayIdx++;
                 } else {
                     table.add(emptyCell());
@@ -254,17 +261,17 @@ public class PurchaseCalendarGrid extends Div {
 
     private Map<LocalDate, PurchaseStatus> mapByDate(List<PurchasePosition> purchases) {
         Map<LocalDate, PurchaseStatus> map = new java.util.HashMap<>();
-        for (PurchasePosition p : purchases) {
-            for (LocalDate date : extractDates(p)) {
-                map.put(date, p.getPurchaseStatus());
+        for (PurchasePosition purchase : purchases) {
+            for (LocalDate date : extractDates(purchase)) {
+                map.put(date, purchase.getPurchaseStatus());
             }
         }
         return map;
     }
 
-    private List<LocalDate> extractDates(PurchasePosition p) {
+    private List<LocalDate> extractDates(PurchasePosition position) {
         List<LocalDate> dates = new java.util.ArrayList<>();
-        String validity = p.getValidity();
+        String validity = position.getValidity();
         if (validity != null && !validity.isBlank()) {
             try {
                 var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
@@ -294,8 +301,9 @@ public class PurchaseCalendarGrid extends Div {
             }
         }
         // Fallback: use orderedAt if no validity segments
-        if (dates.isEmpty() && p.getOrderedAt() != null) {
-            dates.add(p.getOrderedAt().atZone(java.time.ZoneId.systemDefault()).toLocalDate());
+        if (dates.isEmpty() && position.getOrderedAt() != null) {
+            dates.add(
+                    position.getOrderedAt().atZone(java.time.ZoneId.systemDefault()).toLocalDate());
         }
         return dates;
     }

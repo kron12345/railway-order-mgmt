@@ -44,7 +44,20 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 
-/** REST endpoints for managing reference trains and their journey locations. */
+/**
+ * REST API for the Path Manager domain.
+ *
+ * <p>Provides CRUD operations for reference trains, train versions, and journey locations. Trains
+ * are submitted from order management and progress through the path-request lifecycle.
+ *
+ * <p>Ownership rules:
+ *
+ * <ul>
+ *   <li>A {@code TrainVersion} always belongs to exactly one {@code ReferenceTrain}.
+ *   <li>A {@code JourneyLocation} always belongs to exactly one {@code TrainVersion}.
+ *   <li>All update/read endpoints validate the parent chain (train-&gt;version-&gt;location).
+ * </ul>
+ */
 @RestController
 @RequestMapping("/api/v1/pathmanager")
 @Tag(name = "Path Manager")
@@ -60,6 +73,11 @@ public class PathManagerController {
     private final PmProcessStepRepository processStepRepository;
     private final PmTimetableYearRepository timetableYearRepository;
 
+    /**
+     * Submits a new reference train from order management. Creates the train, an initial version
+     * with journey locations (if provided), and resolves the timetable year from the calendar start
+     * date.
+     */
     @PostMapping("/trains")
     @ResponseStatus(HttpStatus.CREATED)
     @Transactional
@@ -71,6 +89,7 @@ public class PathManagerController {
         return loadTrainDetail(train.getId());
     }
 
+    /** Lists all reference trains, optionally filtered by timetable year. */
     @GetMapping("/trains")
     @Operation(summary = "List all reference trains, optionally filtered by timetable year")
     @ApiResponse(responseCode = "200", description = "List of train summaries")
@@ -134,6 +153,10 @@ public class PathManagerController {
         return ResponseEntity.ok(loadTrainDetail(trainId));
     }
 
+    /**
+     * Updates a single journey location. Validates that the location belongs to the specified
+     * version and that the version belongs to the specified train.
+     */
     @PutMapping("/trains/{trainId}/versions/{versionId}/locations/{locationId}")
     @Transactional
     @Operation(summary = "Update a single journey location")
@@ -238,13 +261,16 @@ public class PathManagerController {
         return timetableYearRepository.save(ttYear);
     }
 
+    /** Default label for the first version of a newly submitted train. */
+    private static final String INITIAL_VERSION_LABEL = "Initial v1";
+
     private void createInitialVersionFromDto(
             PmReferenceTrain train, List<JourneyLocationDto> locations) {
         PmTrainVersion version = new PmTrainVersion();
         version.setReferenceTrain(train);
         version.setVersionNumber(1);
         version.setVersionType(VersionType.INITIAL);
-        version.setLabel("Initial v1");
+        version.setLabel(INITIAL_VERSION_LABEL);
         version.setOperationalTrainNumber(train.getOperationalTrainNumber());
         version.setTrainType(train.getTrainType());
         version.setTrafficTypeCode(train.getTrafficTypeCode());

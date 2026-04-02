@@ -1,7 +1,6 @@
 package com.ordermgmt.railway.ui.component;
 
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BiFunction;
 
@@ -11,6 +10,7 @@ import com.vaadin.flow.component.html.Span;
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.order.model.PositionStatus;
 import com.ordermgmt.railway.domain.order.model.PositionType;
+import com.ordermgmt.railway.ui.util.StringUtils;
 
 /** Card-style tile for displaying an order position with route, schedule, tags, and status. */
 public class PositionTile extends Div {
@@ -125,7 +125,7 @@ public class PositionTile extends Div {
             meta.add(createMetaBadge(pos.getServiceType(), "var(--rom-status-warning)"));
         }
 
-        List<String> tags = splitTags(pos.getTags());
+        List<String> tags = StringUtils.splitTags(pos.getTags());
         for (int i = 0; i < Math.min(tags.size(), MAX_TAGS); i++) {
             meta.add(createMetaBadge("#" + tags.get(i), "var(--rom-text-muted)"));
         }
@@ -251,20 +251,6 @@ public class PositionTile extends Div {
             return start + " → " + end;
         }
         return pos.getStart() != null ? start : end;
-    }
-
-    private List<String> splitTags(String rawTags) {
-        List<String> values = new ArrayList<>();
-        if (rawTags == null || rawTags.isBlank()) {
-            return values;
-        }
-        for (String token : rawTags.split(",")) {
-            String normalized = token.trim();
-            if (!normalized.isBlank()) {
-                values.add(normalized);
-            }
-        }
-        return values;
     }
 
     private String t(String key) {
