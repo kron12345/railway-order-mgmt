@@ -26,16 +26,20 @@ class ArchitectureTest {
                     .definedBy("com.ordermgmt.railway.ui..")
                     .layer("Infrastructure")
                     .definedBy("com.ordermgmt.railway.infrastructure..")
+                    .optionalLayer("Api")
+                    .definedBy("com.ordermgmt.railway.api..")
                     .optionalLayer("DTO")
                     .definedBy("com.ordermgmt.railway.dto..")
                     .optionalLayer("Mapper")
                     .definedBy("com.ordermgmt.railway.mapper..")
                     .whereLayer("UI")
                     .mayNotBeAccessedByAnyLayer()
+                    .whereLayer("Api")
+                    .mayNotBeAccessedByAnyLayer()
                     .whereLayer("Domain")
-                    .mayOnlyBeAccessedByLayers("UI", "Infrastructure", "DTO", "Mapper")
+                    .mayOnlyBeAccessedByLayers("UI", "Infrastructure", "Api", "DTO", "Mapper")
                     .whereLayer("Infrastructure")
-                    .mayOnlyBeAccessedByLayers("UI");
+                    .mayOnlyBeAccessedByLayers("UI", "Api");
 
     @ArchTest
     static final ArchRule domain_must_not_depend_on_ui =
@@ -70,8 +74,14 @@ class ArchitectureTest {
             classes()
                     .that()
                     .resideInAPackage("..service..")
+                    .and()
+                    .areTopLevelClasses()
                     .should()
-                    .haveSimpleNameEndingWith("Service");
+                    .haveSimpleNameEndingWith("Service")
+                    .orShould()
+                    .haveSimpleNameEndingWith("Engine")
+                    .orShould()
+                    .haveSimpleNameEndingWith("Generator");
 
     @ArchTest
     static final ArchRule views_should_be_suffixed =
@@ -83,7 +93,9 @@ class ArchitectureTest {
                     .and()
                     .areTopLevelClasses()
                     .should()
-                    .haveSimpleNameEndingWith("View");
+                    .haveSimpleNameEndingWith("View")
+                    .orShould()
+                    .haveSimpleNameEndingWith("Tab");
 
     // === Annotation Rules ===
 

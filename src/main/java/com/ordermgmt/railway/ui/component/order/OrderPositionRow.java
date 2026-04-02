@@ -11,6 +11,7 @@ import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.Span;
+import com.vaadin.flow.component.icon.Icon;
 import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
@@ -35,7 +36,8 @@ public class OrderPositionRow extends Div {
             OrderPosition position,
             BiFunction<String, Object[], String> translator,
             Consumer<OrderPosition> onEdit,
-            Consumer<OrderPosition> onDelete) {
+            Consumer<OrderPosition> onDelete,
+            Consumer<OrderPosition> onSendToPm) {
         this.position = position;
         this.translator = translator;
 
@@ -45,7 +47,7 @@ public class OrderPositionRow extends Div {
                 .set("padding", "0")
                 .set("box-sizing", "border-box");
 
-        add(createSummary(translator, onEdit, onDelete));
+        add(createSummary(translator, onEdit, onDelete, onSendToPm));
 
         calendarSlot.setWidthFull();
         calendarSlot
@@ -60,7 +62,8 @@ public class OrderPositionRow extends Div {
     private HorizontalLayout createSummary(
             BiFunction<String, Object[], String> t,
             Consumer<OrderPosition> onEdit,
-            Consumer<OrderPosition> onDelete) {
+            Consumer<OrderPosition> onDelete,
+            Consumer<OrderPosition> onSendToPm) {
 
         Div info = createInfoBlock(t);
 
@@ -99,6 +102,9 @@ public class OrderPositionRow extends Div {
         viewBtn.addClickListener(e -> navigateToArchiveView());
         viewBtn.setVisible(position.getType() == PositionType.FAHRPLAN);
 
+        // Send to / View in Path Manager button for FAHRPLAN positions
+        Button pmBtn = createPathManagerButton(onSendToPm);
+
         // Edit + Delete (smaller, secondary)
         Button editBtn = new Button(VaadinIcon.EDIT.create());
         editBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
@@ -110,7 +116,7 @@ public class OrderPositionRow extends Div {
         delBtn.getStyle().set("color", "var(--rom-status-danger)");
         delBtn.addClickListener(e -> onDelete.accept(position));
 
-        HorizontalLayout actions = new HorizontalLayout(calBtn, viewBtn, editBtn, delBtn);
+        HorizontalLayout actions = new HorizontalLayout(calBtn, viewBtn, pmBtn, editBtn, delBtn);
         actions.setSpacing(true);
         actions.setAlignItems(FlexComponent.Alignment.START);
 
@@ -282,6 +288,28 @@ public class OrderPositionRow extends Div {
             }
         }
         return values;
+    }
+
+    private Button createPathManagerButton(Consumer<OrderPosition> onSendToPm) {
+        boolean isFahrplan = position.getType() == PositionType.FAHRPLAN;
+        boolean alreadySent = position.getPmReferenceTrainId() != null;
+
+        Icon icon = VaadinIcon.TRAIN.create();
+        Button btn = new Button(icon);
+        btn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
+        btn.setVisible(isFahrplan);
+
+        if (alreadySent) {
+            btn.setTooltipText(translator.apply("position.viewInPm", new Object[0]));
+            btn.getStyle().set("color", "var(--rom-accent)");
+            btn.addClickListener(e -> UI.getCurrent().navigate("pathmanager"));
+        } else {
+            btn.setTooltipText(translator.apply("position.sendToPm", new Object[0]));
+            btn.getStyle().set("color", "var(--rom-status-warning)");
+            btn.addClickListener(e -> onSendToPm.accept(position));
+        }
+
+        return btn;
     }
 
     private void navigateToArchiveView() {

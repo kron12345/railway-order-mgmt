@@ -28,6 +28,8 @@ import com.ordermgmt.railway.domain.infrastructure.repository.PredefinedTagRepos
 import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.domain.order.model.ProcessStatus;
 import com.ordermgmt.railway.domain.order.service.OrderService;
+import com.ordermgmt.railway.domain.pathmanager.service.PathManagerService;
+import com.ordermgmt.railway.domain.timetable.service.TimetableArchiveService;
 import com.ordermgmt.railway.ui.component.StatusBadge;
 import com.ordermgmt.railway.ui.component.order.OrderFormPanel;
 import com.ordermgmt.railway.ui.component.order.OrderPositionPanel;
@@ -44,6 +46,8 @@ public class OrderDetailView extends VerticalLayout implements BeforeEnterObserv
     private final PredefinedTagRepository predefinedTagRepository;
     private final com.ordermgmt.railway.domain.infrastructure.repository.OperationalPointRepository
             opRepo;
+    private final PathManagerService pathManagerService;
+    private final TimetableArchiveService timetableArchiveService;
     private Order order;
     private boolean isNew;
 
@@ -54,11 +58,15 @@ public class OrderDetailView extends VerticalLayout implements BeforeEnterObserv
             CustomerRepository customerRepository,
             PredefinedTagRepository predefinedTagRepository,
             com.ordermgmt.railway.domain.infrastructure.repository.OperationalPointRepository
-                    opRepo) {
+                    opRepo,
+            PathManagerService pathManagerService,
+            TimetableArchiveService timetableArchiveService) {
         this.orderService = orderService;
         this.customerRepository = customerRepository;
         this.predefinedTagRepository = predefinedTagRepository;
         this.opRepo = opRepo;
+        this.pathManagerService = pathManagerService;
+        this.timetableArchiveService = timetableArchiveService;
         setPadding(false);
         setSpacing(false);
         setWidthFull();
@@ -130,7 +138,13 @@ public class OrderDetailView extends VerticalLayout implements BeforeEnterObserv
         add(createCompactHeader());
         var positionPanel =
                 new OrderPositionPanel(
-                        order, orderService, opRepo, predefinedTagRepository, this::getTranslation);
+                        order,
+                        orderService,
+                        opRepo,
+                        predefinedTagRepository,
+                        pathManagerService,
+                        timetableArchiveService,
+                        this::getTranslation);
         add(positionPanel);
     }
 

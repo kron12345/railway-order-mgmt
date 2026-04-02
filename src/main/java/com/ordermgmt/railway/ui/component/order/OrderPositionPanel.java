@@ -1,5 +1,6 @@
 package com.ordermgmt.railway.ui.component.order;
 
+import java.util.List;
 import java.util.function.BiFunction;
 
 import com.vaadin.flow.component.UI;
@@ -10,6 +11,8 @@ import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.H3;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.icon.VaadinIcon;
+import com.vaadin.flow.component.notification.Notification;
+import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
@@ -20,6 +23,11 @@ import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.order.model.PositionType;
 import com.ordermgmt.railway.domain.order.service.OrderService;
+import com.ordermgmt.railway.domain.pathmanager.model.PmReferenceTrain;
+import com.ordermgmt.railway.domain.pathmanager.service.PathManagerService;
+import com.ordermgmt.railway.domain.timetable.model.TimetableArchive;
+import com.ordermgmt.railway.domain.timetable.model.TimetableRowData;
+import com.ordermgmt.railway.domain.timetable.service.TimetableArchiveService;
 
 /** Displays and manages the positions that belong to an order. */
 public class OrderPositionPanel extends Div {
@@ -28,6 +36,8 @@ public class OrderPositionPanel extends Div {
     private final OrderService orderService;
     private final OperationalPointRepository opRepo;
     private final PredefinedTagRepository tagRepo;
+    private final PathManagerService pathManagerService;
+    private final TimetableArchiveService timetableArchiveService;
     private final BiFunction<String, Object[], String> translator;
     private final VerticalLayout rowContainer = new VerticalLayout();
 
@@ -36,11 +46,15 @@ public class OrderPositionPanel extends Div {
             OrderService orderService,
             OperationalPointRepository opRepo,
             PredefinedTagRepository tagRepo,
+            PathManagerService pathManagerService,
+            TimetableArchiveService timetableArchiveService,
             BiFunction<String, Object[], String> translator) {
         this.order = order;
         this.orderService = orderService;
         this.opRepo = opRepo;
         this.tagRepo = tagRepo;
+        this.pathManagerService = pathManagerService;
+        this.timetableArchiveService = timetableArchiveService;
         this.translator = translator;
 
         setWidthFull();
@@ -116,7 +130,8 @@ public class OrderPositionPanel extends Div {
                             pos,
                             translator,
                             this::openPositionForEdit,
-                            this::confirmDeletePosition));
+                            this::confirmDeletePosition,
+                            this::sendToPathManager));
         }
     }
 
@@ -149,6 +164,29 @@ public class OrderPositionPanel extends Div {
                     refreshPositions();
                 });
         dialog.open();
+    }
+
+    private void sendToPathManager(OrderPosition pos) {
+        if (pos.getPmReferenceTrainId() != null) {
+            return;
+        }
+        try {
+            TimetableArchive archive = timetableArchiveService.findArchive(pos).orElse(null);
+            List<TimetableRowData> rows = timetableArchiveService.readRows(pos);
+
+            PmReferenceTrain train =
+                    pathManagerService.createTrainFromOrderPosition(pos, archive, rows);
+
+            pos.setPmReferenceTrainId(train.getId());
+            orderService.savePosition(pos);
+
+            Notification.show(t("position.sentToPm"), 3000, Notification.Position.BOTTOM_END)
+                    .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+            refreshPositions();
+        } catch (Exception ex) {
+            Notification.show(ex.getMessage(), 5000, Notification.Position.BOTTOM_END)
+                    .addThemeVariants(NotificationVariant.LUMO_ERROR);
+        }
     }
 
     private void openTimetableBuilder(OrderPosition existing) {

@@ -90,6 +90,9 @@ public class OrderPosition {
     @Column(length = 20)
     private String mergeStatus;
 
+    /** Link to path manager reference train (if this position was sent to TTT). */
+    private UUID pmReferenceTrainId;
+
     @OneToMany(mappedBy = "orderPosition", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ResourceNeed> resourceNeeds = new ArrayList<>();
 

@@ -129,6 +129,11 @@ public class MainLayout extends AppLayout
                         getTranslation("nav.customers"), "customers", VaadinIcon.USERS.create()));
         sideNav.addItem(
                 new SideNavItem(
+                        getTranslation("nav.pathmanager"),
+                        "pathmanager",
+                        VaadinIcon.TRAIN.create()));
+        sideNav.addItem(
+                new SideNavItem(
                         getTranslation("nav.settings"), "settings", VaadinIcon.COG.create()));
         sideNav.addItem(
                 new SideNavItem(
@@ -177,6 +182,7 @@ public class MainLayout extends AppLayout
             case "customers" -> getTranslation("nav.customers");
             case "new" -> getTranslation("order.new");
             case "timetable-builder" -> getTranslation("timetable.builder.title");
+            case "pathmanager" -> getTranslation("nav.pathmanager");
             default -> {
                 if (segment.matches("[0-9a-f\\-]{36}")) {
                     yield segment.substring(0, 8) + "…";

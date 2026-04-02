@@ -461,6 +461,482 @@ Die Daten werden im UI heute an drei Stellen unterschiedlich verdichtet dargeste
 - SplitLayout 65/35: links Div-basierte Fahrplantabelle, rechts Karte + Gueltigkeit + Metadaten
 - "Bearbeiten"-Button navigiert zum Timetable Builder zur Weiterbearbeitung
 
+## Path Manager Domain Model
+
+Der Path Manager bildet den Lifecycle einer Trassenanfrage (TTT — Train Timetable Transfer) ab. Er simuliert die Kommunikation zwischen dem Responsible Applicant (RA) und dem Infrastructure Manager (IM) innerhalb derselben Applikation, damit das Auftragsmanagement gegen eine realistische API-Schnittstelle entwickelt und getestet werden kann.
+
+### Entitaetsuebersicht
+
+| Entity | Tabelle | Beschreibung |
+| --- | --- | --- |
+| `PmTimetableYear` | `pm_timetable_years` | Fahrplanjahr mit Start-/Enddatum (i.d.R. Mitte Dezember bis Mitte Dezember) |
+| `PmReferenceTrain` | `pm_reference_trains` | Referenzzug mit TRID (Company, Core, Variant, Timetable Year), OTN, Zugdaten und Kalender |
+| `PmTrainVersion` | `pm_train_versions` | Versionierter Snapshot eines Zuges (Initial, Modification, Alteration) |
+| `PmJourneyLocation` | `pm_journey_locations` | Betriebspunkt innerhalb einer Zugversion (Sequence, Zeiten, Qualifier, Aktivitaet) |
+| `PmRoute` | `pm_routes` | Route eines Referenzzuges mit ROID und RoutePoints (JSON) |
+| `PmPath` | `pm_paths` | Zugewiesener Pfad / Trasse (nach Buchung durch IM) |
+| `PmPathRequest` | `pm_path_requests` | Antrag auf eine Trasse (verknuepft Zug mit Pfad) |
+| `PmProcessStep` | `pm_process_steps` | Einzelner Prozessschritt der TTT State Machine (Aktion, Kommentar, Zeitstempel) |
+
+### Entity-Relationship-Diagramm
+
+```mermaid
+erDiagram
+    PmTimetableYear ||--o{ PmReferenceTrain : "contains"
+    PmReferenceTrain ||--o{ PmTrainVersion : "has versions"
+    PmReferenceTrain ||--o{ PmPathRequest : "has requests"
+    PmReferenceTrain ||--o{ PmRoute : "has routes"
+    PmReferenceTrain ||--o{ PmProcessStep : "has steps"
+    PmTrainVersion ||--o{ PmJourneyLocation : "has locations"
+    PmTrainVersion }o--o| PmPath : "linked to"
+    PmPathRequest }o--o| PmRoute : "uses route"
+    PmPathRequest ||--o{ PmPath : "produces"
+    PmPath ||--o{ PmProcessStep : "referenced by"
+    PmPathRequest ||--o{ PmProcessStep : "referenced by"
+
+    PmTimetableYear {
+        UUID id PK
+        INT year UK
+        VARCHAR label
+        DATE start_date
+        DATE end_date
+    }
+
+    PmReferenceTrain {
+        UUID id PK
+        UUID timetable_year_id FK
+        VARCHAR trid_company
+        VARCHAR trid_core
+        VARCHAR trid_variant
+        INT trid_timetable_year
+        VARCHAR operational_train_number
+        VARCHAR train_type
+        VARCHAR traffic_type_code
+        BOOLEAN push_pull_train
+        DATE calendar_start
+        DATE calendar_end
+        TEXT calendar_bitmap
+        INT train_weight
+        INT train_length
+        INT train_max_speed
+        VARCHAR brake_type
+        UUID source_position_id
+        VARCHAR process_state
+    }
+
+    PmTrainVersion {
+        UUID id PK
+        UUID reference_train_id FK
+        UUID path_id FK
+        INT version_number
+        VARCHAR version_type
+        VARCHAR label
+        VARCHAR operational_train_number
+        VARCHAR train_type
+        VARCHAR traffic_type_code
+        INT train_weight
+        INT train_length
+        INT train_max_speed
+        DATE calendar_start
+        DATE calendar_end
+        TEXT calendar_bitmap
+        INT offset_to_reference
+    }
+
+    PmJourneyLocation {
+        UUID id PK
+        UUID train_version_id FK
+        INT sequence
+        VARCHAR country_code_iso
+        VARCHAR location_primary_code
+        VARCHAR primary_location_name
+        VARCHAR uopid
+        VARCHAR journey_location_type
+        VARCHAR arrival_time
+        INT arrival_offset
+        VARCHAR departure_time
+        INT departure_offset
+        INT dwell_time
+        VARCHAR arrival_qualifier
+        VARCHAR departure_qualifier
+        VARCHAR subsidiary_code
+        JSONB activities
+        JSONB network_specific_params
+    }
+
+    PmRoute {
+        UUID id PK
+        UUID reference_train_id FK
+        VARCHAR roid_company
+        VARCHAR roid_core
+        VARCHAR roid_variant
+        INT roid_timetable_year
+        JSONB route_points
+    }
+
+    PmPathRequest {
+        UUID id PK
+        UUID reference_train_id FK
+        UUID route_id FK
+        VARCHAR prid_company
+        VARCHAR prid_core
+        VARCHAR prid_variant
+        INT prid_timetable_year
+        INT type_of_request
+        INT process_type
+        INT message_status
+        VARCHAR current_state
+    }
+
+    PmPath {
+        UUID id PK
+        UUID path_request_id FK
+        UUID reference_train_id FK
+        VARCHAR paid_company
+        VARCHAR paid_core
+        VARCHAR paid_variant
+        INT paid_timetable_year
+        VARCHAR current_state
+        INT type_of_information
+    }
+
+    PmProcessStep {
+        UUID id PK
+        UUID path_request_id FK
+        UUID path_id FK
+        UUID reference_train_id FK
+        VARCHAR step_type
+        VARCHAR from_state
+        VARCHAR to_state
+        INT type_of_information
+        INT message_status
+        VARCHAR comment
+        VARCHAR simulated_by
+        TIMESTAMPTZ created_at
+    }
+```
+
+### Detailierte Feldtabellen
+
+#### PmTimetableYear
+
+| Feld | Typ | Nullable | Beschreibung |
+| --- | --- | --- | --- |
+| `id` | UUID | nein | Primaerschluessel |
+| `year` | INT | nein | Fahrplanjahr (eindeutig), z.B. 2026 |
+| `label` | VARCHAR(100) | ja | Anzeigename, z.B. "Fahrplanjahr 2026" |
+| `start_date` | DATE | nein | Beginn des Fahrplanjahrs (i.d.R. Mitte Dezember Vorjahr) |
+| `end_date` | DATE | nein | Ende des Fahrplanjahrs (i.d.R. Mitte Dezember) |
+| `created_at` | TIMESTAMPTZ | nein | Erstellungszeitpunkt |
+| `updated_at` | TIMESTAMPTZ | nein | Letzter Aenderungszeitpunkt |
+| `version` | BIGINT | nein | Optimistic Locking |
+
+#### PmReferenceTrain (Zugkopf)
+
+Der Referenzzug ist das zentrale Aggregat im Path Manager. Er traegt alle Zugkopf-Attribute (Train Header) gemaess TTT-Standard:
+
+| Feld | Typ | Nullable | Beschreibung |
+| --- | --- | --- | --- |
+| `id` | UUID | nein | Primaerschluessel |
+| `timetable_year_id` | UUID (FK) | nein | Zugehoeriges Fahrplanjahr |
+| `trid_company` | VARCHAR(4) | nein | TRID Unternehmenskuerzel (z.B. "SOB0") |
+| `trid_core` | VARCHAR(20) | nein | TRID Kernnummer (generierter Identifier) |
+| `trid_variant` | VARCHAR(2) | nein | TRID Variante (Default "01") |
+| `trid_timetable_year` | INT | nein | TRID Fahrplanjahr |
+| `operational_train_number` | VARCHAR(20) | ja | Betriebliche Zugnummer (OTN) — Freitext, Platzhaltermuster moeglich |
+| `train_type` | VARCHAR(2) | ja | Zugart nach TTT (z.B. "IC", "EC", "RE") |
+| `traffic_type_code` | VARCHAR(10) | ja | Verkehrsart |
+| `push_pull_train` | BOOLEAN | ja | Wendezug (Default false) |
+| `calendar_start` | DATE | ja | Beginn des Verkehrstagskalenders |
+| `calendar_end` | DATE | ja | Ende des Verkehrstagskalenders |
+| `calendar_bitmap` | TEXT | ja | Bitmap-String der Verkehrstage (1 = faehrt, 0 = faehrt nicht) |
+| `train_weight` | INT | ja | Zuggewicht in Tonnen |
+| `train_length` | INT | ja | Zuglaenge in Metern |
+| `train_max_speed` | INT | ja | Hoechstgeschwindigkeit in km/h |
+| `brake_type` | VARCHAR(10) | ja | Bremsart |
+| `source_position_id` | UUID | ja | Urspruengliche Auftragsposition (Rueckverweis) |
+| `process_state` | VARCHAR(30) | nein | Aktueller Prozessstatus (Default "NEW") |
+| `created_at` | TIMESTAMPTZ | nein | Erstellungszeitpunkt |
+| `updated_at` | TIMESTAMPTZ | nein | Letzter Aenderungszeitpunkt |
+| `version` | BIGINT | nein | Optimistic Locking |
+
+Zusammengesetzter Identifier TRID: `{trid_company}-{trid_core}-{trid_variant}-{trid_timetable_year}` (z.B. `SOB0-000042-01-2026`). Dieser Identifier ist gemaess TTT-Standard aufgebaut und bildet die Train Request ID.
+
+#### PmTrainVersion
+
+Jede Veraenderung am Zug erzeugt eine neue Version. Versionstypen:
+
+| VersionType | Beschreibung |
+| --- | --- |
+| `INITIAL` | Erstversion bei Submission |
+| `MODIFICATION` | IM-Angebot (Draft Offer oder Final Offer) |
+| `ALTERATION` | Nachtraegliche Aenderung nach Buchung |
+| `CANCELLATION` | Stornierungsversion |
+
+| Feld | Typ | Nullable | Beschreibung |
+| --- | --- | --- | --- |
+| `id` | UUID | nein | Primaerschluessel |
+| `reference_train_id` | UUID (FK) | nein | Zugehoeriger Referenzzug |
+| `path_id` | UUID (FK) | ja | Verknuepfter Path (bei IM-Angeboten) |
+| `version_number` | INT | nein | Laufende Versionsnummer (1, 2, 3, ...) — eindeutig pro Referenzzug |
+| `version_type` | VARCHAR(20) | nein | `INITIAL`, `MODIFICATION`, `ALTERATION`, `CANCELLATION` |
+| `label` | VARCHAR(255) | ja | Beschriftung (z.B. "MODIFICATION v2") |
+| `operational_train_number` | VARCHAR(20) | ja | OTN dieser Version (kann vom Zugkopf abweichen) |
+| `train_type` | VARCHAR(2) | ja | Zugart dieser Version |
+| `traffic_type_code` | VARCHAR(10) | ja | Verkehrsart dieser Version |
+| `train_weight` | INT | ja | Zuggewicht in Tonnen |
+| `train_length` | INT | ja | Zuglaenge in Metern |
+| `train_max_speed` | INT | ja | Hoechstgeschwindigkeit in km/h |
+| `calendar_start` | DATE | ja | Beginn Verkehrstagekalender |
+| `calendar_end` | DATE | ja | Ende Verkehrstagekalender |
+| `calendar_bitmap` | TEXT | ja | Bitmap-String der Verkehrstage |
+| `offset_to_reference` | INT | ja | Zeitversatz zum Referenzzug in Minuten (Default 0) |
+| `created_at` | TIMESTAMPTZ | nein | Erstellungszeitpunkt |
+| `updated_at` | TIMESTAMPTZ | nein | Letzter Aenderungszeitpunkt |
+| `version` | BIGINT | nein | Optimistic Locking |
+
+#### PmJourneyLocation (Betriebspunkt / OP-Attribute)
+
+Jede Journey Location repraesentiert einen einzelnen Betriebspunkt im Laufweg einer Zugversion. Die Felder folgen dem TTT-Standard (TSI TAF/TAP Anlage 1):
+
+| Feld | Typ | Nullable | Beschreibung |
+| --- | --- | --- | --- |
+| `id` | UUID | nein | Primaerschluessel |
+| `train_version_id` | UUID (FK) | nein | Zugehoerige Zugversion |
+| `sequence` | INT | nein | Reihenfolge im Laufweg (1-basiert) — eindeutig pro Version |
+| `country_code_iso` | VARCHAR(2) | ja | ISO 3166-1 Laendercode (z.B. "CH", "DE") |
+| `location_primary_code` | VARCHAR(10) | ja | Primaerer Ortsschluessel |
+| `primary_location_name` | VARCHAR(255) | ja | Ortsname / Betriebspunktname |
+| `uopid` | VARCHAR(20) | ja | Unified Operational Point ID (ERA RINF) |
+| `journey_location_type` | VARCHAR(2) | ja | TTT JourneyLocationTypeCode: 01=Origin, 02=Intermediate, 03=Destination, 04=Handover, etc. |
+| `arrival_time` | VARCHAR(8) | ja | Ankunftszeit im Format `HH:mm:ss` oder `HH:mm` |
+| `arrival_offset` | INT | ja | Tagesoffset Ankunft (0 = gleicher Tag, 1 = Folgetag) |
+| `departure_time` | VARCHAR(8) | ja | Abfahrtszeit im Format `HH:mm:ss` oder `HH:mm` |
+| `departure_offset` | INT | ja | Tagesoffset Abfahrt |
+| `dwell_time` | INT | ja | Haltezeit in Minuten |
+| `arrival_qualifier` | VARCHAR(3) | ja | TTT TimingQualifierCode Ankunft (ALA, ELA, LLA, PLA) |
+| `departure_qualifier` | VARCHAR(3) | ja | TTT TimingQualifierCode Abfahrt (ALD, ELD, LLD, PLD) |
+| `subsidiary_code` | VARCHAR(10) | ja | Untergeordneter Ortsschluessel (Gleisangabe, etc.) |
+| `activities` | JSONB | ja | TTT TrainActivityType-Codes als JSON-Array (z.B. `["0001","0012"]`) |
+| `network_specific_params` | JSONB | ja | Netzwerkspezifische Parameter als JSON (fuer Schweizer Netze: TPNSP) |
+| `created_at` | TIMESTAMPTZ | nein | Erstellungszeitpunkt |
+| `updated_at` | TIMESTAMPTZ | nein | Letzter Aenderungszeitpunkt |
+| `version` | BIGINT | nein | Optimistic Locking |
+
+#### PmRoute
+
+| Feld | Typ | Nullable | Beschreibung |
+| --- | --- | --- | --- |
+| `id` | UUID | nein | Primaerschluessel |
+| `reference_train_id` | UUID (FK) | nein | Zugehoeriger Referenzzug |
+| `roid_company` | VARCHAR(4) | nein | ROID Unternehmenskuerzel |
+| `roid_core` | VARCHAR(20) | nein | ROID Kernnummer |
+| `roid_variant` | VARCHAR(2) | nein | ROID Variante (Default "01") |
+| `roid_timetable_year` | INT | nein | ROID Fahrplanjahr |
+| `route_points` | JSONB | ja | Geordnete Routenpunkte als JSON (Koordinaten + Betriebspunktverweise) |
+| `created_at` | TIMESTAMPTZ | nein | Erstellungszeitpunkt |
+| `updated_at` | TIMESTAMPTZ | nein | Letzter Aenderungszeitpunkt |
+| `version` | BIGINT | nein | Optimistic Locking |
+
+#### PmPathRequest (Trassenantrag)
+
+| Feld | Typ | Nullable | Beschreibung |
+| --- | --- | --- | --- |
+| `id` | UUID | nein | Primaerschluessel |
+| `reference_train_id` | UUID (FK) | nein | Zugehoeriger Referenzzug |
+| `route_id` | UUID (FK) | ja | Verknuepfte Route |
+| `prid_company` | VARCHAR(4) | nein | PRID Unternehmenskuerzel |
+| `prid_core` | VARCHAR(20) | nein | PRID Kernnummer |
+| `prid_variant` | VARCHAR(2) | nein | PRID Variante (Default "01") |
+| `prid_timetable_year` | INT | nein | PRID Fahrplanjahr |
+| `type_of_request` | INT | ja | TTT TypeOfRequest-Code |
+| `process_type` | INT | ja | TTT ProcessType-Code |
+| `message_status` | INT | ja | TTT MessageStatus-Code |
+| `current_state` | VARCHAR(30) | nein | Aktueller Antragsstatus (Default "CREATED") |
+| `created_at` | TIMESTAMPTZ | nein | Erstellungszeitpunkt |
+| `updated_at` | TIMESTAMPTZ | nein | Letzter Aenderungszeitpunkt |
+| `version` | BIGINT | nein | Optimistic Locking |
+
+#### PmPath (Trasse / Pfad)
+
+| Feld | Typ | Nullable | Beschreibung |
+| --- | --- | --- | --- |
+| `id` | UUID | nein | Primaerschluessel |
+| `path_request_id` | UUID (FK) | ja | Zugehoeriger Trassenantrag |
+| `reference_train_id` | UUID (FK) | nein | Zugehoeriger Referenzzug |
+| `paid_company` | VARCHAR(4) | nein | PAID Unternehmenskuerzel |
+| `paid_core` | VARCHAR(20) | nein | PAID Kernnummer |
+| `paid_variant` | VARCHAR(2) | nein | PAID Variante (Default "01") |
+| `paid_timetable_year` | INT | nein | PAID Fahrplanjahr |
+| `current_state` | VARCHAR(30) | nein | Trassenstatus (Default "DRAFT_OFFER") |
+| `type_of_information` | INT | ja | TTT TypeOfInformation-Code |
+| `created_at` | TIMESTAMPTZ | nein | Erstellungszeitpunkt |
+| `updated_at` | TIMESTAMPTZ | nein | Letzter Aenderungszeitpunkt |
+| `version` | BIGINT | nein | Optimistic Locking |
+
+#### PmProcessStep (Prozessschritt)
+
+Immutable Audit-Record. Kein Envers-Auditing noetig, da Prozessschritte nur geschrieben, nie geaendert werden.
+
+| Feld | Typ | Nullable | Beschreibung |
+| --- | --- | --- | --- |
+| `id` | UUID | nein | Primaerschluessel |
+| `path_request_id` | UUID (FK) | ja | Verknuepfter Trassenantrag |
+| `path_id` | UUID (FK) | ja | Verknuepfte Trasse |
+| `reference_train_id` | UUID (FK) | nein | Zugehoeriger Referenzzug |
+| `step_type` | VARCHAR(30) | nein | PathAction-Name (z.B. "SEND_REQUEST", "IM_DRAFT_OFFER") |
+| `from_state` | VARCHAR(30) | ja | Ausgangszustand |
+| `to_state` | VARCHAR(30) | ja | Zielzustand |
+| `type_of_information` | INT | ja | TTT TypeOfInformation |
+| `message_status` | INT | ja | TTT MessageStatus |
+| `comment` | VARCHAR(2000) | ja | Optionaler Kommentar zum Prozessschritt |
+| `simulated_by` | VARCHAR(100) | ja | Benutzer, der die Simulation ausgeloest hat |
+| `created_at` | TIMESTAMPTZ | nein | Erstellungszeitpunkt (Write-Once) |
+
+### TTT-Prozess State Machine
+
+Die State Machine steuert den Lebenszyklus einer Trassenanfrage. Der `PathProcessEngine` validiert erlaubte Uebergaenge und erzeugt bei bestimmten Aktionen (IM_DRAFT_OFFER, IM_FINAL_OFFER, IM_ALTERATION_OFFER) automatisch eine neue Zugversion.
+
+```mermaid
+stateDiagram-v2
+    [*] --> NEW
+    NEW --> CREATED : SEND_REQUEST
+
+    CREATED --> MODIFIED : MODIFY_REQUEST
+    CREATED --> WITHDRAWN : WITHDRAW
+    CREATED --> RECEIPT_CONFIRMED : IM_RECEIPT
+
+    RECEIPT_CONFIRMED --> MODIFIED : MODIFY_REQUEST
+    RECEIPT_CONFIRMED --> WITHDRAWN : WITHDRAW
+    RECEIPT_CONFIRMED --> DRAFT_OFFERED : IM_DRAFT_OFFER
+    RECEIPT_CONFIRMED --> NO_ALTERNATIVE : IM_NO_ALTERNATIVE
+    RECEIPT_CONFIRMED --> NO_ALTERNATIVE : IM_ERROR
+
+    DRAFT_OFFERED --> REVISION_REQUESTED : REJECT_WITH_REVISION
+    DRAFT_OFFERED --> WITHDRAWN : REJECT_WITHOUT_REVISION
+    DRAFT_OFFERED --> FINAL_OFFERED : IM_FINAL_OFFER
+
+    REVISION_REQUESTED --> DRAFT_OFFERED : IM_DRAFT_OFFER
+    REVISION_REQUESTED --> NO_ALTERNATIVE : IM_NO_ALTERNATIVE
+
+    FINAL_OFFERED --> BOOKED : ACCEPT_OFFER
+    FINAL_OFFERED --> WITHDRAWN : REJECT_WITHOUT_REVISION
+
+    BOOKED --> MODIFICATION_REQUESTED : REQUEST_MODIFICATION
+    BOOKED --> CANCELED : CANCEL_PATH
+    BOOKED --> ALTERATION_ANNOUNCED : IM_ANNOUNCE_ALTERATION
+
+    MODIFICATION_REQUESTED --> RECEIPT_CONFIRMED : IM_RECEIPT
+    MODIFICATION_REQUESTED --> FINAL_OFFERED : IM_FINAL_OFFER
+    MODIFICATION_REQUESTED --> NO_ALTERNATIVE : IM_NO_ALTERNATIVE
+
+    ALTERATION_ANNOUNCED --> ALTERATION_OFFERED : IM_ALTERATION_OFFER
+    ALTERATION_ANNOUNCED --> NO_ALTERNATIVE : IM_NO_ALTERNATIVE
+
+    ALTERATION_OFFERED --> BOOKED : ACCEPT_ALTERATION
+    ALTERATION_OFFERED --> BOOKED : REJECT_ALTERATION
+
+    NO_ALTERNATIVE --> [*]
+    WITHDRAWN --> [*]
+    CANCELED --> [*]
+    SUPERSEDED --> [*]
+```
+
+**Zustandsbeschreibungen:**
+
+| Zustand | Beschreibung |
+| --- | --- |
+| `NEW` | Frisch erstellt, noch nicht eingereicht |
+| `CREATED` | Antrag eingereicht beim IM |
+| `MODIFIED` | Antrag wurde modifiziert (vor IM-Bestaetigung) |
+| `WITHDRAWN` | Antrag zurueckgezogen oder Angebot abgelehnt |
+| `RECEIPT_CONFIRMED` | IM hat Eingang bestaetigt |
+| `DRAFT_OFFERED` | IM hat Vorangebot gemacht (erzeugt neue Zugversion) |
+| `NO_ALTERNATIVE` | IM kann keine Alternative anbieten (Endstatus) |
+| `REVISION_REQUESTED` | RA bittet IM um Ueberarbeitung des Angebots |
+| `FINAL_OFFERED` | IM hat verbindliches Angebot gemacht (erzeugt neue Zugversion) |
+| `BOOKED` | Trasse gebucht — im Fahrplan eingetragen |
+| `MODIFICATION_REQUESTED` | RA beantragt Aenderung einer gebuchten Trasse |
+| `ALTERATION_ANNOUNCED` | IM kuendigt nachtraegliche Aenderung an |
+| `ALTERATION_OFFERED` | IM bietet Aenderung an (erzeugt neue Zugversion) |
+| `CANCELED` | Gebuchte Trasse storniert (Endstatus) |
+| `SUPERSEDED` | Durch neue Version ersetzt (Endstatus) |
+
+**Aktionen und ihre Rollenverteilung:**
+
+| Aktion | Ausloesende Rolle | Erzeugt Version? | Beschreibung |
+| --- | --- | --- | --- |
+| `SEND_REQUEST` | RA | nein | Antrag erstmalig einreichen |
+| `MODIFY_REQUEST` | RA | nein | Eingereichten Antrag modifizieren |
+| `WITHDRAW` | RA | nein | Antrag zurueckziehen |
+| `IM_RECEIPT` | IM | nein | Eingangsbestaetigung |
+| `IM_DRAFT_OFFER` | IM | ja | Vorangebot mit ggf. geaenderten Zugdaten |
+| `IM_NO_ALTERNATIVE` | IM | nein | Keine Alternative verfuegbar |
+| `IM_ERROR` | IM | nein | Fehler in der Verarbeitung |
+| `REJECT_WITH_REVISION` | RA | nein | Vorangebot ablehnen, Ueberarbeitung erbeten |
+| `REJECT_WITHOUT_REVISION` | RA | nein | Angebot endgueltig ablehnen |
+| `IM_FINAL_OFFER` | IM | ja | Verbindliches Angebot |
+| `ACCEPT_OFFER` | RA | nein | Angebot annehmen, Buchung ausloesen |
+| `IM_BOOK` | IM | nein | Buchung durch IM bestaetigen |
+| `REQUEST_MODIFICATION` | RA | nein | Aenderungswunsch an gebuchter Trasse |
+| `CANCEL_PATH` | RA | nein | Gebuchte Trasse stornieren |
+| `IM_ANNOUNCE_ALTERATION` | IM | nein | Nachtraegliche Aenderung ankuendigen |
+| `IM_ALTERATION_OFFER` | IM | ja | Aenderungsangebot nach Buchung |
+| `ACCEPT_ALTERATION` | RA | nein | Aenderungsangebot annehmen |
+| `REJECT_ALTERATION` | RA | nein | Aenderungsangebot ablehnen (Trasse bleibt gebucht) |
+
+### Verknuepfung mit dem Auftragsmodell
+
+Eine `FAHRPLAN`-Position kann ueber `pm_reference_train_id` auf einen Referenzzug im Path Manager verweisen. Dieses Feld wird gesetzt, wenn der Benutzer die Position an den Fahrplanmanager sendet.
+
+```mermaid
+flowchart LR
+    subgraph Auftragsmanagement
+        OP["OrderPosition<br/>(type=FAHRPLAN)"]
+        TA["TimetableArchive<br/>(tableData: JSON rows)"]
+    end
+
+    subgraph PathManager["Path Manager"]
+        RT["PmReferenceTrain"]
+        TV["PmTrainVersion v1<br/>(INITIAL)"]
+        JL["PmJourneyLocations"]
+    end
+
+    OP -->|"pm_reference_train_id"| RT
+    OP -->|"timetable_archives via CAPACITY"| TA
+    TA -->|"Daten werden kopiert<br/>beim Senden"| TV
+    TV --> JL
+```
+
+**Datenfluss beim Senden an den Path Manager:**
+
+1. Benutzer klickt "An Fahrplanmanager senden" auf einer gespeicherten FAHRPLAN-Position
+2. `PathManagerService.createTrainFromOrderPosition()` liest das gespeicherte TimetableArchive
+3. Ein `PmTimetableYear` wird aufgeloest oder erstellt (basierend auf dem Startdatum der Position)
+4. Ein `PmReferenceTrain` wird mit generiertem TRID, OTN und Zugkopf-Attributen erstellt
+5. Eine `PmRoute` wird aus den Routenpunkten des Archivs erstellt
+6. Eine initiale `PmTrainVersion` (v1, INITIAL) wird mit allen `PmJourneyLocations` aus den Archivzeilen erstellt
+7. `order_positions.pm_reference_train_id` wird auf die ID des neuen Referenzzuges gesetzt
+8. Die Position erscheint im Path Manager unter dem korrekten Fahrplanjahr
+
+### Path Manager REST API
+
+Die API stellt 11 REST Endpoints bereit, dokumentiert ueber Swagger UI unter `/swagger-ui/index.html`:
+
+| # | Methode | Pfad | Controller | Beschreibung |
+| --- | --- | --- | --- | --- |
+| 1 | POST | `/api/v1/pathmanager/trains` | PathManagerController | Neuen Referenzzug einreichen |
+| 2 | GET | `/api/v1/pathmanager/trains` | PathManagerController | Alle Zuege auflisten (optional `?year=`) |
+| 3 | GET | `/api/v1/pathmanager/trains/{trainId}` | PathManagerController | Zugdetail abrufen |
+| 4 | PUT | `/api/v1/pathmanager/trains/{trainId}` | PathManagerController | Zugkopf-Attribute aktualisieren |
+| 5 | GET | `/api/v1/pathmanager/trains/{trainId}/versions` | PathManagerController | Alle Versionen eines Zuges |
+| 6 | GET | `/api/v1/pathmanager/trains/{trainId}/versions/{versionId}/locations` | PathManagerController | Journey Locations einer Version |
+| 7 | PUT | `/api/v1/pathmanager/trains/{trainId}/versions/{versionId}/locations/{locationId}` | PathManagerController | Einzelne Journey Location aktualisieren |
+| 8 | POST | `/api/v1/pathmanager/process/{referenceTrainId}/step` | PathProcessController | Prozessschritt ausfuehren |
+| 9 | GET | `/api/v1/pathmanager/process/{referenceTrainId}/available-actions` | PathProcessController | Verfuegbare Aktionen abfragen |
+| 10 | GET | `/api/v1/pathmanager/process/{referenceTrainId}/history` | PathProcessController | Prozesshistorie abrufen |
+| 11 | POST | `/api/v1/pathmanager/diff?referenceTrainId=` | PathManagerDiffController | Diff zwischen Order-Daten und PM-Version |
+
 ## Prozesskontext
 
 ```mermaid

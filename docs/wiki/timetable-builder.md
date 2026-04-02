@@ -207,6 +207,38 @@ The "Edit" button in the header navigates to the Timetable Builder (`/orders/{or
 
 ![Archive View](screenshots/timetable-archive-view.png)
 
+## Sending to Path Manager
+
+After a timetable position has been saved, it can be sent to the **Path Manager** for TTT (Train Timetable Transfer) processing.
+
+### How to Send
+
+In the order detail view, each `FAHRPLAN` position row shows a **train icon** button next to the view/edit/delete actions:
+
+- **Orange train icon** (tooltip "Send to Path Manager"): The position has not been sent yet. Click to create a reference train in the Path Manager from this position's timetable data.
+- **Teal train icon** (tooltip "View in Path Manager"): The position has already been sent. Click to navigate to the Path Manager view.
+
+### What Happens on Send
+
+When you click "Send to Path Manager", the system:
+
+1. Reads the saved timetable archive and its row data for the position
+2. Calls `PathManagerService.createTrainFromOrderPosition()` which:
+   - Resolves or creates the applicable timetable year based on the position's start date
+   - Creates a `PmReferenceTrain` with a generated TRID (company, core, variant) and the position's OTN
+   - Creates a `PmRoute` from the timetable row data
+   - Creates an initial `PmTrainVersion` (v1) with all journey locations mapped from the timetable rows
+3. Stores the reference train's ID on the order position (`pmReferenceTrainId`)
+4. Shows a success notification
+
+The reference train appears in the Path Manager view under the appropriate timetable year and can then go through the TTT process lifecycle (Send Request, IM Receipt, Draft/Final Offer, Accept, Book, etc.).
+
+### Prerequisites
+
+- The position must be of type `FAHRPLAN`
+- The position must have a saved timetable archive (i.e., the timetable builder must have been completed and saved at least once)
+- The position must not have been sent already (`pmReferenceTrainId` must be null)
+
 ## Saving
 
 Click "Save" to persist the timetable. The system:

@@ -98,6 +98,11 @@ flowchart LR
     TAS --> TA[(timetable_archives)]
     TAS --> OP
     TAS --> RN[(resource_needs)]
+
+    P --> PMS[PathManagerService]
+    PMS --> PMT[(pm_reference_trains)]
+    PMS --> PMV[(pm_train_versions)]
+    PMS --> PML[(pm_journey_locations)]
 ```
 
 ## Timetable Builder Flow
@@ -236,6 +241,12 @@ graph LR
         I_S["CSV Import Services"]
     end
 
+    subgraph PathManager["Path Manager Context"]
+        PM_M["PmReferenceTrain<br/>PmTrainVersion<br/>PmJourneyLocation<br/>PmRoute<br/>PmPath<br/>PmPathRequest<br/>PmProcessStep<br/>PmTimetableYear"]
+        PM_R["Repositories"]
+        PM_S["PathManagerService<br/>PathProcessEngine<br/>DiffService<br/>IdentifierGenerator"]
+    end
+
     subgraph Customer["Customer Context"]
         C_M["Customer"]
     end
@@ -247,7 +258,9 @@ graph LR
     Order -.->|references| Customer
     Order -.->|optional links| Business
     Order -.->|capacity link| Timetable
+    Order -.->|pm_reference_train_id| PathManager
     Timetable -.->|routes over| InfraDomain
+    PathManager -.->|created from| Order
 ```
 
 ## Layers
@@ -265,8 +278,92 @@ graph LR
 - Organized by bounded context
 - `order/`: orders, positions, resource needs, purchase positions, status model
 - `timetable/`: route search, timetable archive, TTT-like row model
+- `pathmanager/`: TTT reference trains, versions, journey locations, routes, paths, process steps, state machine
 - `infrastructure/`: operational points, sections of line, tag catalog, import logs
 - `customer/`, `business/`: supporting master/business data
+
+### REST API Layer (`api/`)
+
+- `api/pathmanager/`: REST endpoints for the Path Manager bounded context
+  - `PathManagerController`: CRUD for reference trains (submit, detail, list by year, update header, update journey location)
+  - `PathProcessController`: query available actions, execute process step, view process history
+  - `PathManagerDiffController`: diff between two train versions
+- All endpoints documented via Springdoc/OpenAPI at `/swagger-ui/index.html`
+
+### Path Manager Component Architecture
+
+The Path Manager simulates TTT (Train Timetable Transfer) communication between the Responsible Applicant (RA) and an Infrastructure Manager (IM) within a single Spring Boot application. The REST API acts as the boundary between order management (RA side) and path management (IM simulation).
+
+```mermaid
+graph TB
+    subgraph UI["UI Layer"]
+        PMV["PathManagerView<br/>(TreeGrid: Year > Train > Version > OP)"]
+        ODV["OrderDetailView<br/>(Send to PM button)"]
+    end
+
+    subgraph API["REST API Layer — /api/v1/pathmanager"]
+        PMC["PathManagerController<br/>(Train CRUD, 7 endpoints)"]
+        PPC["PathProcessController<br/>(State transitions, 3 endpoints)"]
+        PDC["PathManagerDiffController<br/>(Version diff, 1 endpoint)"]
+    end
+
+    subgraph Domain["Domain Layer — pathmanager/"]
+        PMS["PathManagerService<br/>(Train lifecycle operations)"]
+        PPE["PathProcessEngine<br/>(State machine + transitions)"]
+        DS["DiffService<br/>(Row-level comparison)"]
+        IG["IdentifierGenerator<br/>(TRID, ROID, PRID, PAID)"]
+    end
+
+    subgraph Data["Data Layer"]
+        DB["PostgreSQL<br/>pm_* tables (V9 migration)"]
+    end
+
+    ODV -->|"Send to PM"| PMC
+    PMV --> PMC
+    PMV --> PPC
+
+    PMC --> PMS
+    PMC --> IG
+    PPC --> PPE
+    PDC --> DS
+
+    PMS --> DB
+    PPE --> DB
+    DS --> DB
+
+    style API fill:#fff3e0
+    style Domain fill:#e1f5fe
+    style UI fill:#f3e5f5
+    style Data fill:#e8f5e9
+```
+
+#### PathProcessEngine — State Machine Pattern
+
+The `PathProcessEngine` implements a static transition table as an `EnumMap<PathProcessState, Set<PathAction>>`. For each state, only the explicitly listed actions are permitted. The engine:
+
+1. Loads the reference train and its current `PathProcessState`
+2. Validates that the requested `PathAction` is allowed for the current state
+3. Resolves the target state via a `switch` expression (`resolveTargetState()`)
+4. Creates an immutable `PmProcessStep` audit record with from/to states and optional comment
+5. For version-creating actions (`IM_DRAFT_OFFER`, `IM_FINAL_OFFER`, `IM_ALTERATION_OFFER`), clones the latest `PmTrainVersion` with all its `PmJourneyLocations`
+
+This pattern avoids external state machine libraries while keeping the transition logic auditable and testable. The complete state diagram is documented in [datenmodel.md](datenmodel.md#ttt-prozess-state-machine).
+
+#### API Endpoint Summary
+
+| # | Method | Path | Description |
+|---|---|---|---|
+| 1 | POST | `/api/v1/pathmanager/trains` | Submit a new reference train |
+| 2 | GET | `/api/v1/pathmanager/trains` | List trains (optional `?year=` filter) |
+| 3 | GET | `/api/v1/pathmanager/trains/{trainId}` | Get train detail |
+| 4 | PUT | `/api/v1/pathmanager/trains/{trainId}` | Update train header |
+| 5 | GET | `/api/v1/pathmanager/trains/{trainId}/versions` | List train versions |
+| 6 | GET | `/api/v1/pathmanager/trains/{trainId}/versions/{versionId}/locations` | Get journey locations |
+| 7 | PUT | `/api/v1/pathmanager/trains/{trainId}/versions/{versionId}/locations/{locationId}` | Update a journey location |
+| 8 | POST | `/api/v1/pathmanager/process/{referenceTrainId}/step` | Execute a state transition |
+| 9 | GET | `/api/v1/pathmanager/process/{referenceTrainId}/available-actions` | Query available actions |
+| 10 | GET | `/api/v1/pathmanager/process/{referenceTrainId}/history` | Get process history |
+| 11 | POST | `/api/v1/pathmanager/diff?referenceTrainId=` | Compute diff vs. order data |
 
 ### Infrastructure Layer (`infrastructure/`)
 
@@ -277,7 +374,7 @@ graph LR
 
 ## Database
 
-- PostgreSQL 16 with Flyway migrations `V1` to `V7`
+- PostgreSQL 16 with Flyway migrations `V1` to `V9`
 - Shared order-position table with typed behavior via `PositionType`
 - `timetable_archives` stores the detailed timetable rows as `jsonb`
 - `resource_needs.linked_fahrplan_id` provides the technical link from a `CAPACITY` need to an archived timetable

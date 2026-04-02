@@ -24,6 +24,11 @@ public class SecurityConfig extends VaadinWebSecurity {
 
     @Override
     protected void configure(HttpSecurity http) throws Exception {
+        // Allow REST API and Swagger UI without Vaadin session
+        http.authorizeHttpRequests(
+                auth ->
+                        auth.requestMatchers("/api/**", "/swagger-ui/**", "/v3/api-docs/**")
+                                .permitAll());
         super.configure(http);
         setOAuth2LoginPage(http, "/login");
     }

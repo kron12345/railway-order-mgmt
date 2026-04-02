@@ -23,3 +23,21 @@
 | Kommerzielle Zeit | Commercial Time | Orario Commerciale | Horaire Commercial | Published timetable time (PLA/PLD) as shown in public timetables, may differ from operational time |
 | TimingQualifierCode | TimingQualifierCode | TimingQualifierCode | TimingQualifierCode | TTT standard code qualifying a time value: ALA/ALD (exact), ELA/LLA/ELD/LLD (window), PLA/PLD (commercial) |
 | Zugaktivitaet | Train Activity (TrainActivityType) | Attività Treno | Activité du Train | TTT activity code describing the reason for a stop (e.g., 0001 = boarding, 0012 = loco change, 0040 = pass-through) |
+| Fahrplanmanager | Path Manager | Gestore Tracce | Gestionnaire de Sillons | Module managing the TTT path request lifecycle — simulates RA/IM communication for timetable path ordering |
+| Referenzzug | Reference Train | Treno di Riferimento | Train de Référence | Central aggregate in the Path Manager, identified by a TRID (Company + Core + Variant + Timetable Year), e.g. `SOB0-000042-01-2026` |
+| Trasse / Pfad | Path (PAID) | Traccia | Sillon | A path allocated by the Infrastructure Manager, identified by a PAID (Path Allocation Identifier) |
+| Trassenantrag | Path Request (PRID) | Richiesta di Traccia | Demande de Sillon | A formal request for a path, identified by a PRID (Path Request Identifier) |
+| Laufweg | Route (ROID) | Percorso | Itinéraire | Ordered sequence of operational points defining the geographical route, identified by a ROID (Route Identifier) |
+| Zugversion | Train Version | Versione del Treno | Version du Train | Immutable snapshot of a train's data (header + journey locations) at a specific point in the path lifecycle. Types: INITIAL, MODIFICATION, ALTERATION, CANCELLATION |
+| Prozessschritt | Process Step | Passo di Processo | Étape de Processus | Immutable audit record of a single state transition in the TTT lifecycle, recording action, from-state, to-state, comment, and timestamp |
+| State Machine (TTT) | State Machine (TTT) | Macchina a Stati (TTT) | Machine à États (TTT) | The PathProcessEngine implements a static transition table governing the lifecycle of a path request from NEW through BOOKED to terminal states (CANCELED, WITHDRAWN, NO_ALTERNATIVE) |
+| RA (Verantwortlicher Antragsteller) | RA (Responsible Applicant) | RA (Richiedente Responsabile) | RA (Demandeur Responsable) | The railway undertaking or entity requesting a train path from the Infrastructure Manager |
+| IM (Infrastrukturbetreiber / Planungs-IM) | IM (Infrastructure Manager / Planning IM) | IM (Gestore dell'Infrastruttura) | IM (Gestionnaire d'Infrastructure) | The entity managing railway infrastructure and allocating paths — in the simulation, IM actions are triggered manually by the user |
+| Vorangebot | Draft Offer | Offerta Preliminare | Offre Préliminaire | A preliminary path offer from the IM that may differ from the original request — creates a new train version for comparison |
+| Endgueltiges Angebot | Final Offer | Offerta Definitiva | Offre Finale | A binding path offer from the IM that can be accepted to book the path — creates a new train version |
+| Gebucht | Booked | Prenotato | Réservé | The path is confirmed and entered into the timetable — the train can now run on the allocated path |
+| Fahrplanjahr | Timetable Year | Anno di Orario | Année Horaire | The railway timetable period, typically running from mid-December to mid-December of the following year (e.g., 2025-12-14 to 2026-12-12 for timetable year 2026) |
+| TRID | TRID (Train Request ID) | TRID | TRID | Composite identifier for a reference train: Company (4 chars) + Core (20 chars) + Variant (2 chars) + Timetable Year |
+| PAID | PAID (Path Allocation ID) | PAID | PAID | Composite identifier for an allocated path, structured like TRID |
+| PRID | PRID (Path Request ID) | PRID | PRID | Composite identifier for a path request, structured like TRID |
+| ROID | ROID (Route ID) | ROID | ROID | Composite identifier for a route, structured like TRID |
