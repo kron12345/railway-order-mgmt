@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import jakarta.annotation.security.PermitAll;
+import jakarta.annotation.security.RolesAllowed;
 
 import org.springframework.data.domain.Sort;
 
@@ -57,14 +57,16 @@ import com.ordermgmt.railway.domain.timetable.service.TimetableArchiveService;
 import com.ordermgmt.railway.domain.timetable.service.TimetableEditingService;
 import com.ordermgmt.railway.domain.timetable.service.TimetableRoutingService;
 import com.ordermgmt.railway.ui.component.ValidityCalendar;
+import com.ordermgmt.railway.ui.component.timetable.TimetableDataLoader;
 import com.ordermgmt.railway.ui.component.timetable.TimetableRouteStep;
 import com.ordermgmt.railway.ui.component.timetable.TimetableTableStep;
+import com.ordermgmt.railway.ui.component.timetable.TimetableTagHelper;
 import com.ordermgmt.railway.ui.layout.MainLayout;
 
 /** Full-screen two-step builder for timetable order positions. */
 @Route(value = "orders/:orderId/timetable-builder", layout = MainLayout.class)
 @PageTitle("Timetable Builder")
-@PermitAll
+@RolesAllowed({"ADMIN", "DISPATCHER"})
 public class TimetableBuilderView extends VerticalLayout implements BeforeEnterObserver {
 
     private final OrderService orderService;

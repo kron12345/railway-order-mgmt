@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
 
-import jakarta.annotation.security.PermitAll;
+import jakarta.annotation.security.RolesAllowed;
 
 import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.html.Div;
@@ -39,7 +39,7 @@ import com.ordermgmt.railway.ui.layout.MainLayout;
 /** Main view for the Path Manager module with tree hierarchy and detail panels. */
 @Route(value = "pathmanager", layout = MainLayout.class)
 @PageTitle("Path Manager")
-@PermitAll
+@RolesAllowed({"ADMIN", "DISPATCHER"})
 public class PathManagerView extends VerticalLayout {
 
     private final PmTimetableYearRepository timetableYearRepository;

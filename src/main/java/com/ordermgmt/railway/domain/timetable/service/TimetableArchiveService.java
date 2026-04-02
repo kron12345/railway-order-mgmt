@@ -131,6 +131,18 @@ public class TimetableArchiveService {
             List<LocalDate> validityDates,
             List<TimetableRowData> rows,
             String operationalTrainNumber) {
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException("Position name is required");
+        }
+        if (name.length() > 255) {
+            throw new IllegalArgumentException("Position name too long (max 255)");
+        }
+        if (comment != null && comment.length() > 2000) {
+            throw new IllegalArgumentException("Comment too long (max 2000)");
+        }
+        if (operationalTrainNumber != null && operationalTrainNumber.length() > 20) {
+            throw new IllegalArgumentException("OTN too long (max 20)");
+        }
         if (rows == null || rows.isEmpty()) {
             throw new IllegalArgumentException("Timetable rows are required.");
         }

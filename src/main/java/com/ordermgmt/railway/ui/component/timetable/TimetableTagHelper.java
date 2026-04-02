@@ -1,4 +1,4 @@
-package com.ordermgmt.railway.ui.view.order;
+package com.ordermgmt.railway.ui.component.timetable;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -16,14 +16,14 @@ import com.ordermgmt.railway.domain.infrastructure.model.PredefinedTag;
  * Tag selection and matching logic for the timetable builder. Extracted from {@link
  * TimetableBuilderView} to keep file sizes manageable.
  */
-class TimetableTagHelper {
+public class TimetableTagHelper {
 
     private final CheckboxGroup<PredefinedTag> tagSelector;
     private final List<PredefinedTag> availableTags;
     private final LinkedHashSet<String> unmatchedTags;
     private final Component translationSource;
 
-    TimetableTagHelper(
+    public TimetableTagHelper(
             CheckboxGroup<PredefinedTag> tagSelector,
             List<PredefinedTag> availableTags,
             LinkedHashSet<String> unmatchedTags,
@@ -34,7 +34,7 @@ class TimetableTagHelper {
         this.translationSource = translationSource;
     }
 
-    void readTags(String stored) {
+    public void readTags(String stored) {
         Map<String, PredefinedTag> byName = new LinkedHashMap<>();
         availableTags.forEach(t -> byName.put(normalizeTagName(t.getName()), t));
         unmatchedTags.clear();
@@ -51,7 +51,7 @@ class TimetableTagHelper {
         updateTagHelper();
     }
 
-    String joinSelectedTags() {
+    public String joinSelectedTags() {
         LinkedHashSet<String> vals = new LinkedHashSet<>();
         for (PredefinedTag tag : availableTags) {
             if (tagSelector.getValue().contains(tag)) {
@@ -62,7 +62,7 @@ class TimetableTagHelper {
         return vals.isEmpty() ? null : String.join(", ", vals);
     }
 
-    void updateTagHelper() {
+    public void updateTagHelper() {
         String helper = t("position.tags.help");
         if (!unmatchedTags.isEmpty()) {
             helper += " " + t("position.tags.legacy", String.join(", ", unmatchedTags));
@@ -70,7 +70,7 @@ class TimetableTagHelper {
         tagSelector.setHelperText(helper);
     }
 
-    String tagLabel(PredefinedTag tag) {
+    public String tagLabel(PredefinedTag tag) {
         return "[" + tagCategoryLabel(tag.getCategory()) + "] " + tag.getName();
     }
 

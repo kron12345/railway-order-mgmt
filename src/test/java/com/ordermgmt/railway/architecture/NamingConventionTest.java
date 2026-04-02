@@ -27,6 +27,8 @@ class NamingConventionTest {
                     .resideInAPackage("..domain..service..")
                     .and()
                     .areNotInterfaces()
+                    .and()
+                    .areTopLevelClasses()
                     .should()
                     .beAnnotatedWith(Service.class);
 

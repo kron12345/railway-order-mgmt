@@ -1,4 +1,4 @@
-package com.ordermgmt.railway.ui.view.order;
+package com.ordermgmt.railway.ui.component.timetable;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -20,21 +20,19 @@ import com.ordermgmt.railway.domain.timetable.model.TimetableRowData;
 import com.ordermgmt.railway.domain.timetable.service.TimetableArchiveService;
 import com.ordermgmt.railway.domain.timetable.service.TimetableRoutingService;
 import com.ordermgmt.railway.ui.component.ValidityCalendar;
-import com.ordermgmt.railway.ui.component.timetable.TimetableRouteStep;
-import com.ordermgmt.railway.ui.component.timetable.TimetableTableStep;
 
 /**
  * Loads existing position data into the timetable builder. Extracted from {@link
  * TimetableBuilderView} to keep file sizes manageable.
  */
-class TimetableDataLoader {
+public class TimetableDataLoader {
 
     private final TimetableArchiveService archiveService;
     private final TimetableRoutingService routingService;
     private final Map<String, OperationalPoint> operationalPointsByUopid;
     private final Component translationSource;
 
-    TimetableDataLoader(
+    public TimetableDataLoader(
             TimetableArchiveService archiveService,
             TimetableRoutingService routingService,
             Map<String, OperationalPoint> operationalPointsByUopid,
@@ -46,7 +44,7 @@ class TimetableDataLoader {
     }
 
     /** Result of loading existing data. */
-    record LoadResult(
+    public record LoadResult(
             ValidityCalendar calendar,
             TimetableRouteResult route,
             List<TimetableRowData> rows,
@@ -57,7 +55,7 @@ class TimetableDataLoader {
      *
      * @return the loaded data, or a result with empty rows and no switch if nothing to load
      */
-    LoadResult load(
+    public LoadResult load(
             Order order,
             OrderPosition existingPosition,
             TextField positionName,

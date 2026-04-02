@@ -6,6 +6,7 @@ import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -46,6 +47,7 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/api/v1/pathmanager")
 @Tag(name = "Path Manager")
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class PathManagerController {
 
     private final PathManagerService pathManagerService;
@@ -58,6 +60,7 @@ public class PathManagerController {
 
     @PostMapping("/trains")
     @ResponseStatus(HttpStatus.CREATED)
+    @Transactional
     @Operation(summary = "Submit a new train from order management")
     @ApiResponse(responseCode = "201", description = "Train created successfully")
     public TrainDetailDto submitTrain(@RequestBody TrainSubmitRequest request) {
@@ -91,9 +94,7 @@ public class PathManagerController {
     @ApiResponse(responseCode = "200", description = "List of train versions")
     public List<TrainVersionDto> listVersions(@PathVariable UUID trainId) {
         pathManagerService.findById(trainId); // validate existence
-        return trainVersionRepository
-                .findByReferenceTrainIdOrderByVersionNumberDesc(trainId)
-                .stream()
+        return trainVersionRepository.findWithLocationsByReferenceTrainId(trainId).stream()
                 .map(PathManagerDtoMapper::toVersion)
                 .toList();
     }
@@ -110,6 +111,7 @@ public class PathManagerController {
     }
 
     @PutMapping("/trains/{trainId}")
+    @Transactional
     @Operation(summary = "Update train header fields")
     @ApiResponse(responseCode = "200", description = "Train updated")
     @ApiResponse(responseCode = "404", description = "Train not found")
@@ -128,6 +130,7 @@ public class PathManagerController {
     }
 
     @PutMapping("/trains/{trainId}/versions/{versionId}/locations/{locationId}")
+    @Transactional
     @Operation(summary = "Update a single journey location")
     @ApiResponse(responseCode = "200", description = "Location updated")
     @ApiResponse(responseCode = "404", description = "Location not found")
@@ -247,8 +250,7 @@ public class PathManagerController {
 
     private TrainDetailDto loadTrainDetail(UUID trainId) {
         PmReferenceTrain train = pathManagerService.findById(trainId);
-        var versions =
-                trainVersionRepository.findByReferenceTrainIdOrderByVersionNumberDesc(trainId);
+        var versions = trainVersionRepository.findWithLocationsByReferenceTrainId(trainId);
         var steps = processStepRepository.findByReferenceTrainIdOrderByCreatedAtDesc(trainId);
         return PathManagerDtoMapper.toDetail(train, versions, steps);
     }

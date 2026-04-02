@@ -38,7 +38,7 @@ import com.ordermgmt.railway.ui.layout.MainLayout;
 /** Handles creation, editing, and deletion for a single order. */
 @Route(value = "orders/:orderId", layout = MainLayout.class)
 @PageTitle("Order Detail")
-@PermitAll
+@PermitAll // Read access is OK for all authenticated users; mutations are guarded in service layer
 public class OrderDetailView extends VerticalLayout implements BeforeEnterObserver {
 
     private final OrderService orderService;

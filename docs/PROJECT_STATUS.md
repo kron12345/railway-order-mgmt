@@ -4,7 +4,9 @@
 
 ## Letzte Aktualisierung
 
-**2026-03-31** — Timetable Builder UX: 3 Fixes umgesetzt. (1) Route berechnen bleibt auf Step 1, zeigt Erfolgs-Notification und gruenen Button; "Next" wechselt zu Step 2 wenn Route existiert. (2) Interaktive Karte mit OP-Hintergrund-Markern: alle Betriebspunkte als kleine graue Kreise auf der Karte, Klick fuellt Von/Nach/Via-Felder sequentiell. (3) Kompakter Kalender in Step 2: Gueltigkeit als zusammenklappbares Details-Akkordeon mit Scrollhoehe 200px, standardmaessig geoeffnet wenn keine Daten gewaehlt. i18n-Keys `timetable.route.calculated` und `timetable.route.calculated.summary` in DE/EN/IT/FR. E2E-Tests angepasst.
+**2026-03-31** — Path Manager E2E Test + REST API Bugfix + Wiki Screenshots + finale Dokumentation. (1) Neuer E2E-Test `path-manager.spec.ts` mit 8 Tests: Sidebar-Navigation, TreeGrid-Anzeige (FPJ 2026), Train-Submit via REST, TreeGrid-Expansion, Available-Actions-Pruefung, SEND_REQUEST-Transition, API-List/Detail-Endpoints, Cleanup-Verifikation. (2) REST API Bugfix: `LazyInitializationException` in `PathManagerController` behoben durch `@Transactional(readOnly = true)` auf Klasse + `@EntityGraph` fuer Eager-Loading der JourneyLocations in `PmTrainVersionRepository`. (3) Wiki-Screenshots aktualisiert: `path-manager-view.png`, `path-manager-tree-expanded.png`, alle Timetable-Screenshots aus frischem Comprehensive-Test-Run. (4) Teststand: 49 E2E + 45 Unit + 31 ArchUnit = 125 Tests gesamt.
+
+Davor: Timetable Builder UX: 3 Fixes umgesetzt. (1) Route berechnen bleibt auf Step 1, zeigt Erfolgs-Notification und gruenen Button; "Next" wechselt zu Step 2 wenn Route existiert. (2) Interaktive Karte mit OP-Hintergrund-Markern: alle Betriebspunkte als kleine graue Kreise auf der Karte, Klick fuellt Von/Nach/Via-Felder sequentiell. (3) Kompakter Kalender in Step 2: Gueltigkeit als zusammenklappbares Details-Akkordeon mit Scrollhoehe 200px, standardmaessig geoeffnet wenn keine Daten gewaehlt. i18n-Keys `timetable.route.calculated` und `timetable.route.calculated.summary` in DE/EN/IT/FR. E2E-Tests angepasst.
 
 Davor: Path Manager Dokumentation umfassend erweitert: datenmodel.md mit ER-Diagramm, detaillierten Feldtabellen (alle 8 Entities), vollstaendiger TTT State Machine (Mermaid stateDiagram), Zustandsbeschreibungen, Aktionen/Rollen-Tabelle, Integrationsmodell (Datenfluss-Diagramm) und REST-API-Endpunkt-Tabelle. ARCHITECTURE.md mit Komponenten-Diagramm, PathProcessEngine-Pattern-Beschreibung und API-Summary. Wiki-Seite docs/wiki/path-manager.md (User Guide mit TreeGrid-Erklaerung, Submissions-Anleitung, 3 Beispielflows, Zugkopf/OP-Bearbeitung, Diff-Feature, API-Referenz). ADR-011 (Path Manager Architektur: REST API als Integrations-Boundary, Shared DB mit pm_-Prefix, statische State Machine, Simulationsansatz, Alternativen: Microservice/Direct Injection/Message Queue). GLOSSARY.md um 16 Path-Manager-Begriffe erweitert (Fahrplanmanager, Referenzzug, Trasse, Trassenantrag, Laufweg, Zugversion, Prozessschritt, State Machine, RA, IM, Draft/Final Offer, Booked, Fahrplanjahr, TRID, PAID, PRID, ROID).
 
@@ -47,7 +49,7 @@ Davor: Fahrplanbuilder Phase 2-4: Timetable-Editing Features implementiert. Time
 | **i18n** | Aktiv | DE/EN/IT/FR, inkl. Builder, Settings, Order-Views |
 | **Push / Live Updates** | Skeleton | `BroadcastService` und `@Push` vorhanden |
 | **Audit Trail** | Aktiv | Hibernate Envers fuer Orders, Positionen, Ressourcen, Archive |
-| **Datenbank** | V1-V8 Migrationen | Orders, Positionen, Ressourcen, Bestellungen, Infrastruktur, Schlagwoerter, Positionskommentare, Fahrplanarchiv, OTN |
+| **Datenbank** | V1-V10 Migrationen | Orders, Positionen, Ressourcen, Bestellungen, Infrastruktur, Schlagwoerter, Positionskommentare, Fahrplanarchiv, OTN, Path Manager (8 `pm_*` Tabellen + Audit) |
 | **Theme** | Aktiv | Profile-basiertes Theme mit sofortigem Umschalten; Fallback auf Default abgesichert |
 | **Accessibility** | Aktiv | ARIA-Labels, Tastaturbedienbarkeit, lesbare Statuschips, Builder und Liste testbar |
 | **Laufzeit** | Lokal verifiziert | Anwendung laeuft ohne Docker auf `*:8085` |
@@ -62,7 +64,7 @@ Davor: Fahrplanbuilder Phase 2-4: Timetable-Editing Features implementiert. Time
 | **SpotBugs** | Aktiv | Statische Analyse |
 | **OWASP Dep Check** | Aktiv | CVE-Scanning bei PRs |
 | **Gitleaks** | Aktiv | Secret Scanning |
-| **Playwright** | Aktiv | E2E fuer Login-/Order-/Builder-Pfade, inkl. Fahrplanbuilder-Regression |
+| **Playwright** | Aktiv | 49 E2E-Tests: Login, Order CRUD/Lifecycle, Timetable Builder/Editing/Comprehensive, Path Manager |
 
 ## UI
 
@@ -113,6 +115,7 @@ Davor: Fahrplanbuilder Phase 2-4: Timetable-Editing Features implementiert. Time
 | V7 | `V7__timetable_archive_and_border_connectors.sql` | `timetable_archives`, Audit, FK von `resource_needs`, 0m-Grenzverbinder fuer CH/DE-Routing |
 | V8 | `V8__timetable_otn.sql` | `operational_train_number` (VARCHAR 20, nullable) auf `timetable_archives` und `order_positions` |
 | V9 | `V9__path_manager_tables.sql` | `pm_timetable_years`, `pm_reference_trains`, `pm_routes`, `pm_path_requests`, `pm_paths`, `pm_train_versions`, `pm_journey_locations`, `pm_process_steps` + Audit-Tabellen + FK `pm_reference_train_id` auf `order_positions` + Seed FPJ 2026 |
+| V10 | `V10__fix_pm_audit_columns.sql` | Envers Audit-Spalten `revision_id` -> `rev`, `revision_type` -> `revtype` in allen `pm_*_aud` Tabellen |
 
 ## ERA RINF Infrastrukturdaten
 
@@ -137,7 +140,6 @@ Hinweise:
 - [ ] TTT-Export / Versand fuer `tttRelevant` Fahrplanzeilen
 - [ ] Lazy Loading / Pagination bei grossen Datenmengen
 - [ ] Erweiterte E2E-Tests fuer Fehlerszenarien und Imports
-- [ ] E2E-Test fuer Timetable Archive View im Order-Lifecycle
 
 ## Bekannte Issues
 
@@ -162,6 +164,7 @@ Hinweise:
 
 | Datum | Aenderung |
 |---|---|
+| 2026-03-31 | Path Manager E2E-Test (8 Tests), REST API Bugfix (LazyInitializationException via @Transactional + @EntityGraph), Wiki-Screenshots aktualisiert (PM + Timetable), finale Dokumentation |
 | 2026-03-31 | Timetable Builder UX: Route ohne Step-Wechsel (Erfolgs-Notification + gruener Button), interaktive Karte mit OP-Markern (Klick fuellt Formularfelder), kompakter Kalender als Details-Akkordeon in Step 2. i18n DE/EN/IT/FR. E2E-Tests angepasst |
 | 2026-03-31 | Path Manager Doku erweitert: datenmodel.md (ER-Diagramm, Feldtabellen, State Machine, Integration), ARCHITECTURE.md (Komponenten, API), wiki/path-manager.md (User Guide), ADR-011, GLOSSARY.md (+16 Begriffe) |
 | 2026-03-31 | Path Manager Integration: Send-to-PM Button in OrderPositionRow, OrderPositionPanel Handler mit PathManagerService/TimetableArchiveService, OrderDetailView DI. i18n DE/EN/IT/FR. Doku: datenmodel.md, timetable-builder.md, ARCHITECTURE.md |
