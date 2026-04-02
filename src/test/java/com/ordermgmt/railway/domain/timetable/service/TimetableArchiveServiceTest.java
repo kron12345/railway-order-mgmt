@@ -82,7 +82,8 @@ class TimetableArchiveServiceTest {
                         "Trasse, Test",
                         "Archivtest",
                         List.of(LocalDate.of(2026, 4, 2), LocalDate.of(2026, 4, 3)),
-                        List.of(origin, destination));
+                        List.of(origin, destination),
+                        "95345");
 
         assertThat(saved.getId()).isNotNull();
         assertThat(saved.getType()).isEqualTo(PositionType.FAHRPLAN);
