@@ -2,13 +2,16 @@ package com.ordermgmt.railway.ui.component.timetable;
 
 import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.activityLabel;
 import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.arrivalConstraintLabel;
+import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.createCard;
 import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.departureConstraintLabel;
 import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.distanceLabel;
+import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.helperSpan;
 import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.nvl;
 import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.parseTime;
 import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.roleLabel;
 import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.timeOrDash;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayList;
@@ -21,8 +24,6 @@ import com.vaadin.flow.component.details.Details;
 import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.grid.GridVariant;
 import com.vaadin.flow.component.html.Div;
-import com.vaadin.flow.component.html.H3;
-import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.notification.Notification.Position;
@@ -89,7 +90,7 @@ public class TimetableTableStep extends Div {
         Div calendarWrapper = new Div(validityCalendar);
         calendarWrapper.getStyle().set("max-height", "200px").set("overflow-y", "auto");
         validityDetails.add(
-                helperText(t("position.validity.help", orderFrom, orderTo)), calendarWrapper);
+                helperSpan(t("position.validity.help", orderFrom, orderTo)), calendarWrapper);
         validityDetails.setWidthFull();
         validityDetails
                 .getStyle()
@@ -112,7 +113,7 @@ public class TimetableTableStep extends Div {
                 .set("min-height", "0");
         rowGrid.getStyle().set("flex", "1").set("min-height", "0");
 
-        Div gridCard = createCard(t("timetable.table.title"), helperText(routeSummaryText));
+        Div gridCard = createCard(t("timetable.table.title"), helperSpan(routeSummaryText));
         gridCard.add(gridAndForm);
         gridCard.getStyle()
                 .set("display", "flex")
@@ -169,9 +170,17 @@ public class TimetableTableStep extends Div {
         rowGrid.setWidthFull();
         rowGrid.setSelectionMode(Grid.SelectionMode.SINGLE);
 
-        // Strike-through styling for soft-deleted rows
+        // Strike-through styling for soft-deleted rows, warning for unrealistic speed
         rowGrid.setClassNameGenerator(
-                row -> Boolean.TRUE.equals(row.getDeleted()) ? "row-deleted" : null);
+                row -> {
+                    if (Boolean.TRUE.equals(row.getDeleted())) {
+                        return "row-deleted";
+                    }
+                    if (hasUnrealisticSpeed(row)) {
+                        return "row-warning";
+                    }
+                    return null;
+                });
 
         rowGrid.addColumn(TimetableRowData::getSequence)
                 .setHeader("#")
@@ -336,38 +345,45 @@ public class TimetableTableStep extends Div {
         }
     }
 
-    // ── UI helpers ────────────────────────────────────────────────────
+    // ── Speed plausibility ─────────────────────────────────────────────
 
-    private Div createCard(String title, Component... content) {
-        Div card = new Div();
-        card.setWidthFull();
-        card.getStyle()
-                .set("background", "var(--rom-bg-card)")
-                .set("border", "1px solid var(--rom-border)")
-                .set("border-radius", "6px")
-                .set("padding", "14px 16px")
-                .set("box-sizing", "border-box");
-        if (title != null && !title.isBlank()) {
-            H3 heading = new H3(title);
-            heading.getStyle()
-                    .set("margin", "0 0 12px 0")
-                    .set("font-size", "var(--lumo-font-size-l)")
-                    .set("color", "var(--rom-text-primary)");
-            card.add(heading);
+    private static final double MAX_SPEED_KMH = 200.0;
+
+    private boolean hasUnrealisticSpeed(TimetableRowData row) {
+        if (row.getSegmentLengthMeters() == null || row.getSegmentLengthMeters() <= 0) {
+            return false;
         }
-        card.add(content);
-        return card;
+        LocalTime arr = parseTime(row.getEstimatedArrival());
+        LocalTime dep = parseTime(row.getEstimatedDeparture());
+        // We need the previous row's departure; approximate from arrival vs departure
+        // For a single row, arrival marks when the train arrives at this point.
+        // Use estimated arrival and the previous point's estimated departure.
+        // Since we only have this row, use the row's own data:
+        // segment was covered between previous departure and this arrival.
+        // We can only check when both arrival and the row index > 0.
+        if (arr == null) {
+            return false;
+        }
+        int idx = timetableRows.indexOf(row);
+        if (idx <= 0) {
+            return false;
+        }
+        TimetableRowData prev = timetableRows.get(idx - 1);
+        LocalTime prevDep = parseTime(prev.getEstimatedDeparture());
+        if (prevDep == null) {
+            return false;
+        }
+        long seconds = Duration.between(prevDep, arr).getSeconds();
+        if (seconds <= 0) {
+            return false;
+        }
+        double km = row.getSegmentLengthMeters() / 1000.0;
+        double hours = seconds / 3600.0;
+        double impliedSpeed = km / hours;
+        return impliedSpeed > MAX_SPEED_KMH;
     }
 
-    private Span helperText(String text) {
-        Span s = new Span(text);
-        s.getStyle()
-                .set("display", "block")
-                .set("font-size", "11px")
-                .set("color", "var(--rom-text-muted)")
-                .set("margin-bottom", "10px");
-        return s;
-    }
+    // ── UI helpers ────────────────────────────────────────────────────
 
     private boolean isOrigin(TimetableRowData row) {
         return row != null && !timetableRows.isEmpty() && row == timetableRows.getFirst();

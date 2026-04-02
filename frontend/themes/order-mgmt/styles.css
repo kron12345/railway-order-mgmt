@@ -176,6 +176,11 @@ vaadin-grid .row-deleted {
     opacity: 0.5;
 }
 
+/* === Travel-time warning: unrealistic speed === */
+vaadin-grid .row-warning {
+    border-left: 3px solid var(--rom-status-warning) !important;
+}
+
 /* === Vaadin Details — compact accordion === */
 vaadin-details {
     --vaadin-details-summary-padding: 6px 12px;

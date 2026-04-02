@@ -7,7 +7,11 @@ import java.util.Locale;
 import java.util.Optional;
 
 import com.vaadin.flow.component.Component;
+import com.vaadin.flow.component.html.Div;
+import com.vaadin.flow.component.html.H3;
+import com.vaadin.flow.component.html.Span;
 
+import com.ordermgmt.railway.domain.infrastructure.model.OperationalPoint;
 import com.ordermgmt.railway.domain.timetable.model.RoutePointRole;
 import com.ordermgmt.railway.domain.timetable.model.TimeConstraintMode;
 import com.ordermgmt.railway.domain.timetable.model.TimetableActivityOption;
@@ -149,6 +153,46 @@ public final class TimetableFormatUtils {
 
     public static String nvl(String value) {
         return value != null ? value : "—";
+    }
+
+    // ── shared UI component builders ───────────────────────────────────
+
+    /** Builds a styled card Div with optional title and child content. */
+    public static Div createCard(String title, Component... content) {
+        Div card = new Div();
+        card.setWidthFull();
+        card.getStyle()
+                .set("background", "var(--rom-bg-card)")
+                .set("border", "1px solid var(--rom-border)")
+                .set("border-radius", "6px")
+                .set("padding", "14px 16px")
+                .set("box-sizing", "border-box");
+        if (title != null && !title.isBlank()) {
+            H3 heading = new H3(title);
+            heading.getStyle()
+                    .set("margin", "0 0 12px 0")
+                    .set("font-size", "var(--lumo-font-size-l)")
+                    .set("color", "var(--rom-text-primary)");
+            card.add(heading);
+        }
+        card.add(content);
+        return card;
+    }
+
+    /** Builds a small, muted helper-text span. */
+    public static Span helperSpan(String text) {
+        Span helper = new Span(text);
+        helper.getStyle()
+                .set("display", "block")
+                .set("font-size", "11px")
+                .set("color", "var(--rom-text-muted)")
+                .set("margin-bottom", "10px");
+        return helper;
+    }
+
+    /** Standard label for an operational point combo box. */
+    public static String opLabel(OperationalPoint point) {
+        return point.getName() + " (" + point.getUopid() + ")";
     }
 
     /**

@@ -8,9 +8,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 
 import jakarta.annotation.security.PermitAll;
@@ -18,6 +16,8 @@ import jakarta.annotation.security.PermitAll;
 import org.springframework.data.domain.Sort;
 
 import com.vaadin.flow.component.Component;
+import com.vaadin.flow.component.Key;
+import com.vaadin.flow.component.KeyModifier;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
@@ -49,9 +49,7 @@ import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.order.model.PositionType;
 import com.ordermgmt.railway.domain.order.service.OrderService;
-import com.ordermgmt.railway.domain.timetable.model.RoutePointRole;
 import com.ordermgmt.railway.domain.timetable.model.TimetableActivityOption;
-import com.ordermgmt.railway.domain.timetable.model.TimetableArchive;
 import com.ordermgmt.railway.domain.timetable.model.TimetableRouteResult;
 import com.ordermgmt.railway.domain.timetable.model.TimetableRowData;
 import com.ordermgmt.railway.domain.timetable.service.IntervalTimetableService;
@@ -86,8 +84,12 @@ public class TimetableBuilderView extends VerticalLayout implements BeforeEnterO
     private final Button stepBackButton = new Button();
     private final Button stepNextButton = new Button();
     private final Button saveButton = new Button();
+    private final Span statusOtn = new Span();
+    private final Span statusRoute = new Span();
+    private final Span statusState = new Span();
     private final LinkedHashSet<String> unmatchedTags = new LinkedHashSet<>();
     private final List<TimetableRowData> timetableRows = new ArrayList<>();
+    private boolean routeDirty = false;
     private Details metadataDetails;
     private ValidityCalendar validityCalendar;
     private Order order;
@@ -204,12 +206,27 @@ public class TimetableBuilderView extends VerticalLayout implements BeforeEnterO
                     timetableRows.clear();
                     timetableRows.addAll(result.rows());
                     tableStep.setRows(new ArrayList<>(result.rows()));
+                    // Auto-fill position name from route endpoints
+                    if (positionName.getValue().isBlank() && !result.rows().isEmpty()) {
+                        positionName.setValue(
+                                result.rows().getFirst().getName()
+                                        + " \u2192 "
+                                        + result.rows().getLast().getName());
+                    }
+                    routeDirty = false;
                     notify(
                             t(
                                     "timetable.route.calculated.summary",
                                     result.rows().size(),
                                     distanceLabel(result.route().totalLengthMeters())),
                             NotificationVariant.LUMO_SUCCESS);
+                    updateStepControls();
+                    refreshStatusBar();
+                });
+        routeStep.setOnRouteDirty(
+                () -> {
+                    routeDirty = true;
+                    refreshStatusBar();
                     updateStepControls();
                 });
         // Wire interval timetable generation
@@ -258,7 +275,7 @@ public class TimetableBuilderView extends VerticalLayout implements BeforeEnterO
         configureStepActions();
         contentSlot.setWidthFull();
         contentSlot.getStyle().set("flex", "1").set("min-height", "0");
-        add(createHeader(), createMetadataCard(), contentSlot);
+        add(createHeader(), createStatusBar(), createMetadataCard(), contentSlot);
         expand(contentSlot);
         switchStep(Step.ROUTE);
     }
@@ -375,6 +392,50 @@ public class TimetableBuilderView extends VerticalLayout implements BeforeEnterO
         saveButton.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_PRIMARY);
         saveButton.getStyle().set("background", "var(--rom-status-info)").set("color", "white");
         saveButton.addClickListener(e -> savePosition());
+        saveButton.addClickShortcut(Key.KEY_S, KeyModifier.CONTROL);
+    }
+
+    private Component createStatusBar() {
+        Div bar = new Div(statusOtn, statusRoute, statusState);
+        bar.getStyle()
+                .set("display", "flex")
+                .set("align-items", "center")
+                .set("gap", "12px")
+                .set("background", "var(--rom-bg-secondary)")
+                .set("border-bottom", "1px solid var(--rom-border)")
+                .set("padding", "4px 16px")
+                .set("font-size", "11px")
+                .set("font-family", "'JetBrains Mono', monospace");
+        statusOtn.getStyle().set("color", "var(--rom-accent)").set("font-weight", "600");
+        statusRoute.getStyle().set("color", "var(--rom-text-secondary)");
+        statusState.getStyle().set("margin-left", "auto");
+        return bar;
+    }
+
+    private void refreshStatusBar() {
+        String otn = otnField.getValue();
+        statusOtn.setText(otn != null && !otn.isBlank() ? "OTN " + otn : "");
+
+        if (!timetableRows.isEmpty()) {
+            statusRoute.setText(
+                    timetableRows.getFirst().getName()
+                            + " \u2192 "
+                            + timetableRows.getLast().getName());
+        } else {
+            statusRoute.setText("");
+        }
+
+        boolean ready = !positionName.getValue().isBlank() && !timetableRows.isEmpty();
+        if (routeDirty) {
+            statusState.setText(t("timetable.status.routeDirty"));
+            statusState.getStyle().set("color", "var(--rom-status-warning)");
+        } else if (ready) {
+            statusState.setText("\u2713 " + t("timetable.status.ready"));
+            statusState.getStyle().set("color", "var(--rom-status-active)");
+        } else {
+            statusState.setText("\u26a0 " + t("timetable.status.incomplete"));
+            statusState.getStyle().set("color", "var(--rom-status-warning)");
+        }
     }
 
     private void switchStep(Step step) {
@@ -393,99 +454,40 @@ public class TimetableBuilderView extends VerticalLayout implements BeforeEnterO
                             routeSummaryText(timetableRows, currentRoute)));
         }
         updateStepControls();
+        refreshStatusBar();
     }
 
     private void loadExistingData() {
-        positionName.setValue(
-                existingPosition != null ? textOrBlank(existingPosition.getName()) : "");
-        commentField.setValue(
-                existingPosition != null ? textOrBlank(existingPosition.getComment()) : "");
-        readTags(existingPosition != null ? existingPosition.getTags() : null);
-        // Load OTN from archive if editing
-        if (existingPosition != null) {
-            timetableArchiveService
-                    .findArchive(existingPosition)
-                    .ifPresent(a -> otnField.setValue(textOrBlank(a.getOperationalTrainNumber())));
-        }
-        LocalDate min = order.getValidFrom() != null ? order.getValidFrom() : LocalDate.now();
-        LocalDate max = order.getValidTo() != null ? order.getValidTo() : min.plusMonths(3);
-        ValidityCalendar cal = new ValidityCalendar(min, max);
-        if (existingPosition != null) {
-            cal.setSelectedDates(
-                    timetableArchiveService.parseValidityDates(existingPosition.getValidity()));
-        }
-        this.validityCalendar = cal;
-        if (existingPosition == null) {
-            routeStep.getRouteSummary().setText(t("timetable.route.empty"));
-            routeStep.getRouteError().setText("");
-            return;
-        }
-        Optional<TimetableArchive> archive = timetableArchiveService.findArchive(existingPosition);
-        if (archive.isPresent()) {
-            List<TimetableRowData> rows = timetableArchiveService.readRows(archive.get());
+        TimetableDataLoader loader =
+                new TimetableDataLoader(
+                        timetableArchiveService,
+                        timetableRoutingService,
+                        operationalPointsByUopid,
+                        this);
+        TimetableDataLoader.LoadResult result =
+                loader.load(
+                        order,
+                        existingPosition,
+                        positionName,
+                        otnField,
+                        commentField,
+                        () ->
+                                readTags(
+                                        existingPosition != null
+                                                ? existingPosition.getTags()
+                                                : null),
+                        routeStep,
+                        tableStep,
+                        routeSummaryText(timetableRows, currentRoute));
+        this.validityCalendar = result.calendar();
+        if (!result.rows().isEmpty()) {
             timetableRows.clear();
-            timetableRows.addAll(rows);
-            tableStep.setRows(new ArrayList<>(rows));
-            currentRoute = timetableRoutingService.routeFromStoredRows(rows);
-            routeStep.setRoute(currentRoute);
-            prefillRouteInputsFromRows(rows);
-            routeStep.getRouteSummary().setText(routeSummaryText(rows, currentRoute));
-            routeStep.getRouteError().setText("");
+            timetableRows.addAll(result.rows());
+            currentRoute = result.route();
+        }
+        if (result.switchToTable()) {
             switchStep(Step.TABLE);
-            return;
         }
-        prefillLegacyRoute();
-    }
-
-    private void prefillRouteInputsFromRows(List<TimetableRowData> rows) {
-        if (rows.isEmpty()) {
-            return;
-        }
-        List<TimetableRouteStep.ViaData> vias = new ArrayList<>();
-        for (TimetableRowData row : rows) {
-            if (row.getRoutePointRole() == RoutePointRole.VIA) {
-                vias.add(
-                        new TimetableRouteStep.ViaData(
-                                operationalPointsByUopid.get(row.getUopid()),
-                                Boolean.TRUE.equals(row.getHalt()),
-                                row.getActivityCode()));
-            }
-        }
-        routeStep.prefillFrom(
-                operationalPointsByUopid.get(rows.getFirst().getUopid()),
-                operationalPointsByUopid.get(rows.getLast().getUopid()),
-                vias);
-    }
-
-    private void prefillLegacyRoute() {
-        if (existingPosition == null) {
-            return;
-        }
-        Optional<OperationalPoint> fromPt =
-                timetableRoutingService.resolveLegacyPoint(existingPosition.getFromLocation());
-        Optional<OperationalPoint> toPt =
-                timetableRoutingService.resolveLegacyPoint(existingPosition.getToLocation());
-        routeStep.prefillFrom(fromPt.orElse(null), toPt.orElse(null), null);
-        if (existingPosition.getStart() != null) {
-            routeStep.setDepartureAnchor(existingPosition.getStart().toLocalTime());
-        }
-        if (existingPosition.getEnd() != null && routeStep.getDepartureAnchor() == null) {
-            routeStep.setArrivalAnchor(existingPosition.getEnd().toLocalTime());
-        }
-        if (fromPt.isPresent() && toPt.isPresent()) {
-            List<TimetableRowData> rows =
-                    routeStep.calculateRoute(
-                            routeStep.getDepartureAnchor(), routeStep.getArrivalAnchor());
-            if (rows != null) {
-                timetableRows.clear();
-                timetableRows.addAll(rows);
-                tableStep.setRows(new ArrayList<>(rows));
-                currentRoute = routeStep.getCurrentRoute();
-            }
-            return;
-        }
-        routeStep.getRouteSummary().setText(t("timetable.route.empty"));
-        routeStep.getRouteError().setText(t("timetable.route.legacyUnresolved"));
     }
 
     private void savePosition() {
@@ -540,7 +542,9 @@ public class TimetableBuilderView extends VerticalLayout implements BeforeEnterO
         stepNextButton.setText(
                 currentStep == Step.ROUTE ? t("common.next") : t("timetable.step.route"));
         saveButton.setVisible(currentStep == Step.TABLE);
-        stepNextButton.setEnabled(currentStep == Step.ROUTE || !timetableRows.isEmpty());
+        boolean nextEnabled =
+                currentStep == Step.TABLE || (!timetableRows.isEmpty() && !routeDirty);
+        stepNextButton.setEnabled(nextEnabled);
     }
 
     private void styleStepBadge(Span badge, String label, boolean active, boolean enabled) {
@@ -561,73 +565,26 @@ public class TimetableBuilderView extends VerticalLayout implements BeforeEnterO
                 .set("opacity", enabled ? "1" : "0.55");
     }
 
-    // ── Tag handling ───────────────────────────────────────────────────
+    // ── Tag handling (delegated to TimetableTagHelper) ─────────────────
 
     private void readTags(String stored) {
-        Map<String, PredefinedTag> byName = new LinkedHashMap<>();
-        availableTags.forEach(t -> byName.put(normalizeTagName(t.getName()), t));
-        unmatchedTags.clear();
-        LinkedHashSet<PredefinedTag> selected = new LinkedHashSet<>();
-        for (String token : splitTags(stored)) {
-            PredefinedTag match = byName.get(normalizeTagName(token));
-            if (match != null) {
-                selected.add(match);
-            } else {
-                unmatchedTags.add(token);
-            }
-        }
-        tagSelector.setValue(selected);
-        updateTagHelper();
+        tagHelper().readTags(stored);
     }
 
     private String joinSelectedTags() {
-        LinkedHashSet<String> vals = new LinkedHashSet<>();
-        for (PredefinedTag tag : availableTags) {
-            if (tagSelector.getValue().contains(tag)) {
-                vals.add(tag.getName());
-            }
-        }
-        vals.addAll(unmatchedTags);
-        return vals.isEmpty() ? null : String.join(", ", vals);
+        return tagHelper().joinSelectedTags();
     }
 
     private void updateTagHelper() {
-        String helper = t("position.tags.help");
-        if (!unmatchedTags.isEmpty()) {
-            helper += " " + t("position.tags.legacy", String.join(", ", unmatchedTags));
-        }
-        tagSelector.setHelperText(helper);
+        tagHelper().updateTagHelper();
     }
 
     private String tagLabel(PredefinedTag tag) {
-        return "[" + tagCategoryLabel(tag.getCategory()) + "] " + tag.getName();
+        return tagHelper().tagLabel(tag);
     }
 
-    private String tagCategoryLabel(String category) {
-        String n = category == null ? "general" : category.trim().toLowerCase(Locale.ROOT);
-        return switch (n) {
-            case "order" -> t("settings.tags.cat.order");
-            case "position" -> t("settings.tags.cat.position");
-            default -> t("settings.tags.cat.general");
-        };
-    }
-
-    private String normalizeTagName(String v) {
-        return v == null ? "" : v.trim().toLowerCase(Locale.ROOT);
-    }
-
-    private List<String> splitTags(String raw) {
-        List<String> result = new ArrayList<>();
-        if (raw == null || raw.isBlank()) {
-            return result;
-        }
-        for (String tok : raw.split(",")) {
-            String trimmed = tok.trim();
-            if (!trimmed.isBlank()) {
-                result.add(trimmed);
-            }
-        }
-        return result;
+    private TimetableTagHelper tagHelper() {
+        return new TimetableTagHelper(tagSelector, availableTags, unmatchedTags, this);
     }
 
     // ── Helpers ────────────────────────────────────────────────────────
@@ -642,10 +599,6 @@ public class TimetableBuilderView extends VerticalLayout implements BeforeEnterO
                 distanceLabel(route.totalLengthMeters()),
                 timeOrDash(rows.getFirst().getEstimatedDeparture()),
                 timeOrDash(rows.getLast().getEstimatedArrival()));
-    }
-
-    private String textOrBlank(String v) {
-        return v != null ? v : "";
     }
 
     private void notify(String msg, NotificationVariant variant) {

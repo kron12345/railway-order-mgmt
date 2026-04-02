@@ -1,5 +1,11 @@
 package com.ordermgmt.railway.ui.component.timetable;
 
+import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.createCard;
+import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.distanceLabel;
+import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.firstNonBlank;
+import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.helperSpan;
+import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.timeOrDash;
+
 import java.time.Duration;
 import java.time.LocalTime;
 import java.util.ArrayList;
@@ -9,13 +15,13 @@ import java.util.Optional;
 import java.util.function.Consumer;
 
 import com.vaadin.flow.component.Component;
+import com.vaadin.flow.component.Key;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.checkbox.Checkbox;
 import com.vaadin.flow.component.combobox.ComboBox;
 import com.vaadin.flow.component.formlayout.FormLayout;
 import com.vaadin.flow.component.html.Div;
-import com.vaadin.flow.component.html.H3;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.orderedlayout.FlexComponent;
@@ -59,6 +65,7 @@ public class TimetableRouteStep extends Div {
     private Button calcButton;
     private TimetableRouteResult currentRoute = new TimetableRouteResult(List.of(), 0D);
     private Consumer<RouteCalculationResult> onRouteCalculated;
+    private Runnable onRouteDirty;
 
     public TimetableRouteStep(
             List<OperationalPoint> availableOperationalPoints,
@@ -76,11 +83,17 @@ public class TimetableRouteStep extends Div {
         addViaBtn.addThemeVariants(ButtonVariant.LUMO_SMALL);
         addViaBtn.addClickListener(e -> addViaEditor(null, false, null));
 
+        Button reverseBtn = new Button(VaadinIcon.EXCHANGE.create());
+        reverseBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY_INLINE);
+        reverseBtn.getStyle().set("color", "var(--rom-text-secondary)").set("cursor", "pointer");
+        reverseBtn.getElement().setAttribute("title", t("timetable.route.reverse"));
+        reverseBtn.addClickListener(e -> reverseRoute());
+
         FormLayout routeForm = new FormLayout();
         routeForm.setWidthFull();
         routeForm.setResponsiveSteps(
                 new FormLayout.ResponsiveStep("0", 1), new FormLayout.ResponsiveStep("640px", 2));
-        routeForm.add(fromField, toField, departureAnchorField, arrivalAnchorField);
+        routeForm.add(fromField, reverseBtn, toField, departureAnchorField, arrivalAnchorField);
 
         Div viaHeader = new Div();
         viaHeader
@@ -100,10 +113,19 @@ public class TimetableRouteStep extends Div {
                 .set("background", "var(--rom-accent)")
                 .set("color", "var(--rom-bg-primary)");
         calcButton.addClickListener(e -> calculateRoute());
+        calcButton.addClickShortcut(Key.ENTER);
 
-        // Reset calc button appearance when form inputs change
-        fromField.addValueChangeListener(e -> resetCalcButtonAppearance());
-        toField.addValueChangeListener(e -> resetCalcButtonAppearance());
+        // Clear field-level validation on value change
+        fromField.addValueChangeListener(
+                e -> {
+                    fromField.setInvalid(false);
+                    resetCalcButtonAppearance();
+                });
+        toField.addValueChangeListener(
+                e -> {
+                    toField.setInvalid(false);
+                    resetCalcButtonAppearance();
+                });
         departureAnchorField.addValueChangeListener(e -> resetCalcButtonAppearance());
         arrivalAnchorField.addValueChangeListener(e -> resetCalcButtonAppearance());
 
@@ -115,7 +137,7 @@ public class TimetableRouteStep extends Div {
                 createCard(
                         t("timetable.route.title"),
                         routeForm,
-                        helperText(t("timetable.route.anchor.help")),
+                        helperSpan(t("timetable.route.anchor.help")),
                         viaHeader,
                         viaList,
                         routeSummary,
@@ -231,6 +253,37 @@ public class TimetableRouteStep extends Div {
         this.onRouteCalculated = callback;
     }
 
+    public void setOnRouteDirty(Runnable callback) {
+        this.onRouteDirty = callback;
+    }
+
+    private void reverseRoute() {
+        OperationalPoint from = fromField.getValue();
+        OperationalPoint to = toField.getValue();
+        fromField.setValue(to);
+        toField.setValue(from);
+        LocalTime dep = departureAnchorField.getValue();
+        LocalTime arr = arrivalAnchorField.getValue();
+        departureAnchorField.setValue(arr);
+        arrivalAnchorField.setValue(dep);
+        // Reverse via editors order
+        List<ViaData> reversedVias = new ArrayList<>();
+        for (int i = viaEditors.size() - 1; i >= 0; i--) {
+            ViaPointEditor ed = viaEditors.get(i);
+            reversedVias.add(
+                    new ViaData(
+                            ed.pointField.getValue(),
+                            Boolean.TRUE.equals(ed.haltField.getValue()),
+                            ed.activityField.getValue() != null
+                                    ? ed.activityField.getValue().code()
+                                    : null));
+        }
+        clearViaEditors();
+        for (ViaData via : reversedVias) {
+            addViaEditor(via.point(), via.halt(), via.activityCode());
+        }
+    }
+
     public List<ViaData> getViaValues() {
         List<ViaData> result = new ArrayList<>();
         for (ViaPointEditor ed : viaEditors) {
@@ -268,6 +321,9 @@ public class TimetableRouteStep extends Div {
                 .getStyle()
                 .set("background", "var(--rom-accent)")
                 .set("color", "var(--rom-bg-primary)");
+        if (onRouteDirty != null) {
+            onRouteDirty.run();
+        }
     }
 
     private OperationalPoint findOpByUopid(String uopid) {
@@ -306,7 +362,7 @@ public class TimetableRouteStep extends Div {
     private void configureOpCombo(ComboBox<OperationalPoint> combo, String label, String helper) {
         combo.setLabel(label);
         combo.setItems(availableOps);
-        combo.setItemLabelGenerator(this::opLabel);
+        combo.setItemLabelGenerator(TimetableFormatUtils::opLabel);
         combo.setWidthFull();
         combo.setClearButtonVisible(true);
         combo.setHelperText(helper);
@@ -315,7 +371,7 @@ public class TimetableRouteStep extends Div {
     private void addViaEditor(OperationalPoint point, boolean halt, String activityCode) {
         ViaPointEditor ed = new ViaPointEditor();
         ed.pointField.setItems(availableOps);
-        ed.pointField.setItemLabelGenerator(this::opLabel);
+        ed.pointField.setItemLabelGenerator(TimetableFormatUtils::opLabel);
         ed.pointField.setWidthFull();
         ed.pointField.setClearButtonVisible(true);
         ed.pointField.setValue(point);
@@ -370,7 +426,17 @@ public class TimetableRouteStep extends Div {
     private List<TimetableRowData> doCalculateRoute(
             LocalTime depAnchor, LocalTime arrAnchor, boolean notifyCallback) {
         routeError.setText("");
-        if (fromField.getValue() == null || toField.getValue() == null) {
+        fromField.setInvalid(fromField.getValue() == null);
+        toField.setInvalid(toField.getValue() == null);
+        if (fromField.getValue() == null) {
+            fromField.setErrorMessage(t("timetable.route.pointsRequired"));
+            fromField.focus();
+            routeError.setText(t("timetable.route.pointsRequired"));
+            return null;
+        }
+        if (toField.getValue() == null) {
+            toField.setErrorMessage(t("timetable.route.pointsRequired"));
+            toField.focus();
             routeError.setText(t("timetable.route.pointsRequired"));
             return null;
         }
@@ -449,51 +515,8 @@ public class TimetableRouteStep extends Div {
         }
     }
 
-    private Div createCard(String title, Component... content) {
-        Div card = new Div();
-        card.setWidthFull();
-        card.getStyle()
-                .set("background", "var(--rom-bg-card)")
-                .set("border", "1px solid var(--rom-border)")
-                .set("border-radius", "6px")
-                .set("padding", "14px 16px")
-                .set("box-sizing", "border-box");
-        if (title != null && !title.isBlank()) {
-            H3 heading = new H3(title);
-            heading.getStyle()
-                    .set("margin", "0 0 12px 0")
-                    .set("font-size", "var(--lumo-font-size-l)")
-                    .set("color", "var(--rom-text-primary)");
-            card.add(heading);
-        }
-        card.add(content);
-        return card;
-    }
-
-    private Span helperText(String text) {
-        Span helper = new Span(text);
-        helper.getStyle()
-                .set("display", "block")
-                .set("font-size", "11px")
-                .set("color", "var(--rom-text-muted)")
-                .set("margin-bottom", "10px");
-        return helper;
-    }
-
-    private String opLabel(OperationalPoint p) {
-        return p.getName() + " (" + p.getUopid() + ")";
-    }
-
     private String activityOptionLabel(TimetableActivityOption o) {
         return o.code() + " \u00b7 " + o.label();
-    }
-
-    private String distanceLabel(Double meters) {
-        return meters == null ? "0.0 km" : String.format(Locale.GERMANY, "%.1f km", meters / 1000D);
-    }
-
-    private String timeOrDash(String v) {
-        return v == null || v.isBlank() ? "\u2014" : v;
     }
 
     private String routeSummaryText(List<TimetableRowData> rows, TimetableRouteResult route) {
@@ -518,10 +541,6 @@ public class TimetableRouteStep extends Div {
 
     private Locale resolveLocale() {
         return getLocale() != null ? getLocale() : Locale.GERMANY;
-    }
-
-    private String firstNonBlank(String a, String b) {
-        return a != null && !a.isBlank() ? a : b;
     }
 
     private Optional<TimetableActivityOption> findActivityOption(String code) {

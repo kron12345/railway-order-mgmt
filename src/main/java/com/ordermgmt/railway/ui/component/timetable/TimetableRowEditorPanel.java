@@ -287,6 +287,10 @@ class TimetableRowEditorPanel extends Div {
                     if (halt) {
                         activityField.getStyle().set("background", "rgba(250,204,21,0.15)");
                         activityField.setRequiredIndicatorVisible(true);
+                        // Auto-select first activity if none selected
+                        if (activityField.getValue() == null && !activityOptions.isEmpty()) {
+                            activityField.setValue(activityOptions.getFirst());
+                        }
                     }
                 });
     }
