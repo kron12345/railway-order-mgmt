@@ -64,6 +64,7 @@ public class PathManagerController {
     @Operation(summary = "Submit a new train from order management")
     @ApiResponse(responseCode = "201", description = "Train created successfully")
     public TrainDetailDto submitTrain(@RequestBody TrainSubmitRequest request) {
+        validateSubmitRequest(request);
         PmReferenceTrain train = createTrainFromRequest(request);
         return loadTrainDetail(train.getId());
     }
@@ -104,8 +105,10 @@ public class PathManagerController {
     @ApiResponse(responseCode = "200", description = "List of journey locations")
     public List<JourneyLocationDto> listLocations(
             @PathVariable UUID trainId, @PathVariable UUID versionId) {
-        pathManagerService.findById(trainId); // validate train existence
-        return journeyLocationRepository.findByTrainVersionIdOrderBySequenceAsc(versionId).stream()
+        PmTrainVersion version = validateVersionBelongsToTrain(trainId, versionId);
+        return journeyLocationRepository
+                .findByTrainVersionIdOrderBySequenceAsc(version.getId())
+                .stream()
                 .map(PathManagerDtoMapper::toLocationDto)
                 .toList();
     }
@@ -139,6 +142,8 @@ public class PathManagerController {
             @PathVariable UUID versionId,
             @PathVariable UUID locationId,
             @RequestBody JourneyLocationDto request) {
+        validateVersionBelongsToTrain(trainId, versionId);
+        validateLocationBelongsToVersion(locationId, versionId);
         pathManagerService.updateJourneyLocation(
                 locationId,
                 request.arrivalTime(),
@@ -146,7 +151,9 @@ public class PathManagerController {
                 request.dwellTime(),
                 request.arrivalQualifier(),
                 request.departureQualifier(),
-                request.activityCodes() != null ? String.join(",", request.activityCodes()) : null);
+                request.activityCodes() != null ? String.join(",", request.activityCodes()) : null,
+                request.journeyLocationType(),
+                request.subsidiaryCode());
         PmJourneyLocation updated =
                 journeyLocationRepository
                         .findById(locationId)
@@ -160,11 +167,25 @@ public class PathManagerController {
     // ── Exception handling ─────────────────────────────────────────────
 
     @org.springframework.web.bind.annotation.ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<String> handleNotFound(IllegalArgumentException ex) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ex.getMessage());
+    public ResponseEntity<String> handleIllegalArgument(IllegalArgumentException ex) {
+        String message = ex.getMessage();
+        if (message != null && message.contains("not found")) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(message);
+        }
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(message);
     }
 
     // ── Private helpers ────────────────────────────────────────────────
+
+    private void validateSubmitRequest(TrainSubmitRequest request) {
+        if (request.operationalTrainNumber() == null
+                || request.operationalTrainNumber().isBlank()) {
+            throw new IllegalArgumentException("Operational train number is required");
+        }
+        if (request.operationalTrainNumber().length() > 20) {
+            throw new IllegalArgumentException("Operational train number too long (max 20)");
+        }
+    }
 
     private PmReferenceTrain createTrainFromRequest(TrainSubmitRequest request) {
         PmReferenceTrain train = new PmReferenceTrain();
@@ -253,5 +274,33 @@ public class PathManagerController {
         var versions = trainVersionRepository.findWithLocationsByReferenceTrainId(trainId);
         var steps = processStepRepository.findByReferenceTrainIdOrderByCreatedAtDesc(trainId);
         return PathManagerDtoMapper.toDetail(train, versions, steps);
+    }
+
+    private PmTrainVersion validateVersionBelongsToTrain(UUID trainId, UUID versionId) {
+        pathManagerService.findById(trainId);
+        PmTrainVersion version =
+                trainVersionRepository
+                        .findById(versionId)
+                        .orElseThrow(
+                                () ->
+                                        new IllegalArgumentException(
+                                                "Train version not found: " + versionId));
+        if (!version.getReferenceTrain().getId().equals(trainId)) {
+            throw new IllegalArgumentException("Version does not belong to train");
+        }
+        return version;
+    }
+
+    private void validateLocationBelongsToVersion(UUID locationId, UUID versionId) {
+        PmJourneyLocation location =
+                journeyLocationRepository
+                        .findById(locationId)
+                        .orElseThrow(
+                                () ->
+                                        new IllegalArgumentException(
+                                                "Journey location not found: " + locationId));
+        if (!location.getTrainVersion().getId().equals(versionId)) {
+            throw new IllegalArgumentException("Location does not belong to version");
+        }
     }
 }

@@ -5,6 +5,7 @@ import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -33,6 +34,7 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/api/v1/pathmanager/diff")
 @Tag(name = "Timetable Diff")
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class PathManagerDiffController {
 
     private final DiffService diffService;

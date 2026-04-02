@@ -256,10 +256,14 @@ public class TimetableArchiveService {
             }
 
             if (Boolean.TRUE.equals(row.getHalt())) {
-                if (!isOrigin && row.getArrivalMode() == TimeConstraintMode.NONE) {
+                if (!isOrigin
+                        && row.getArrivalMode() == TimeConstraintMode.NONE
+                        && blank(row.getEstimatedArrival())) {
                     throw new IllegalArgumentException("Halts require an arrival time.");
                 }
-                if (!isDestination && row.getDepartureMode() == TimeConstraintMode.NONE) {
+                if (!isDestination
+                        && row.getDepartureMode() == TimeConstraintMode.NONE
+                        && blank(row.getEstimatedDeparture())) {
                     throw new IllegalArgumentException("Halts require a departure time.");
                 }
                 if (blank(row.getActivityCode())) {

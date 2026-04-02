@@ -180,7 +180,9 @@ public class JourneyLocationPanel extends VerticalLayout {
                 dwellField.getValue(),
                 arrivalQualifierField.getValue(),
                 departureQualifierField.getValue(),
-                activitiesField.getValue());
+                activitiesField.getValue(),
+                locationTypeField.getValue(),
+                trackField.getValue());
         Notification.show(t("pm.save"), 2000, Notification.Position.BOTTOM_END)
                 .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
     }

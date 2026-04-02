@@ -58,7 +58,7 @@ public class DiffService {
     private Map<String, TimetableRowData> indexOrderRows(List<TimetableRowData> rows) {
         Map<String, TimetableRowData> map = new LinkedHashMap<>();
         for (TimetableRowData row : rows) {
-            String key = row.getUopid() != null ? row.getUopid() : "seq:" + row.getSequence();
+            String key = compositeKey(row.getUopid(), row.getSequence());
             map.put(key, row);
         }
         return map;
@@ -67,10 +67,15 @@ public class DiffService {
     private Map<String, PmJourneyLocation> indexPmLocations(List<PmJourneyLocation> locations) {
         Map<String, PmJourneyLocation> map = new LinkedHashMap<>();
         for (PmJourneyLocation loc : locations) {
-            String key = loc.getUopid() != null ? loc.getUopid() : "seq:" + loc.getSequence();
+            String key = compositeKey(loc.getUopid(), loc.getSequence());
             map.put(key, loc);
         }
         return map;
+    }
+
+    private String compositeKey(String uopid, Integer sequence) {
+        String base = uopid != null ? uopid : "noid";
+        return base + ":" + (sequence != null ? sequence : 0);
     }
 
     private List<String> compareFields(TimetableRowData order, PmJourneyLocation pm) {

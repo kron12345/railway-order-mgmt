@@ -32,8 +32,12 @@ public class SecurityConfig extends VaadinWebSecurity {
     @Override
     protected void configure(WebSecurity web) throws Exception {
         super.configure(web);
-        // Allow REST API and Swagger UI without authentication
-        web.ignoring().requestMatchers("/api/**", "/swagger-ui/**", "/v3/api-docs/**");
+        // SECURITY NOTE: API endpoints are excluded from Spring Security for the
+        // Path Manager simulation tool. In production, these should be secured
+        // with a separate SecurityFilterChain using Bearer token authentication.
+        web.ignoring()
+                .requestMatchers("/api/v1/pathmanager/**")
+                .requestMatchers("/swagger-ui/**", "/v3/api-docs/**");
     }
 
     /** Maps Keycloak realm roles from the OIDC token to Spring Security GrantedAuthorities. */

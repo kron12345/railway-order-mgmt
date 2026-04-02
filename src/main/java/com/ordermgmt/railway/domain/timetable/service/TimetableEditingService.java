@@ -241,21 +241,26 @@ public class TimetableEditingService {
         // Stretch intermediate times proportionally
         for (int i = changedIndex + 1; i < pinIndex; i++) {
             TimetableRowData row = rows.get(i);
-            stretchField(row, true, newTime, ratio);
-            stretchField(row, false, newTime, ratio);
+            stretchField(row, true, oldTime, newTime, ratio);
+            stretchField(row, false, oldTime, newTime, ratio);
         }
     }
 
     private void stretchField(
-            TimetableRowData row, boolean isArrival, LocalTime anchor, double ratio) {
+            TimetableRowData row,
+            boolean isArrival,
+            LocalTime oldAnchor,
+            LocalTime newAnchor,
+            double ratio) {
         String fieldValue = isArrival ? row.getEstimatedArrival() : row.getEstimatedDeparture();
         LocalTime time = parseTime(fieldValue);
         if (time == null) {
             return;
         }
-        long offsetMinutes = java.time.Duration.between(anchor, time).toMinutes();
-        long newOffset = Math.round(offsetMinutes * ratio);
-        String stretched = anchor.plusMinutes(newOffset).format(HH_MM);
+        // Calculate original offset from old anchor, scale it, apply to new anchor
+        long originalOffset = java.time.Duration.between(oldAnchor, time).toMinutes();
+        long newOffset = Math.round(originalOffset * ratio);
+        String stretched = newAnchor.plusMinutes(newOffset).format(HH_MM);
         if (isArrival) {
             row.setEstimatedArrival(stretched);
             if (row.getArrivalExact() != null) {

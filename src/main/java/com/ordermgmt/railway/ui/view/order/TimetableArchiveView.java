@@ -91,6 +91,10 @@ public class TimetableArchiveView extends VerticalLayout implements BeforeEnterO
             event.forwardTo(order != null ? "orders/" + order.getId() : "orders");
             return;
         }
+        if (position.getOrder() == null || !order.getId().equals(position.getOrder().getId())) {
+            event.forwardTo("orders/" + order.getId());
+            return;
+        }
         Optional<TimetableArchive> archiveOpt = timetableArchiveService.findArchive(position);
         if (archiveOpt.isEmpty()) {
             event.forwardTo("orders/" + order.getId());

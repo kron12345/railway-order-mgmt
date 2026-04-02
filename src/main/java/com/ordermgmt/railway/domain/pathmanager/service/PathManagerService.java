@@ -1,11 +1,16 @@
 package com.ordermgmt.railway.domain.pathmanager.service;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.pathmanager.model.PathProcessState;
@@ -30,6 +35,8 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 @Transactional
 public class PathManagerService {
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final PmReferenceTrainRepository referenceTrainRepository;
     private final PmTrainVersionRepository trainVersionRepository;
@@ -100,13 +107,27 @@ public class PathManagerService {
             Integer trainMaxSpeed,
             String brakeType) {
         PmReferenceTrain train = findById(trainId);
-        train.setOperationalTrainNumber(operationalTrainNumber);
-        train.setTrainType(trainType);
-        train.setTrafficTypeCode(trafficTypeCode);
-        train.setTrainWeight(trainWeight);
-        train.setTrainLength(trainLength);
-        train.setTrainMaxSpeed(trainMaxSpeed);
-        train.setBrakeType(brakeType);
+        if (operationalTrainNumber != null) {
+            train.setOperationalTrainNumber(operationalTrainNumber);
+        }
+        if (trainType != null) {
+            train.setTrainType(trainType);
+        }
+        if (trafficTypeCode != null) {
+            train.setTrafficTypeCode(trafficTypeCode);
+        }
+        if (trainWeight != null) {
+            train.setTrainWeight(trainWeight);
+        }
+        if (trainLength != null) {
+            train.setTrainLength(trainLength);
+        }
+        if (trainMaxSpeed != null) {
+            train.setTrainMaxSpeed(trainMaxSpeed);
+        }
+        if (brakeType != null) {
+            train.setBrakeType(brakeType);
+        }
         referenceTrainRepository.save(train);
     }
 
@@ -117,7 +138,9 @@ public class PathManagerService {
             Integer dwellTime,
             String arrivalQualifier,
             String departureQualifier,
-            String activities) {
+            String activities,
+            String journeyLocationType,
+            String subsidiaryCode) {
         PmJourneyLocation location =
                 journeyLocationRepository
                         .findById(locationId)
@@ -125,12 +148,30 @@ public class PathManagerService {
                                 () ->
                                         new IllegalArgumentException(
                                                 "Journey location not found: " + locationId));
-        location.setArrivalTime(arrivalTime);
-        location.setDepartureTime(departureTime);
-        location.setDwellTime(dwellTime);
-        location.setArrivalQualifier(arrivalQualifier);
-        location.setDepartureQualifier(departureQualifier);
-        location.setActivities(activities);
+        if (arrivalTime != null) {
+            location.setArrivalTime(arrivalTime);
+        }
+        if (departureTime != null) {
+            location.setDepartureTime(departureTime);
+        }
+        if (dwellTime != null) {
+            location.setDwellTime(dwellTime);
+        }
+        if (arrivalQualifier != null) {
+            location.setArrivalQualifier(arrivalQualifier);
+        }
+        if (departureQualifier != null) {
+            location.setDepartureQualifier(departureQualifier);
+        }
+        if (activities != null) {
+            location.setActivities(activities);
+        }
+        if (journeyLocationType != null) {
+            location.setJourneyLocationType(journeyLocationType);
+        }
+        if (subsidiaryCode != null) {
+            location.setSubsidiaryCode(subsidiaryCode);
+        }
         journeyLocationRepository.save(location);
     }
 
@@ -167,26 +208,24 @@ public class PathManagerService {
         route.setRoidCore(identifierGenerator.generateCore());
         route.setRoidVariant(identifierGenerator.initialVariant());
         route.setRoidTimetableYear(train.getTridTimetableYear());
-
-        StringBuilder routePointsJson = new StringBuilder("[");
-        for (int i = 0; i < rows.size(); i++) {
-            TimetableRowData row = rows.get(i);
-            if (i > 0) {
-                routePointsJson.append(",");
-            }
-            routePointsJson
-                    .append("{\"sequence\":")
-                    .append(row.getSequence())
-                    .append(",\"uopid\":\"")
-                    .append(row.getUopid() != null ? row.getUopid() : "")
-                    .append("\",\"name\":\"")
-                    .append(row.getName() != null ? row.getName() : "")
-                    .append("\"}");
-        }
-        routePointsJson.append("]");
-        route.setRoutePoints(routePointsJson.toString());
-
+        route.setRoutePoints(routePointsToJson(rows));
         return route;
+    }
+
+    private String routePointsToJson(List<TimetableRowData> rows) {
+        try {
+            List<Map<String, Object>> points = new ArrayList<>();
+            for (TimetableRowData row : rows) {
+                Map<String, Object> point = new LinkedHashMap<>();
+                point.put("sequence", row.getSequence());
+                point.put("uopid", row.getUopid() != null ? row.getUopid() : "");
+                point.put("name", row.getName() != null ? row.getName() : "");
+                points.add(point);
+            }
+            return OBJECT_MAPPER.writeValueAsString(points);
+        } catch (Exception e) {
+            return "[]";
+        }
     }
 
     private PmTrainVersion createInitialVersion(

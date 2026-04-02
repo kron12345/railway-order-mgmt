@@ -61,6 +61,14 @@ public class PathProcessEngine {
                 EnumSet.of(PathAction.MODIFY_REQUEST, PathAction.WITHDRAW, PathAction.IM_RECEIPT));
 
         ALLOWED_TRANSITIONS.put(
+                PathProcessState.MODIFIED,
+                EnumSet.of(
+                        PathAction.WITHDRAW,
+                        PathAction.IM_RECEIPT,
+                        PathAction.IM_DRAFT_OFFER,
+                        PathAction.IM_NO_ALTERNATIVE));
+
+        ALLOWED_TRANSITIONS.put(
                 PathProcessState.RECEIPT_CONFIRMED,
                 EnumSet.of(
                         PathAction.MODIFY_REQUEST,
