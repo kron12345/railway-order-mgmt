@@ -14,4 +14,4 @@ spring:
 logging:
   level:
     com.ordermgmt.railway: DEBUG
-    org.springframework.security: DEBUG
+    org.springframework.security: INFO

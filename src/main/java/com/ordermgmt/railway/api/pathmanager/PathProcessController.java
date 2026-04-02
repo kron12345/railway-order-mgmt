@@ -1,6 +1,7 @@
 package com.ordermgmt.railway.api.pathmanager;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -79,12 +80,13 @@ public class PathProcessController {
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<String> handleNotFound(IllegalArgumentException ex) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ex.getMessage());
+    public ResponseEntity<Map<String, String>> handleNotFound(IllegalArgumentException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of("error", "Resource not found"));
     }
 
     @ExceptionHandler(IllegalStateException.class)
-    public ResponseEntity<String> handleBadState(IllegalStateException ex) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ex.getMessage());
+    public ResponseEntity<Map<String, String>> handleBadState(IllegalStateException ex) {
+        return ResponseEntity.badRequest().body(Map.of("error", "Invalid request"));
     }
 }

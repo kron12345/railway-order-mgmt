@@ -8,36 +8,44 @@ import java.util.Set;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.builders.WebSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.authority.mapping.GrantedAuthoritiesMapper;
 import org.springframework.security.oauth2.core.oidc.user.OidcUserAuthority;
+import org.springframework.security.web.SecurityFilterChain;
 
 import com.vaadin.flow.spring.security.VaadinWebSecurity;
 
 /** Configures Vaadin security and maps Keycloak roles to authorities. */
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 public class SecurityConfig extends VaadinWebSecurity {
+
+    /**
+     * Separate filter chain for API and Swagger endpoints. Uses stateless sessions and no CSRF so
+     * REST clients work without a Vaadin session. Takes precedence over the Vaadin filter chain.
+     */
+    @Bean
+    @Order(1)
+    public SecurityFilterChain apiSecurityFilterChain(HttpSecurity http) throws Exception {
+        http.securityMatcher("/api/**", "/swagger-ui/**", "/v3/api-docs/**")
+                .csrf(csrf -> csrf.disable())
+                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
+                .sessionManagement(
+                        session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
+        return http.build();
+    }
 
     @Override
     protected void configure(HttpSecurity http) throws Exception {
         super.configure(http);
         setOAuth2LoginPage(http, "/login");
-    }
-
-    @Override
-    protected void configure(WebSecurity web) throws Exception {
-        super.configure(web);
-        // SECURITY NOTE: API endpoints are excluded from Spring Security for the
-        // Path Manager simulation tool. In production, these should be secured
-        // with a separate SecurityFilterChain using Bearer token authentication.
-        web.ignoring()
-                .requestMatchers("/api/v1/pathmanager/**")
-                .requestMatchers("/swagger-ui/**", "/v3/api-docs/**");
     }
 
     /** Maps Keycloak realm roles from the OIDC token to Spring Security GrantedAuthorities. */

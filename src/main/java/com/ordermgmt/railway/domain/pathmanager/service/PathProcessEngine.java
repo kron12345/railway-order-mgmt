@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -146,6 +147,7 @@ public class PathProcessEngine {
         step.setFromState(currentState.name());
         step.setToState(newState.name());
         step.setComment(comment);
+        step.setSimulatedBy(getCurrentUsername());
 
         train.setProcessState(newState);
         referenceTrainRepository.save(train);
@@ -158,6 +160,14 @@ public class PathProcessEngine {
 
         step = processStepRepository.save(step);
         return new ProcessStepResult(step, newState, newVersion);
+    }
+
+    private String getCurrentUsername() {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated()) {
+            return auth.getName();
+        }
+        return "anonymous";
     }
 
     private PmReferenceTrain loadTrain(UUID referenceTrainId) {

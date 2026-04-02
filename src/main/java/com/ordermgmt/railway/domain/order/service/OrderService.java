@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -62,10 +63,12 @@ public class OrderService {
         return orders;
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
     public Order save(Order order) {
         return orderRepository.save(order);
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
     public void delete(UUID id) {
         orderRepository.deleteById(id);
     }
@@ -77,10 +80,12 @@ public class OrderService {
         return positions;
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
     public OrderPosition savePosition(OrderPosition position) {
         return positionRepository.save(position);
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
     public void deletePosition(UUID positionId) {
         positionRepository.deleteById(positionId);
     }

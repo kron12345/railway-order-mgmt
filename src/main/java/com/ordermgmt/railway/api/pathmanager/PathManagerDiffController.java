@@ -1,6 +1,7 @@
 package com.ordermgmt.railway.api.pathmanager;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
@@ -68,8 +69,14 @@ public class PathManagerDiffController {
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<String> handleNotFound(IllegalArgumentException ex) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ex.getMessage());
+    public ResponseEntity<Map<String, String>> handleNotFound(IllegalArgumentException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of("error", "Resource not found"));
+    }
+
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<Map<String, String>> handleBadRequest(IllegalStateException ex) {
+        return ResponseEntity.badRequest().body(Map.of("error", "Invalid request"));
     }
 
     // ── Private helpers ────────────────────────────────────────────────
