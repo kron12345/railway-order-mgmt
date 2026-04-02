@@ -17,6 +17,7 @@ import java.util.List;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
+import com.vaadin.flow.component.details.Details;
 import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.grid.GridVariant;
 import com.vaadin.flow.component.html.Div;
@@ -76,11 +77,27 @@ public class TimetableTableStep extends Div {
                 .set("height", "100%")
                 .set("min-height", "0");
 
-        wrapper.add(
-                createCard(
-                        t("position.validity"),
-                        helperText(t("position.validity.help", orderFrom, orderTo)),
-                        validityCalendar));
+        int selectedCount = validityCalendar.getSelectedDates().size();
+        String validitySummary =
+                t("position.validity")
+                        + " \u2014 "
+                        + selectedCount
+                        + " "
+                        + t("timetable.archive.days", selectedCount);
+        Details validityDetails = new Details();
+        validityDetails.setSummaryText(validitySummary);
+        Div calendarWrapper = new Div(validityCalendar);
+        calendarWrapper.getStyle().set("max-height", "200px").set("overflow-y", "auto");
+        validityDetails.add(
+                helperText(t("position.validity.help", orderFrom, orderTo)), calendarWrapper);
+        validityDetails.setWidthFull();
+        validityDetails
+                .getStyle()
+                .set("background", "var(--rom-bg-card)")
+                .set("border", "1px solid var(--rom-border)")
+                .set("border-radius", "6px");
+        validityDetails.setOpened(selectedCount == 0);
+        wrapper.add(validityDetails);
 
         addStopForm =
                 new AddStopForm(availableOperationalPoints, activityOptions, this::handleAddStop);

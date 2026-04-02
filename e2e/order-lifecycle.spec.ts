@@ -266,27 +266,22 @@ test.describe("Order Lifecycle: Create -> Positions -> Modify -> Delete", () => 
 
     await screenshot(page, "08-timetable-route-form");
 
-    // Calculate route
+    // Calculate route (stays on Step 1 after calculation)
     await dismissDevBanner(page);
     await page.getByRole("button", { name: CALCULATE_ROUTE_BTN }).click({ force: true });
 
-    // Wait for table step to appear (grid with timetable rows)
-    await expect(page.locator("vaadin-grid")).toBeVisible({ timeout: 30_000 });
-    await screenshot(page, "09-timetable-table-step");
-
-    // Go back to route step to verify map
-    await page
-      .getByRole("button", { name: /Route|Schritt 1|Step 1/i })
-      .click();
-    await page.waitForTimeout(1_500);
+    // Wait for success notification and calc button to turn green
+    await page.waitForTimeout(2_000);
+    await screenshot(page, "09a-route-calculated-on-step1");
 
     // Verify route is displayed on the map (check for Leaflet elements)
     const mapContainer = page.locator("rom-timetable-map");
     await expect(mapContainer).toBeVisible({ timeout: 10_000 });
 
     // Check that route polyline exists (Leaflet renders SVG paths)
+    // Use stroke color to distinguish route polyline from background OP circles
     const routePath = page.locator(
-      "rom-timetable-map path.leaflet-interactive",
+      'rom-timetable-map path.leaflet-interactive[stroke="#14b8a6"]',
     );
     await expect(routePath.first()).toBeVisible({ timeout: 10_000 });
 

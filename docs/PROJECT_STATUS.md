@@ -4,7 +4,9 @@
 
 ## Letzte Aktualisierung
 
-**2026-03-31** — Path Manager Dokumentation umfassend erweitert: datenmodel.md mit ER-Diagramm, detaillierten Feldtabellen (alle 8 Entities), vollstaendiger TTT State Machine (Mermaid stateDiagram), Zustandsbeschreibungen, Aktionen/Rollen-Tabelle, Integrationsmodell (Datenfluss-Diagramm) und REST-API-Endpunkt-Tabelle. ARCHITECTURE.md mit Komponenten-Diagramm, PathProcessEngine-Pattern-Beschreibung und API-Summary. Wiki-Seite docs/wiki/path-manager.md (User Guide mit TreeGrid-Erklaerung, Submissions-Anleitung, 3 Beispielflows, Zugkopf/OP-Bearbeitung, Diff-Feature, API-Referenz). ADR-011 (Path Manager Architektur: REST API als Integrations-Boundary, Shared DB mit pm_-Prefix, statische State Machine, Simulationsansatz, Alternativen: Microservice/Direct Injection/Message Queue). GLOSSARY.md um 16 Path-Manager-Begriffe erweitert (Fahrplanmanager, Referenzzug, Trasse, Trassenantrag, Laufweg, Zugversion, Prozessschritt, State Machine, RA, IM, Draft/Final Offer, Booked, Fahrplanjahr, TRID, PAID, PRID, ROID).
+**2026-03-31** — Timetable Builder UX: 3 Fixes umgesetzt. (1) Route berechnen bleibt auf Step 1, zeigt Erfolgs-Notification und gruenen Button; "Next" wechselt zu Step 2 wenn Route existiert. (2) Interaktive Karte mit OP-Hintergrund-Markern: alle Betriebspunkte als kleine graue Kreise auf der Karte, Klick fuellt Von/Nach/Via-Felder sequentiell. (3) Kompakter Kalender in Step 2: Gueltigkeit als zusammenklappbares Details-Akkordeon mit Scrollhoehe 200px, standardmaessig geoeffnet wenn keine Daten gewaehlt. i18n-Keys `timetable.route.calculated` und `timetable.route.calculated.summary` in DE/EN/IT/FR. E2E-Tests angepasst.
+
+Davor: Path Manager Dokumentation umfassend erweitert: datenmodel.md mit ER-Diagramm, detaillierten Feldtabellen (alle 8 Entities), vollstaendiger TTT State Machine (Mermaid stateDiagram), Zustandsbeschreibungen, Aktionen/Rollen-Tabelle, Integrationsmodell (Datenfluss-Diagramm) und REST-API-Endpunkt-Tabelle. ARCHITECTURE.md mit Komponenten-Diagramm, PathProcessEngine-Pattern-Beschreibung und API-Summary. Wiki-Seite docs/wiki/path-manager.md (User Guide mit TreeGrid-Erklaerung, Submissions-Anleitung, 3 Beispielflows, Zugkopf/OP-Bearbeitung, Diff-Feature, API-Referenz). ADR-011 (Path Manager Architektur: REST API als Integrations-Boundary, Shared DB mit pm_-Prefix, statische State Machine, Simulationsansatz, Alternativen: Microservice/Direct Injection/Message Queue). GLOSSARY.md um 16 Path-Manager-Begriffe erweitert (Fahrplanmanager, Referenzzug, Trasse, Trassenantrag, Laufweg, Zugversion, Prozessschritt, State Machine, RA, IM, Draft/Final Offer, Booked, Fahrplanjahr, TRID, PAID, PRID, ROID).
 
 Davor: Path Manager Integration Button: "Send to Path Manager" Button in `OrderPositionRow` fuer FAHRPLAN-Positionen (Train-Icon, orange wenn nicht gesendet, teal wenn gesendet). `OrderPositionPanel` ruft `PathManagerService.createTrainFromOrderPosition()` auf, speichert `pmReferenceTrainId` auf der Position, zeigt Erfolgs-Notification. Nach Senden wechselt der Button zu "View in PM" und navigiert zum PathManagerView. Neue Dependencies in `OrderDetailView` durchgereicht. i18n in DE/EN/IT/FR. Doku in datenmodel.md, timetable-builder.md und ARCHITECTURE.md aktualisiert.
 
@@ -90,7 +92,7 @@ Davor: Fahrplanbuilder Phase 2-4: Timetable-Editing Features implementiert. Time
 | `AddStopForm` | Inline-Formular zum Hinzufuegen eines neuen Halts nach einer Zeile |
 | `TimetableArchiveTable` | Read-only Div-basierte Fahrplantabelle mit Farbcodierung fuer Origin/Destination, Halte, Durchfahrten und Soft-Delete |
 | `TimetableArchiveSidebar` | Rechte Seite der Archivansicht: Karte, Gueltigkeit, Metadaten |
-| `TimetableMap` | Leaflet-/OpenStreetMap-Komponente fuer die Fahrplanroute |
+| `TimetableMap` | Leaflet-/OpenStreetMap-Komponente fuer die Fahrplanroute mit klickbaren OP-Hintergrund-Markern |
 | `TagsTab` | Schlagwort-Katalog mit CSV-Import im Settings-Bereich |
 | `TopologyTab` | RINF-Import und Datenbestand im Settings-Bereich |
 | `TreeNode` | Sealed-Interface mit YearNode, TrainNode, VersionNode, LocationNode fuer heterogenen TreeGrid |
@@ -160,6 +162,7 @@ Hinweise:
 
 | Datum | Aenderung |
 |---|---|
+| 2026-03-31 | Timetable Builder UX: Route ohne Step-Wechsel (Erfolgs-Notification + gruener Button), interaktive Karte mit OP-Markern (Klick fuellt Formularfelder), kompakter Kalender als Details-Akkordeon in Step 2. i18n DE/EN/IT/FR. E2E-Tests angepasst |
 | 2026-03-31 | Path Manager Doku erweitert: datenmodel.md (ER-Diagramm, Feldtabellen, State Machine, Integration), ARCHITECTURE.md (Komponenten, API), wiki/path-manager.md (User Guide), ADR-011, GLOSSARY.md (+16 Begriffe) |
 | 2026-03-31 | Path Manager Integration: Send-to-PM Button in OrderPositionRow, OrderPositionPanel Handler mit PathManagerService/TimetableArchiveService, OrderDetailView DI. i18n DE/EN/IT/FR. Doku: datenmodel.md, timetable-builder.md, ARCHITECTURE.md |
 | 2026-03-31 | Path Manager Vaadin UI: PathManagerView (TreeGrid + SplitLayout), TrainHeaderPanel, ProcessSimulationPanel, JourneyLocationPanel, TreeNode sealed interface. Navigation + Breadcrumb. i18n DE/EN/IT/FR |

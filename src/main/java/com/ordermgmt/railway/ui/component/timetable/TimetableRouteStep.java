@@ -55,6 +55,7 @@ public class TimetableRouteStep extends Div {
     private final Span routeError = new Span();
     private final TimetableMap routeMap = new TimetableMap();
 
+    private Button calcButton;
     private TimetableRouteResult currentRoute = new TimetableRouteResult(List.of(), 0D);
     private Consumer<RouteCalculationResult> onRouteCalculated;
 
@@ -91,12 +92,19 @@ public class TimetableRouteStep extends Div {
         viaTitle.getStyle().set("font-weight", "600").set("color", "var(--rom-text-primary)");
         viaHeader.add(viaTitle, addViaBtn);
 
-        Button calcBtn = new Button(t("timetable.route.calculate"), VaadinIcon.MAP_MARKER.create());
-        calcBtn.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
-        calcBtn.getStyle()
+        calcButton = new Button(t("timetable.route.calculate"), VaadinIcon.MAP_MARKER.create());
+        calcButton.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
+        calcButton
+                .getStyle()
                 .set("background", "var(--rom-accent)")
                 .set("color", "var(--rom-bg-primary)");
-        calcBtn.addClickListener(e -> calculateRoute());
+        calcButton.addClickListener(e -> calculateRoute());
+
+        // Reset calc button appearance when form inputs change
+        fromField.addValueChangeListener(e -> resetCalcButtonAppearance());
+        toField.addValueChangeListener(e -> resetCalcButtonAppearance());
+        departureAnchorField.addValueChangeListener(e -> resetCalcButtonAppearance());
+        arrivalAnchorField.addValueChangeListener(e -> resetCalcButtonAppearance());
 
         VerticalLayout left = new VerticalLayout();
         left.setPadding(false);
@@ -111,7 +119,7 @@ public class TimetableRouteStep extends Div {
                         viaList,
                         routeSummary,
                         routeError,
-                        calcBtn));
+                        calcButton));
 
         Div mapCard = new Div();
         mapCard.setSizeFull();
@@ -128,6 +136,23 @@ public class TimetableRouteStep extends Div {
         mapLabel.getStyle().set("font-weight", "600").set("margin-bottom", "10px");
         routeMap.getElement().getStyle().set("flex", "1").set("min-height", "0");
         mapCard.add(mapLabel, routeMap);
+
+        // Show all operational points as background markers on the map
+        routeMap.setAllOperationalPoints(availableOps);
+
+        // Map click on OP fills from/to/via fields sequentially
+        routeMap.addOpSelectedListener(
+                uopid -> {
+                    OperationalPoint op = findOpByUopid(uopid);
+                    if (op == null) return;
+                    if (fromField.getValue() == null) {
+                        fromField.setValue(op);
+                    } else if (toField.getValue() == null) {
+                        toField.setValue(op);
+                    } else {
+                        addViaEditor(op, false, null);
+                    }
+                });
 
         SplitLayout split = new SplitLayout(left, mapCard);
         split.setWidthFull();
@@ -212,6 +237,39 @@ public class TimetableRouteStep extends Div {
                                     : null));
         }
         return result;
+    }
+
+    /** Registers a callback for when an operational point is clicked on the map. */
+    public void addOpSelectedListener(Consumer<String> callback) {
+        routeMap.addOpSelectedListener(callback);
+    }
+
+    private void markCalcButtonSuccess() {
+        if (calcButton == null) return;
+        calcButton.setText(t("timetable.route.calculated"));
+        calcButton.setIcon(VaadinIcon.CHECK.create());
+        calcButton
+                .getStyle()
+                .set("background", "var(--rom-status-success, #22c55e)")
+                .set("color", "#fff");
+    }
+
+    private void resetCalcButtonAppearance() {
+        if (calcButton == null) return;
+        calcButton.setText(t("timetable.route.calculate"));
+        calcButton.setIcon(VaadinIcon.MAP_MARKER.create());
+        calcButton
+                .getStyle()
+                .set("background", "var(--rom-accent)")
+                .set("color", "var(--rom-bg-primary)");
+    }
+
+    private OperationalPoint findOpByUopid(String uopid) {
+        if (uopid == null) return null;
+        return availableOps.stream()
+                .filter(op -> uopid.equals(op.getUopid()))
+                .findFirst()
+                .orElse(null);
     }
 
     private void configureRouteInputs() {
@@ -345,6 +403,7 @@ public class TimetableRouteStep extends Div {
             routeMap.setRoute(currentRoute.points());
             routeSummary.setText(routeSummaryText(rows, currentRoute));
             routeError.setText("");
+            markCalcButtonSuccess();
             if (notifyCallback && onRouteCalculated != null) {
                 onRouteCalculated.accept(new RouteCalculationResult(currentRoute, rows));
             }

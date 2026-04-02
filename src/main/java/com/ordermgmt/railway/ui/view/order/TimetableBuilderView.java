@@ -200,7 +200,13 @@ public class TimetableBuilderView extends VerticalLayout implements BeforeEnterO
                     timetableRows.clear();
                     timetableRows.addAll(result.rows());
                     tableStep.setRows(new ArrayList<>(result.rows()));
-                    switchStep(Step.TABLE);
+                    notify(
+                            t(
+                                    "timetable.route.calculated.summary",
+                                    result.rows().size(),
+                                    distanceLabel(result.route().totalLengthMeters())),
+                            NotificationVariant.LUMO_SUCCESS);
+                    updateStepControls();
                 });
         tableStep =
                 new TimetableTableStep(
@@ -313,7 +319,11 @@ public class TimetableBuilderView extends VerticalLayout implements BeforeEnterO
         stepNextButton.addClickListener(
                 e -> {
                     if (currentStep == Step.ROUTE) {
-                        routeStep.calculateRoute();
+                        if (!timetableRows.isEmpty()) {
+                            switchStep(Step.TABLE);
+                        } else {
+                            routeStep.calculateRoute();
+                        }
                     } else {
                         switchStep(Step.ROUTE);
                     }

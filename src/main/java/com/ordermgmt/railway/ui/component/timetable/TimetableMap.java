@@ -1,12 +1,14 @@
 package com.ordermgmt.railway.ui.component.timetable;
 
 import java.util.List;
+import java.util.function.Consumer;
 
 import com.vaadin.flow.component.Tag;
 import com.vaadin.flow.component.dependency.JsModule;
 import com.vaadin.flow.component.dependency.NpmPackage;
 import com.vaadin.flow.component.html.Div;
 
+import com.ordermgmt.railway.domain.infrastructure.model.OperationalPoint;
 import com.ordermgmt.railway.domain.timetable.model.TimetableRoutePoint;
 
 import elemental.json.Json;
@@ -46,5 +48,35 @@ public class TimetableMap extends Div {
 
     public void clearRoute() {
         getElement().callJsFunction("clearRoute");
+    }
+
+    /** Renders all operational points as small background markers on the map. */
+    public void setAllOperationalPoints(List<OperationalPoint> ops) {
+        JsonArray jsonOps = Json.createArray();
+        int idx = 0;
+        for (OperationalPoint op : ops) {
+            if (op.getLatitude() == null || op.getLongitude() == null) continue;
+            JsonObject item = Json.createObject();
+            item.put("uopid", op.getUopid());
+            item.put("name", op.getName());
+            item.put("latitude", op.getLatitude());
+            item.put("longitude", op.getLongitude());
+            jsonOps.set(idx++, item);
+        }
+        getElement().callJsFunction("setOperationalPoints", jsonOps);
+    }
+
+    /** Registers a callback that fires when the user clicks an OP marker on the map. */
+    public void addOpSelectedListener(Consumer<String> callback) {
+        getElement()
+                .addEventListener(
+                        "op-selected",
+                        event -> {
+                            String uopid = event.getEventData().getString("event.detail.uopid");
+                            if (uopid != null && !uopid.isBlank()) {
+                                callback.accept(uopid);
+                            }
+                        })
+                .addEventData("event.detail.uopid");
     }
 }

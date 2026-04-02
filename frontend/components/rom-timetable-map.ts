@@ -12,6 +12,13 @@ type RoutePoint = {
   journeyLocationType: string;
 };
 
+type BackgroundOp = {
+  uopid: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+};
+
 const DEFAULT_CENTER: [number, number] = [47.3769, 8.5417];
 const DEFAULT_ZOOM = 7;
 const BASEMAP_URL = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
@@ -70,6 +77,14 @@ function injectMapStyles() {
     .rtm-marker--auto:hover .rtm-marker__label,
     .rtm-marker--auto:focus-within .rtm-marker__label { display: flex; }
 
+    .rtm-bg-tooltip {
+      background: rgba(10,14,23,0.88) !important; border: 1px solid rgba(255,255,255,0.08) !important;
+      border-radius: 3px !important; color: #e2e8f0 !important;
+      font-family: 'Inter', sans-serif !important; font-size: 11px !important;
+      padding: 2px 6px !important; box-shadow: none !important;
+    }
+    .rtm-bg-tooltip::before { border-top-color: rgba(10,14,23,0.88) !important; }
+
     .rtm-overlay {
       background: rgba(10,14,23,0.92); border: 1px solid rgba(255,255,255,0.08);
       border-radius: 6px; padding: 8px 12px; color: #e2e8f0; pointer-events: none;
@@ -98,6 +113,7 @@ class RomTimetableMap extends HTMLElement {
   private container?: HTMLDivElement;
   private routeLayer?: any;
   private layers: any[] = [];
+  private bgMarkers: any[] = [];
   private overlay?: any;
   private resizeObserver?: ResizeObserver;
 
@@ -222,6 +238,48 @@ class RomTimetableMap extends HTMLElement {
       this.map.setView(latLngs[0], 11);
     } else {
       this.map.fitBounds(this.routeLayer.getBounds(), { padding: [FIT_PADDING, FIT_PADDING] });
+    }
+  }
+
+  setOperationalPoints(ops: BackgroundOp[]) {
+    if (!this.map) return;
+
+    // Remove existing background markers
+    this.bgMarkers.forEach((m) => m.remove());
+    this.bgMarkers = [];
+
+    const valid = ops.filter(
+      (op) => Number.isFinite(op.latitude) && Number.isFinite(op.longitude),
+    );
+
+    for (const op of valid) {
+      const marker = L.circleMarker([op.latitude, op.longitude], {
+        radius: 3,
+        color: '#94a3b8',
+        fillColor: '#94a3b8',
+        fillOpacity: 0.3,
+        opacity: 0.3,
+        weight: 1,
+      });
+
+      marker.bindTooltip(escapeHtml(op.name), {
+        direction: 'top',
+        offset: [0, -5],
+        className: 'rtm-bg-tooltip',
+      });
+
+      marker.on('click', () => {
+        this.dispatchEvent(
+          new CustomEvent('op-selected', {
+            detail: { uopid: op.uopid, name: op.name },
+            bubbles: true,
+            composed: true,
+          }),
+        );
+      });
+
+      marker.addTo(this.map);
+      this.bgMarkers.push(marker);
     }
   }
 

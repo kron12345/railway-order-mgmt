@@ -271,17 +271,24 @@ test.describe("Timetable Editing: Grid operations on Step 2", () => {
     // Set departure time
     await page.getByLabel(DEPARTURE_ANCHOR_LABEL).fill("08:00");
 
-    // Calculate route
+    // Calculate route (stays on Step 1 after calculation)
     await dismissDevBanner(page);
     await page
       .getByRole("button", { name: CALCULATE_ROUTE_BTN })
       .click({ force: true });
 
+    // Wait for success notification (route calculated on Step 1)
+    await page.waitForTimeout(2_000);
+
+    // Click "Next" to move to Step 2
+    const NEXT_BTN = /^(Weiter|Next)$/i;
+    await page.getByRole("button", { name: NEXT_BTN }).click();
+
     // Wait for grid (Step 2) to appear
     await expect(page.locator("vaadin-grid")).toBeVisible({ timeout: 30_000 });
     await page.waitForTimeout(1_500);
 
-    // Select "All" validity dates
+    // Select "All" validity dates — calendar is now inside a Details accordion
     await page.getByText(ALL_LABEL, { exact: true }).click();
     await page.waitForTimeout(500);
 
