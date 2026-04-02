@@ -65,8 +65,7 @@ class OrderServicePositionPersistenceTest {
         var persisted = positionRepository.findByOrderId(order.getId());
         assertThat(persisted).hasSize(1);
         assertThat(persisted.getFirst().getType()).isEqualTo(PositionType.LEISTUNG);
-        assertThat(persisted.getFirst().getEnd())
-                .isEqualTo(LocalDateTime.of(2026, 3, 3, 23, 59));
+        assertThat(persisted.getFirst().getEnd()).isEqualTo(LocalDateTime.of(2026, 3, 3, 23, 59));
         assertThat(persisted.getFirst().getValidity())
                 .isEqualTo("[{\"startDate\":\"2026-03-03\",\"endDate\":\"2026-03-03\"}]");
         assertThat(persisted.getFirst().getComment()).isEqualTo("Kommentar");

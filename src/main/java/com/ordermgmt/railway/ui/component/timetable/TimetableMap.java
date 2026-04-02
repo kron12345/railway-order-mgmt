@@ -2,16 +2,16 @@ package com.ordermgmt.railway.ui.component.timetable;
 
 import java.util.List;
 
-import elemental.json.Json;
-import elemental.json.JsonArray;
-import elemental.json.JsonObject;
-
-import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.Tag;
 import com.vaadin.flow.component.dependency.JsModule;
 import com.vaadin.flow.component.dependency.NpmPackage;
+import com.vaadin.flow.component.html.Div;
 
 import com.ordermgmt.railway.domain.timetable.model.TimetableRoutePoint;
+
+import elemental.json.Json;
+import elemental.json.JsonArray;
+import elemental.json.JsonObject;
 
 /** Leaflet-based route map for the timetable builder. */
 @Tag("rom-timetable-map")

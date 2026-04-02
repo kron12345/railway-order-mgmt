@@ -38,12 +38,14 @@ public class OrderService {
 
     @Transactional(readOnly = true)
     public Optional<OrderPosition> findPositionById(UUID id) {
-        return positionRepository.findById(id).map(
-                position -> {
-                    position.getResourceNeeds().size();
-                    initializePurchasePositions(List.of(position));
-                    return position;
-                });
+        return positionRepository
+                .findById(id)
+                .map(
+                        position -> {
+                            position.getResourceNeeds().size();
+                            initializePurchasePositions(List.of(position));
+                            return position;
+                        });
     }
 
     @Transactional(readOnly = true)

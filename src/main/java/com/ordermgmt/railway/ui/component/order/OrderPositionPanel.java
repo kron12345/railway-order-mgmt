@@ -68,16 +68,16 @@ public class OrderPositionPanel extends Div {
                 .set("margin", "0")
                 .set("font-size", "var(--lumo-font-size-l)");
 
-        Button addService = new Button(
-                "+ " + t("position.type.LEISTUNG"), VaadinIcon.TOOLS.create());
+        Button addService =
+                new Button("+ " + t("position.type.LEISTUNG"), VaadinIcon.TOOLS.create());
         addService.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_PRIMARY);
-        addService.getStyle()
+        addService
+                .getStyle()
                 .set("background", "var(--rom-accent)")
                 .set("color", "var(--rom-bg-primary)");
         addService.addClickListener(e -> openServiceDialog(null));
 
-        Button addTrain = new Button(
-                "+ " + t("position.type.FAHRPLAN"), VaadinIcon.TRAIN.create());
+        Button addTrain = new Button("+ " + t("position.type.FAHRPLAN"), VaadinIcon.TRAIN.create());
         addTrain.addThemeVariants(ButtonVariant.LUMO_SMALL);
         addTrain.getStyle()
                 .set("color", "var(--rom-status-info)")
@@ -113,7 +113,8 @@ public class OrderPositionPanel extends Div {
         for (OrderPosition pos : positions) {
             rowContainer.add(
                     new OrderPositionRow(
-                            pos, translator,
+                            pos,
+                            translator,
                             this::openPositionForEdit,
                             this::confirmDeletePosition));
         }
@@ -128,8 +129,9 @@ public class OrderPositionPanel extends Div {
     }
 
     private void openServiceDialog(OrderPosition existing) {
-        ServicePositionDialog dialog = new ServicePositionDialog(
-                order, existing, orderService, opRepo, tagRepo, translator);
+        ServicePositionDialog dialog =
+                new ServicePositionDialog(
+                        order, existing, orderService, opRepo, tagRepo, translator);
         dialog.addSaveListener(e -> refreshPositions());
         dialog.open();
     }
@@ -141,10 +143,11 @@ public class OrderPositionPanel extends Div {
         dialog.setCancelText(t("common.cancel"));
         dialog.setConfirmText(t("common.delete"));
         dialog.setConfirmButtonTheme("error primary");
-        dialog.addConfirmListener(e -> {
-            orderService.deletePosition(pos.getId());
-            refreshPositions();
-        });
+        dialog.addConfirmListener(
+                e -> {
+                    orderService.deletePosition(pos.getId());
+                    refreshPositions();
+                });
         dialog.open();
     }
 

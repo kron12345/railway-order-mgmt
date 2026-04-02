@@ -1,5 +1,6 @@
 package com.ordermgmt.railway.ui.layout;
 
+import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.applayout.AppLayout;
 import com.vaadin.flow.component.applayout.DrawerToggle;
 import com.vaadin.flow.component.html.Anchor;
@@ -12,7 +13,6 @@ import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.sidenav.SideNav;
 import com.vaadin.flow.component.sidenav.SideNavItem;
-import com.vaadin.flow.component.UI;
 import com.vaadin.flow.i18n.LocaleChangeEvent;
 import com.vaadin.flow.i18n.LocaleChangeObserver;
 import com.vaadin.flow.router.AfterNavigationEvent;
@@ -21,8 +21,8 @@ import com.vaadin.flow.router.RouterLayout;
 
 import com.ordermgmt.railway.infrastructure.keycloak.CurrentUserHelper;
 import com.ordermgmt.railway.infrastructure.keycloak.KeycloakUserService;
-import com.ordermgmt.railway.ui.theme.UiThemeUtil;
 import com.ordermgmt.railway.ui.component.LanguageSwitcher;
+import com.ordermgmt.railway.ui.theme.UiThemeUtil;
 
 /** Shared application shell with navigation, breadcrumbs, and locale switching. */
 public class MainLayout extends AppLayout

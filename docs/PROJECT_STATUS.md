@@ -4,7 +4,13 @@
 
 ## Letzte Aktualisierung
 
-**2026-03-31** — Dokumentation konsolidiert fuer alle Auftragspositionstypen (`LEISTUNG`, `FAHRPLAN`), Fahrplanbuilder, Fahrplanarchiv und aktuelle UI-Darstellung
+**2026-03-31** — Dokumentation und E2E-Test fuer Timetable Archive View. Datenmodell-Route `/orders/{orderId}/timetable/{positionId}` dokumentiert, Wiki-Abschnitt "Fahrplan-Detailansicht", ARCHITECTURE.md um TimetableArchiveView/Table/Sidebar erweitert. Lifecycle-E2E um Schritt 3b (Archive View oeffnen, pruefen, zum Builder navigieren) ergaenzt.
+
+Davor: Read-only Timetable Archive View (Fahrplan-Detailansicht) unter Route `orders/:orderId/timetable/:positionId`. SplitLayout 65/35: links Div-basierte Fahrplantabelle mit Farbcodierung (Origin/Destination amber, Halte teal, Durchfahrten gedaempft, Soft-Delete durchgestrichen), rechts Karte + Gueltigkeit + Metadaten. View-Button (Auge) in OrderPositionRow fuer FAHRPLAN-Positionen. i18n in DE/EN/IT/FR.
+
+Davor: OTN-Feld (Operational Train Number) dokumentiert: Freitext VARCHAR 20 auf `timetable_archives` und `order_positions`, V8-Migration, Anzeige in Positionslisten/-kacheln, TTT-Mapping.
+
+Davor: Fahrplanbuilder Phase 2-4: Timetable-Editing Features implementiert. TimetableTableStep erneut aufgeteilt (888 -> 367+507+140 Zeilen): AddStopForm und TimetableRowEditorPanel als eigene Klassen extrahiert. Stop Add/Remove mit Inline-Form und Soft-Delete, Shift/Stretch-Zeitpropagation, Commercial-Zeitmodus (PLA/PLD), TimingQualifier-Tags, Pinned-Zeiten, Activity-Pflicht bei Halt mit visueller Hervorhebung.
 
 ## Projektstatus
 
@@ -15,7 +21,7 @@
 | Modul | Status | Entities | Views / Komponenten | Bemerkung |
 |---|---|---|---|---|
 | **Order** | CRUD aktiv | `Order`, `OrderPosition`, `ResourceNeed`, `PurchasePosition` + Status-/Typ-Enums | `OrderListView`, `OrderDetailView`, `OrderFormPanel`, `OrderPositionPanel`, `ServicePositionDialog` | Auftragsuebersicht mit Status-Chips, Detailansicht mit angereicherten Positionszeilen, Leistungspositionen als Dialog |
-| **Timetable** | Aktiv | `TimetableArchive`, `TimetableRowData`, Routing- und TTT-Enums | `TimetableBuilderView`, `TimetableMap` | Full-screen Builder in 2 Schritten, OSM-Karte, kuerzester Weg ueber SoLs, Archivierung ueber `CAPACITY`-Bedarf |
+| **Timetable** | Aktiv | `TimetableArchive`, `TimetableRowData`, `TimetableEditingService`, Routing- und TTT-Enums | `TimetableBuilderView`, `TimetableRouteStep`, `TimetableTableStep`, `TimetableRowEditorPanel`, `AddStopForm`, `TimetableFormatUtils`, `TimetableMap` | Builder mit Stop Add/Remove (Inline-Form + Soft-Delete), Shift/Stretch-Propagation, Commercial-Modus (PLA/PLD), TimingQualifier-Tags, Pinned-Zeiten |
 | **Infrastructure** | Import aktiv | `OperationalPoint`, `SectionOfLine`, `ImportLog`, `PredefinedTag` | `SettingsView`, `TagsTab`, `TopologyTab` | ERA RINF: 12.298 OPs + 13.849 SoLs (CH+DE), CSV-Import fuer Schlagwoerter, synthetische Grenzverbinder fuer Routing |
 | **Customer** | Entity | `Customer`, `CustomerStatus` | — | Repository vorhanden, eigene UI noch offen |
 | **Business** | Entity | `Business`, `BusinessStatus` | — | Repository vorhanden, eigene UI noch offen |
@@ -30,7 +36,7 @@
 | **i18n** | Aktiv | DE/EN/IT/FR, inkl. Builder, Settings, Order-Views |
 | **Push / Live Updates** | Skeleton | `BroadcastService` und `@Push` vorhanden |
 | **Audit Trail** | Aktiv | Hibernate Envers fuer Orders, Positionen, Ressourcen, Archive |
-| **Datenbank** | V1-V7 Migrationen | Orders, Positionen, Ressourcen, Bestellungen, Infrastruktur, Schlagwoerter, Positionskommentare, Fahrplanarchiv |
+| **Datenbank** | V1-V8 Migrationen | Orders, Positionen, Ressourcen, Bestellungen, Infrastruktur, Schlagwoerter, Positionskommentare, Fahrplanarchiv, OTN |
 | **Theme** | Aktiv | Profile-basiertes Theme mit sofortigem Umschalten; Fallback auf Default abgesichert |
 | **Accessibility** | Aktiv | ARIA-Labels, Tastaturbedienbarkeit, lesbare Statuschips, Builder und Liste testbar |
 | **Laufzeit** | Lokal verifiziert | Anwendung laeuft ohne Docker auf `*:8085` |
@@ -57,6 +63,7 @@
 | **OrderListView** | `/orders` | Implementiert | Accordion + Summary-Metriken + Kommentarzeile + Status-Chips mit Zaehlern und Positionsfilter |
 | **OrderDetailView** | `/orders/{id}` | Implementiert | Kompakter Header + Auftragspositionen + Bestellkalender |
 | **TimetableBuilderView** | `/orders/{orderId}/timetable-builder` | Implementiert | Full-screen Fahrplanbuilder mit Route, Karte, Tabelle und Archiv-Save |
+| **TimetableArchiveView** | `/orders/{orderId}/timetable/{positionId}` | Implementiert | Read-only Fahrplan-Detailansicht mit Div-Tabelle, Karte, Gueltigkeit und Metadaten |
 | **SettingsView** | `/settings` | Implementiert | Topologie-Import + Schlagwort-Katalog + Datenbestand + Import-Verlauf (ADMIN only) |
 
 ## UI-Komponenten
@@ -66,9 +73,13 @@
 | `OrderFormPanel` | Auftragsformular mit vordefiniertem Schlagwort-Katalog fuer `ORDER` / `GENERAL` |
 | `ServicePositionDialog` | Dialog fuer `LEISTUNG`-Positionen mit OP-Auswahl, Zeitfeldern, Gueltigkeit, Tags und Kommentar |
 | `OrderPositionPanel` | Einstieg fuer neue `LEISTUNG`- und `FAHRPLAN`-Positionen |
-| `OrderPositionRow` | Angereicherte Positionszeile in der Auftragsbearbeitung mit Route, Zeitfenster, Service-Typ, Tags und Kommentar |
+| `OrderPositionRow` | Angereicherte Positionszeile in der Auftragsbearbeitung mit Route, Zeitfenster, Service-Typ, Tags, Kommentar und View-Button (Auge) fuer FAHRPLAN |
 | `PositionTile` | Positions-Kachel in der Auftragsliste mit Route, Zeitfenster, Kommentar, Tags, Bestellanzahl und Status |
 | `PurchaseCalendarPanel` | Bestellkalender mit Summary, Grid und Details pro Position |
+| `TimetableRowEditorPanel` | Rechte Seite des Table-Steps: Zeitbearbeitung, Halt/Aktivitaet, Propagation, Commercial-Modus |
+| `AddStopForm` | Inline-Formular zum Hinzufuegen eines neuen Halts nach einer Zeile |
+| `TimetableArchiveTable` | Read-only Div-basierte Fahrplantabelle mit Farbcodierung fuer Origin/Destination, Halte, Durchfahrten und Soft-Delete |
+| `TimetableArchiveSidebar` | Rechte Seite der Archivansicht: Karte, Gueltigkeit, Metadaten |
 | `TimetableMap` | Leaflet-/OpenStreetMap-Komponente fuer die Fahrplanroute |
 | `TagsTab` | Schlagwort-Katalog mit CSV-Import im Settings-Bereich |
 | `TopologyTab` | RINF-Import und Datenbestand im Settings-Bereich |
@@ -84,6 +95,7 @@
 | V5 | `V5__predefined_tags.sql` | `predefined_tags` Tabelle fuer Schlagwort-Katalog |
 | V6 | `V6__position_comment.sql` | Kommentarspalte fuer `order_positions` und Audit |
 | V7 | `V7__timetable_archive_and_border_connectors.sql` | `timetable_archives`, Audit, FK von `resource_needs`, 0m-Grenzverbinder fuer CH/DE-Routing |
+| V8 | `V8__timetable_otn.sql` | `operational_train_number` (VARCHAR 20, nullable) auf `timetable_archives` und `order_positions` |
 
 ## ERA RINF Infrastrukturdaten
 
@@ -108,6 +120,7 @@ Hinweise:
 - [ ] TTT-Export / Versand fuer `tttRelevant` Fahrplanzeilen
 - [ ] Lazy Loading / Pagination bei grossen Datenmengen
 - [ ] Erweiterte E2E-Tests fuer Fehlerszenarien und Imports
+- [ ] E2E-Test fuer Timetable Archive View im Order-Lifecycle
 
 ## Bekannte Issues
 
@@ -125,11 +138,17 @@ Hinweise:
 7. **ADR-007**: ERA RINF als Infrastruktur-Stammdaten
 8. **ADR-008**: CSV-Import fuer Schlagwort-Katalog statt SQL-Seed
 9. **ADR-009**: `FAHRPLAN`-Positionen speichern den Detailfahrplan nicht selbst, sondern verlinken 1:1 auf `timetable_archives` ueber einen `CAPACITY`-Ressourcenbedarf
+10. **ADR-010**: Shift/Stretch-Zeitpropagation mit Pin-Konzept fuer Fahrplan-Zeitbearbeitung
 
 ## Changelog
 
 | Datum | Aenderung |
 |---|---|
+| 2026-03-31 | E2E-Test und Dokumentation fuer Timetable Archive View: Lifecycle-Test Schritt 3b, Datenmodell-Route, Wiki-Abschnitt, ARCHITECTURE.md Komponentenhierarchie |
+| 2026-03-31 | Read-only Timetable Archive View: SplitLayout 65/35, Div-basierte Fahrplantabelle mit Farbcodierung, Karte, Gueltigkeit, Metadaten. View-Button in OrderPositionRow. i18n DE/EN/IT/FR |
+| 2026-03-31 | Doku: OTN-Feld (Operational Train Number) in datenmodel.md, timetable-builder.md und PROJECT_STATUS.md dokumentiert. Freitext VARCHAR 20 auf `timetable_archives` und `order_positions`, V8-Migration |
+| 2026-03-31 | Doku: datenmodel.md (neue TimetableRowData-Felder, Enums, Editing-Service), ARCHITECTURE.md (Komponentenhierarchie, Propagationsarchitektur), ADR-010 (Shift/Stretch), Wiki timetable-builder.md, GLOSSARY.md (6 neue Begriffe) |
+| 2026-03-31 | Timetable-Editing Phase 2-4: Stop Add/Remove, Shift/Stretch-Propagation, Commercial-Modus, TimingQualifier-Tags, Pinned-Zeiten. TimetableTableStep in 3 Klassen aufgeteilt |
 | 2026-03-31 | Dokumentation fuer `LEISTUNG`- und `FAHRPLAN`-Positionen, Builder, Archiv und aktuelle UI konsolidiert |
 | 2026-03-31 | Fahrplanbuilder umgesetzt: 2 Schritte, OSM-Karte, kuerzester Weg ueber SoLs, TTT-nahe Zeitmodi, Archivspeicherung |
 | 2026-03-31 | `timetable_archives` + CH/DE-Grenzverbinder per V7 eingefuehrt |

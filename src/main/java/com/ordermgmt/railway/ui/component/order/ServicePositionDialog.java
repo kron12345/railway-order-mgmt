@@ -18,7 +18,6 @@ import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.checkbox.CheckboxGroup;
 import com.vaadin.flow.component.combobox.ComboBox;
-import com.ordermgmt.railway.ui.component.ValidityCalendar;
 import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.formlayout.FormLayout;
 import com.vaadin.flow.component.html.Div;
@@ -39,10 +38,11 @@ import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.order.model.PositionStatus;
 import com.ordermgmt.railway.domain.order.model.PositionType;
 import com.ordermgmt.railway.domain.order.service.OrderService;
+import com.ordermgmt.railway.ui.component.ValidityCalendar;
 
 /**
- * Dialog for creating/editing a "Leistung" (service) order position.
- * Fahrplan positions use a separate editor.
+ * Dialog for creating/editing a "Leistung" (service) order position. Fahrplan positions use a
+ * separate editor.
  */
 public class ServicePositionDialog extends Dialog {
 
@@ -79,8 +79,10 @@ public class ServicePositionDialog extends Dialog {
         this.position = isNew ? new OrderPosition() : existing;
         this.availableTags = loadTags(tagRepo);
 
-        setHeaderTitle(isNew ? t("position.new") + " — " + t("position.type.LEISTUNG")
-                : t("position.edit") + " — " + position.getName());
+        setHeaderTitle(
+                isNew
+                        ? t("position.new") + " — " + t("position.type.LEISTUNG")
+                        : t("position.edit") + " — " + position.getName());
         setWidth("800px");
 
         buildForm(opRepo);
@@ -129,14 +131,16 @@ public class ServicePositionDialog extends Dialog {
         startTime.setAllowedCharPattern("[0-9:]");
         startTime.setPlaceholder("HH:mm");
         startTime.setLocale(locale);
-        startTime.setI18n(new TimePicker.TimePickerI18n()
-                .setRequiredErrorMessage(t("position.startTime.required"))
-                .setBadInputErrorMessage(t("position.time.format")));
-        startTime.addValueChangeListener(event -> {
-            if (event.getValue() != null) {
-                startTime.setInvalid(false);
-            }
-        });
+        startTime.setI18n(
+                new TimePicker.TimePickerI18n()
+                        .setRequiredErrorMessage(t("position.startTime.required"))
+                        .setBadInputErrorMessage(t("position.time.format")));
+        startTime.addValueChangeListener(
+                event -> {
+                    if (event.getValue() != null) {
+                        startTime.setInvalid(false);
+                    }
+                });
 
         endTime.setLabel(t("position.endTime"));
         endTime.setHelperText(t("position.endTime.help"));
@@ -147,18 +151,21 @@ public class ServicePositionDialog extends Dialog {
         endTime.setAllowedCharPattern("[0-9:]");
         endTime.setPlaceholder("HH:mm");
         endTime.setLocale(locale);
-        endTime.setI18n(new TimePicker.TimePickerI18n()
-                .setRequiredErrorMessage(t("position.endTime.required"))
-                .setBadInputErrorMessage(t("position.time.format")));
-        endTime.addValueChangeListener(event -> {
-            if (event.getValue() != null) {
-                endTime.setInvalid(false);
-            }
-        });
+        endTime.setI18n(
+                new TimePicker.TimePickerI18n()
+                        .setRequiredErrorMessage(t("position.endTime.required"))
+                        .setBadInputErrorMessage(t("position.time.format")));
+        endTime.addValueChangeListener(
+                event -> {
+                    if (event.getValue() != null) {
+                        endTime.setInvalid(false);
+                    }
+                });
 
         // Validity calendar — multi-date selection within order range
         LocalDate orderFrom = order.getValidFrom() != null ? order.getValidFrom() : LocalDate.now();
-        LocalDate orderTo = order.getValidTo() != null ? order.getValidTo() : orderFrom.plusMonths(3);
+        LocalDate orderTo =
+                order.getValidTo() != null ? order.getValidTo() : orderFrom.plusMonths(3);
         validityCalendar = new ValidityCalendar(orderFrom, orderTo);
 
         tags.setLabel(t("order.tags"));
@@ -175,8 +182,7 @@ public class ServicePositionDialog extends Dialog {
 
         FormLayout form = new FormLayout();
         form.setResponsiveSteps(
-                new FormLayout.ResponsiveStep("0", 1),
-                new FormLayout.ResponsiveStep("500px", 2));
+                new FormLayout.ResponsiveStep("0", 1), new FormLayout.ResponsiveStep("500px", 2));
 
         form.add(name, serviceType);
         form.add(fromOp, toOp);
@@ -191,9 +197,10 @@ public class ServicePositionDialog extends Dialog {
                 .set("color", "var(--rom-text-primary)")
                 .set("display", "block")
                 .set("margin-bottom", "6px");
-        Span calHelper = new Span(t("position.validity.help",
-                orderFrom.toString(), orderTo.toString()));
-        calHelper.getStyle()
+        Span calHelper =
+                new Span(t("position.validity.help", orderFrom.toString(), orderTo.toString()));
+        calHelper
+                .getStyle()
                 .set("font-size", "10px")
                 .set("font-family", "'JetBrains Mono', monospace")
                 .set("color", "var(--rom-text-muted)")
@@ -243,14 +250,20 @@ public class ServicePositionDialog extends Dialog {
             // Fallback: use start/end as range
             LocalDate d = position.getStart().toLocalDate();
             LocalDate end = position.getEnd() != null ? position.getEnd().toLocalDate() : d;
-            while (!d.isAfter(end)) { dates.add(d); d = d.plusDays(1); }
+            while (!d.isAfter(end)) {
+                dates.add(d);
+                d = d.plusDays(1);
+            }
         }
         validityCalendar.setSelectedDates(dates);
         readTags(position.getTags());
     }
 
     private void savePosition() {
-        if (name.getValue().isBlank()) { name.setInvalid(true); return; }
+        if (name.getValue().isBlank()) {
+            name.setInvalid(true);
+            return;
+        }
 
         if (startTime.getValue() == null) {
             startTime.setInvalid(true);
@@ -268,8 +281,8 @@ public class ServicePositionDialog extends Dialog {
 
         List<LocalDate> selectedDates = validityCalendar.getSelectedDates();
         if (selectedDates.isEmpty()) {
-            Notification.show(t("position.validity.required"), 3000,
-                            Notification.Position.BOTTOM_END)
+            Notification.show(
+                            t("position.validity.required"), 3000, Notification.Position.BOTTOM_END)
                     .addThemeVariants(NotificationVariant.LUMO_ERROR);
             return;
         }
@@ -318,7 +331,10 @@ public class ServicePositionDialog extends Dialog {
     private List<PredefinedTag> loadTags(PredefinedTagRepository tagRepo) {
         return tagRepo.findAllByOrderByCategoryAscSortOrderAsc().stream()
                 .filter(PredefinedTag::isActive)
-                .filter(t -> "POSITION".equals(t.getCategory()) || "GENERAL".equals(t.getCategory()))
+                .filter(
+                        t ->
+                                "POSITION".equals(t.getCategory())
+                                        || "GENERAL".equals(t.getCategory()))
                 .toList();
     }
 
@@ -405,7 +421,11 @@ public class ServicePositionDialog extends Dialog {
                 rangeStart = d;
             } else if (!d.equals(prev.plusDays(1))) {
                 if (!first) sb.append(",");
-                sb.append("{\"startDate\":\"").append(rangeStart).append("\",\"endDate\":\"").append(prev).append("\"}");
+                sb.append("{\"startDate\":\"")
+                        .append(rangeStart)
+                        .append("\",\"endDate\":\"")
+                        .append(prev)
+                        .append("\"}");
                 first = false;
                 rangeStart = d;
             }
@@ -413,7 +433,11 @@ public class ServicePositionDialog extends Dialog {
         }
         if (rangeStart != null) {
             if (!first) sb.append(",");
-            sb.append("{\"startDate\":\"").append(rangeStart).append("\",\"endDate\":\"").append(prev).append("\"}");
+            sb.append("{\"startDate\":\"")
+                    .append(rangeStart)
+                    .append("\",\"endDate\":\"")
+                    .append(prev)
+                    .append("\"}");
         }
         sb.append("]");
         return sb.toString();
@@ -434,7 +458,8 @@ public class ServicePositionDialog extends Dialog {
                     for (LocalDate d = s; !d.isAfter(e); d = d.plusDays(1)) dates.add(d);
                 }
             }
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        }
         return dates;
     }
 
@@ -452,9 +477,18 @@ public class ServicePositionDialog extends Dialog {
 
     // --- Helpers ---
 
-    private String t(String key) { return translator.apply(key, new Object[0]); }
-    private String t(String key, Object... params) { return translator.apply(key, params); }
-    private static String nvl(String s) { return s != null ? s : ""; }
+    private String t(String key) {
+        return translator.apply(key, new Object[0]);
+    }
+
+    private String t(String key, Object... params) {
+        return translator.apply(key, params);
+    }
+
+    private static String nvl(String s) {
+        return s != null ? s : "";
+    }
+
     private static String blankToNull(String s) {
         return s != null && !s.isBlank() ? s.trim() : null;
     }

@@ -31,19 +31,24 @@ class TimetableRoutingServiceTest {
 
         when(operationalPointRepository.findAll()).thenReturn(List.of(basel, olten, bern));
         when(sectionOfLineRepository.findAll())
-                .thenReturn(List.of(
-                        section("SOL-1", "CH00001", "CH00002", 54_000D),
-                        section("SOL-2", "CH00002", "CH00003", 40_000D),
-                        section("SOL-3", "CH00001", "CH00003", 140_000D)));
+                .thenReturn(
+                        List.of(
+                                section("SOL-1", "CH00001", "CH00002", 54_000D),
+                                section("SOL-2", "CH00002", "CH00003", 40_000D),
+                                section("SOL-3", "CH00001", "CH00003", 140_000D)));
 
         TimetableRoutingService service =
                 new TimetableRoutingService(operationalPointRepository, sectionOfLineRepository);
 
         var route = service.calculateRoute(List.of(basel, bern));
 
-        assertThat(route.points()).extracting(point -> point.name()).containsExactly("Basel SBB", "Olten", "Bern");
-        assertThat(route.points()).extracting(point -> point.routePointRole())
-                .containsExactly(RoutePointRole.ORIGIN, RoutePointRole.AUTO, RoutePointRole.DESTINATION);
+        assertThat(route.points())
+                .extracting(point -> point.name())
+                .containsExactly("Basel SBB", "Olten", "Bern");
+        assertThat(route.points())
+                .extracting(point -> point.routePointRole())
+                .containsExactly(
+                        RoutePointRole.ORIGIN, RoutePointRole.AUTO, RoutePointRole.DESTINATION);
         assertThat(route.totalLengthMeters()).isEqualTo(94_000D);
 
         var rows = service.estimateRows(route, LocalTime.of(10, 0), null);

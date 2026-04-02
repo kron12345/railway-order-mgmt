@@ -74,14 +74,15 @@ class TimetableArchiveServiceTest {
         destination.setArrivalExact("11:02");
         destination.setEstimatedArrival("11:02");
 
-        var saved = timetableArchiveService.saveTimetablePosition(
-                order,
-                null,
-                "Basel - Olten",
-                "Trasse, Test",
-                "Archivtest",
-                List.of(LocalDate.of(2026, 4, 2), LocalDate.of(2026, 4, 3)),
-                List.of(origin, destination));
+        var saved =
+                timetableArchiveService.saveTimetablePosition(
+                        order,
+                        null,
+                        "Basel - Olten",
+                        "Trasse, Test",
+                        "Archivtest",
+                        List.of(LocalDate.of(2026, 4, 2), LocalDate.of(2026, 4, 3)),
+                        List.of(origin, destination));
 
         assertThat(saved.getId()).isNotNull();
         assertThat(saved.getType()).isEqualTo(PositionType.FAHRPLAN);
@@ -91,15 +92,19 @@ class TimetableArchiveServiceTest {
         assertThat(saved.getEnd()).isEqualTo(LocalDate.of(2026, 4, 3).atTime(11, 2));
         assertThat(saved.getResourceNeeds())
                 .hasSize(1)
-                .allSatisfy(need -> assertThat(need.getResourceType()).isEqualTo(ResourceType.CAPACITY));
+                .allSatisfy(
+                        need ->
+                                assertThat(need.getResourceType())
+                                        .isEqualTo(ResourceType.CAPACITY));
 
         var persisted = orderPositionRepository.findById(saved.getId()).orElseThrow();
         assertThat(persisted.getResourceNeeds()).hasSize(1);
         assertThat(persisted.getResourceNeeds().getFirst().getLinkedFahrplanId()).isNotNull();
 
-        TimetableArchive archive = timetableArchiveRepository
-                .findById(persisted.getResourceNeeds().getFirst().getLinkedFahrplanId())
-                .orElseThrow();
+        TimetableArchive archive =
+                timetableArchiveRepository
+                        .findById(persisted.getResourceNeeds().getFirst().getLinkedFahrplanId())
+                        .orElseThrow();
         assertThat(archive.getRouteSummary()).isEqualTo("Basel SBB → Olten");
         assertThat(archive.getTableData()).contains("Basel SBB").contains("Olten");
     }

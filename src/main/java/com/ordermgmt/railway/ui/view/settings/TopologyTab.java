@@ -19,8 +19,8 @@ public class TopologyTab extends Div {
     private final Grid<OperationalPoint> grid = new Grid<>(OperationalPoint.class, false);
     private final BiFunction<String, Object[], String> t;
 
-    public TopologyTab(OperationalPointRepository opRepo,
-                       BiFunction<String, Object[], String> translator) {
+    public TopologyTab(
+            OperationalPointRepository opRepo, BiFunction<String, Object[], String> translator) {
         this.opRepo = opRepo;
         this.t = translator;
         setWidthFull();
@@ -41,18 +41,28 @@ public class TopologyTab extends Div {
         add(search);
 
         grid.addColumn(OperationalPoint::getUopid)
-                .setHeader("UOPID").setWidth("100px").setSortable(true);
+                .setHeader("UOPID")
+                .setWidth("100px")
+                .setSortable(true);
         grid.addColumn(OperationalPoint::getName)
-                .setHeader(tr("settings.topology.name")).setSortable(true).setFlexGrow(2);
-        grid.addColumn(OperationalPoint::getTafTapCode)
-                .setHeader("PLC").setWidth("100px");
+                .setHeader(tr("settings.topology.name"))
+                .setSortable(true)
+                .setFlexGrow(2);
+        grid.addColumn(OperationalPoint::getTafTapCode).setHeader("PLC").setWidth("100px");
         grid.addColumn(op -> opTypeName(op.getOpType()))
-                .setHeader(tr("settings.topology.type")).setWidth("140px");
+                .setHeader(tr("settings.topology.type"))
+                .setWidth("140px");
         grid.addColumn(OperationalPoint::getCountry)
-                .setHeader(tr("settings.import.country")).setWidth("60px");
-        grid.addColumn(op -> op.getLatitude() != null
-                        ? String.format("%.4f, %.4f", op.getLatitude(), op.getLongitude()) : "—")
-                .setHeader("Koordinaten").setWidth("160px");
+                .setHeader(tr("settings.import.country"))
+                .setWidth("60px");
+        grid.addColumn(
+                        op ->
+                                op.getLatitude() != null
+                                        ? String.format(
+                                                "%.4f, %.4f", op.getLatitude(), op.getLongitude())
+                                        : "—")
+                .setHeader("Koordinaten")
+                .setWidth("160px");
 
         grid.addThemeVariants(GridVariant.LUMO_NO_BORDER, GridVariant.LUMO_COMPACT);
         grid.setPageSize(50);

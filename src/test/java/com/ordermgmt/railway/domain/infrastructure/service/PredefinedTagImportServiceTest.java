@@ -24,11 +24,9 @@ import com.ordermgmt.railway.domain.infrastructure.repository.PredefinedTagRepos
 @ExtendWith(MockitoExtension.class)
 class PredefinedTagImportServiceTest {
 
-    @Mock
-    private PredefinedTagRepository tagRepository;
+    @Mock private PredefinedTagRepository tagRepository;
 
-    @InjectMocks
-    private PredefinedTagImportService importService;
+    @InjectMocks private PredefinedTagImportService importService;
 
     @Test
     void importsNewTagsAndUpdatesExistingOnes() throws Exception {

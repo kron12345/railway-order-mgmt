@@ -19,10 +19,10 @@ import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
-import com.vaadin.flow.component.upload.Upload;
-import com.vaadin.flow.component.upload.receivers.MemoryBuffer;
 import com.vaadin.flow.component.textfield.IntegerField;
 import com.vaadin.flow.component.textfield.TextField;
+import com.vaadin.flow.component.upload.Upload;
+import com.vaadin.flow.component.upload.receivers.MemoryBuffer;
 
 import com.ordermgmt.railway.domain.infrastructure.model.PredefinedTag;
 import com.ordermgmt.railway.domain.infrastructure.repository.PredefinedTagRepository;
@@ -36,9 +36,10 @@ public class TagsTab extends Div {
     private final Grid<PredefinedTag> grid = new Grid<>(PredefinedTag.class, false);
     private final BiFunction<String, Object[], String> t;
 
-    public TagsTab(PredefinedTagRepository tagRepo,
-                   PredefinedTagImportService importService,
-                   BiFunction<String, Object[], String> translator) {
+    public TagsTab(
+            PredefinedTagRepository tagRepo,
+            PredefinedTagImportService importService,
+            BiFunction<String, Object[], String> translator) {
         this.tagRepo = tagRepo;
         this.importService = importService;
         this.t = translator;
@@ -67,64 +68,88 @@ public class TagsTab extends Div {
         add(header, createImportSection());
 
         grid.addColumn(PredefinedTag::getName)
-                .setHeader(tr("settings.tags.name")).setSortable(true).setFlexGrow(2);
+                .setHeader(tr("settings.tags.name"))
+                .setSortable(true)
+                .setFlexGrow(2);
 
-        grid.addComponentColumn(tag -> {
-            Span badge = new Span(categoryLabel(tag.getCategory()));
-            String color = switch (tag.getCategory()) {
-                case "ORDER" -> "var(--rom-accent)";
-                case "POSITION" -> "var(--rom-status-info)";
-                default -> "var(--rom-text-muted)";
-            };
-            badge.getStyle()
-                    .set("font-family", "'JetBrains Mono', monospace")
-                    .set("font-size", "10px")
-                    .set("font-weight", "600")
-                    .set("padding", "2px 6px")
-                    .set("border-radius", "3px")
-                    .set("color", color)
-                    .set("background", "color-mix(in srgb, " + color + " 12%, transparent)");
-            return badge;
-        }).setHeader(tr("settings.tags.category")).setWidth("120px");
+        grid.addComponentColumn(
+                        tag -> {
+                            Span badge = new Span(categoryLabel(tag.getCategory()));
+                            String color =
+                                    switch (tag.getCategory()) {
+                                        case "ORDER" -> "var(--rom-accent)";
+                                        case "POSITION" -> "var(--rom-status-info)";
+                                        default -> "var(--rom-text-muted)";
+                                    };
+                            badge.getStyle()
+                                    .set("font-family", "'JetBrains Mono', monospace")
+                                    .set("font-size", "10px")
+                                    .set("font-weight", "600")
+                                    .set("padding", "2px 6px")
+                                    .set("border-radius", "3px")
+                                    .set("color", color)
+                                    .set(
+                                            "background",
+                                            "color-mix(in srgb, " + color + " 12%, transparent)");
+                            return badge;
+                        })
+                .setHeader(tr("settings.tags.category"))
+                .setWidth("120px");
 
-        grid.addComponentColumn(tag -> {
-            if (tag.getColor() == null) return new Span("—");
-            Div dot = new Div();
-            dot.getStyle()
-                    .set("width", "16px").set("height", "16px")
-                    .set("border-radius", "4px")
-                    .set("background", tag.getColor());
-            return dot;
-        }).setHeader(tr("settings.tags.color")).setWidth("60px");
+        grid.addComponentColumn(
+                        tag -> {
+                            if (tag.getColor() == null) return new Span("—");
+                            Div dot = new Div();
+                            dot.getStyle()
+                                    .set("width", "16px")
+                                    .set("height", "16px")
+                                    .set("border-radius", "4px")
+                                    .set("background", tag.getColor());
+                            return dot;
+                        })
+                .setHeader(tr("settings.tags.color"))
+                .setWidth("60px");
 
-        grid.addColumn(PredefinedTag::getSortOrder)
-                .setHeader("#").setWidth("50px");
+        grid.addColumn(PredefinedTag::getSortOrder).setHeader("#").setWidth("50px");
 
-        grid.addComponentColumn(tag -> {
-            Span status = new Span(tag.isActive() ? "✓" : "—");
-            status.getStyle().set("color",
-                    tag.isActive() ? "var(--rom-status-active)" : "var(--rom-text-muted)");
-            return status;
-        }).setHeader(tr("settings.tags.active")).setWidth("60px");
+        grid.addComponentColumn(
+                        tag -> {
+                            Span status = new Span(tag.isActive() ? "✓" : "—");
+                            status.getStyle()
+                                    .set(
+                                            "color",
+                                            tag.isActive()
+                                                    ? "var(--rom-status-active)"
+                                                    : "var(--rom-text-muted)");
+                            return status;
+                        })
+                .setHeader(tr("settings.tags.active"))
+                .setWidth("60px");
 
-        grid.addComponentColumn(tag -> {
-            Button edit = new Button(VaadinIcon.EDIT.create());
-            edit.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
-            edit.getStyle().set("color", "var(--rom-text-muted)");
-            edit.addClickListener(e -> openTagDialog(tag));
+        grid.addComponentColumn(
+                        tag -> {
+                            Button edit = new Button(VaadinIcon.EDIT.create());
+                            edit.addThemeVariants(
+                                    ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
+                            edit.getStyle().set("color", "var(--rom-text-muted)");
+                            edit.addClickListener(e -> openTagDialog(tag));
 
-            Button del = new Button(VaadinIcon.TRASH.create());
-            del.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
-            del.getStyle().set("color", "var(--rom-status-danger)");
-            del.addClickListener(e -> {
-                tagRepo.delete(tag);
-                refresh();
-            });
+                            Button del = new Button(VaadinIcon.TRASH.create());
+                            del.addThemeVariants(
+                                    ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
+                            del.getStyle().set("color", "var(--rom-status-danger)");
+                            del.addClickListener(
+                                    e -> {
+                                        tagRepo.delete(tag);
+                                        refresh();
+                                    });
 
-            HorizontalLayout actions = new HorizontalLayout(edit, del);
-            actions.setSpacing(false);
-            return actions;
-        }).setHeader("").setWidth("80px");
+                            HorizontalLayout actions = new HorizontalLayout(edit, del);
+                            actions.setSpacing(false);
+                            return actions;
+                        })
+                .setHeader("")
+                .setWidth("80px");
 
         grid.addThemeVariants(GridVariant.LUMO_NO_BORDER, GridVariant.LUMO_COMPACT);
         grid.setAllRowsVisible(true);
@@ -185,22 +210,23 @@ public class TagsTab extends Div {
         save.getStyle()
                 .set("background", "var(--rom-accent)")
                 .set("color", "var(--rom-bg-primary)");
-        save.addClickListener(e -> {
-            if (name.getValue().isBlank()) {
-                name.setInvalid(true);
-                return;
-            }
-            tag.setName(name.getValue().trim());
-            tag.setCategory(category.getValue());
-            tag.setColor(color.getValue().isBlank() ? null : color.getValue().trim());
-            tag.setSortOrder(sortOrder.getValue() != null ? sortOrder.getValue() : 0);
-            tag.setActive(active.getValue());
-            tagRepo.save(tag);
-            Notification.show("✓", 2000, Notification.Position.BOTTOM_END)
-                    .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
-            dialog.close();
-            refresh();
-        });
+        save.addClickListener(
+                e -> {
+                    if (name.getValue().isBlank()) {
+                        name.setInvalid(true);
+                        return;
+                    }
+                    tag.setName(name.getValue().trim());
+                    tag.setCategory(category.getValue());
+                    tag.setColor(color.getValue().isBlank() ? null : color.getValue().trim());
+                    tag.setSortOrder(sortOrder.getValue() != null ? sortOrder.getValue() : 0);
+                    tag.setActive(active.getValue());
+                    tagRepo.save(tag);
+                    Notification.show("✓", 2000, Notification.Position.BOTTOM_END)
+                            .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+                    dialog.close();
+                    refresh();
+                });
 
         dialog.getFooter().add(cancel, save);
         dialog.open();
@@ -222,10 +248,7 @@ public class TagsTab extends Div {
                 .set("padding", "0 0 var(--lumo-space-s) 0");
 
         Div text = new Div();
-        text.getStyle()
-                .set("display", "flex")
-                .set("flex-direction", "column")
-                .set("gap", "4px");
+        text.getStyle().set("display", "flex").set("flex-direction", "column").set("gap", "4px");
 
         Span title = new Span(tr("settings.tags.import"));
         title.getStyle()
@@ -234,9 +257,7 @@ public class TagsTab extends Div {
                 .set("color", "var(--rom-text-primary)");
 
         Span desc = new Span(tr("settings.tags.import.desc"));
-        desc.getStyle()
-                .set("font-size", "11px")
-                .set("color", "var(--rom-text-muted)");
+        desc.getStyle().set("font-size", "11px").set("color", "var(--rom-text-muted)");
 
         Span sample = new Span(tr("settings.tags.import.sample", "data/seeds/predefined-tags.csv"));
         sample.getStyle()
@@ -249,8 +270,8 @@ public class TagsTab extends Div {
         Upload upload = new Upload(buffer);
         upload.setAcceptedFileTypes(".csv");
         upload.setMaxFiles(1);
-        upload.setUploadButton(new Button(tr("settings.tags.import.upload"),
-                VaadinIcon.UPLOAD.create()));
+        upload.setUploadButton(
+                new Button(tr("settings.tags.import.upload"), VaadinIcon.UPLOAD.create()));
         upload.addSucceededListener(event -> importCsv(buffer));
 
         section.add(text, upload);

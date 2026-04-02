@@ -49,10 +49,12 @@ jobs:
       - name: Unit Tests
         run: mvn test -B -pl .
         env:
-          SPRING_PROFILES_ACTIVE: test
+          SPRING_PROFILES_ACTIVE: ci
 
       - name: ArchUnit Tests
         run: mvn test -B -Dtest="com.ordermgmt.railway.architecture.*" -pl .
+        env:
+          SPRING_PROFILES_ACTIVE: ci
 
       - name: SpotBugs (Static Analysis)
         run: mvn spotbugs:check -B

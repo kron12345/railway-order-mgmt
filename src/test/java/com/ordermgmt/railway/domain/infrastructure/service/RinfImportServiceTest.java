@@ -28,29 +28,27 @@ import com.ordermgmt.railway.domain.infrastructure.repository.SectionOfLineRepos
 @ExtendWith(MockitoExtension.class)
 class RinfImportServiceTest {
 
-    @Mock
-    private OperationalPointRepository opRepo;
+    @Mock private OperationalPointRepository opRepo;
 
-    @Mock
-    private SectionOfLineRepository solRepo;
+    @Mock private SectionOfLineRepository solRepo;
 
-    @Mock
-    private ImportLogRepository logRepo;
+    @Mock private ImportLogRepository logRepo;
 
-    @Mock
-    private TransactionOperations transactionOperations;
+    @Mock private TransactionOperations transactionOperations;
 
-    @InjectMocks
-    private RinfImportService importService;
+    @InjectMocks private RinfImportService importService;
 
     @Test
     void deduplicatesOperationalPointsByUopidBeforePersisting() {
-        when(transactionOperations.execute(any())).thenAnswer(invocation -> {
-            @SuppressWarnings("unchecked")
-            TransactionCallback<Integer> callback = invocation.getArgument(0);
-            return callback.doInTransaction(new SimpleTransactionStatus());
-        });
-        when(logRepo.save(any(ImportLog.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(transactionOperations.execute(any()))
+                .thenAnswer(
+                        invocation -> {
+                            @SuppressWarnings("unchecked")
+                            TransactionCallback<Integer> callback = invocation.getArgument(0);
+                            return callback.doInTransaction(new SimpleTransactionStatus());
+                        });
+        when(logRepo.save(any(ImportLog.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
         String csv =
                 """
@@ -78,8 +76,11 @@ class RinfImportServiceTest {
     @Test
     void recordsErrorLogWhenTransactionalImportFails() {
         when(transactionOperations.execute(any()))
-                .thenThrow(new IllegalStateException("duplicate key value violates unique constraint"));
-        when(logRepo.save(any(ImportLog.class))).thenAnswer(invocation -> invocation.getArgument(0));
+                .thenThrow(
+                        new IllegalStateException(
+                                "duplicate key value violates unique constraint"));
+        when(logRepo.save(any(ImportLog.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
         String csv =
                 """

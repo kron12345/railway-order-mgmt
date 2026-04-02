@@ -34,4 +34,19 @@ public class TimetableRowData {
     private String departureExact;
     private String departureEarliest;
     private String departureLatest;
+
+    /** Commercial arrival time (PLA — published timetable). */
+    private String commercialArrival;
+
+    /** Commercial departure time (PLD — published timetable). */
+    private String commercialDeparture;
+
+    /** Whether this row's times are pinned (not affected by shift/stretch propagation). */
+    private Boolean pinned = false;
+
+    /** Whether this stop was manually added (not from route calculation). */
+    private Boolean manuallyAdded = false;
+
+    /** Whether this stop is soft-deleted (strike-through, recoverable). */
+    private Boolean deleted = false;
 }

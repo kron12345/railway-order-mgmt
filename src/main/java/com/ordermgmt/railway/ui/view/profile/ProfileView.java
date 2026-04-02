@@ -16,7 +16,6 @@ import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.notification.NotificationVariant;
-import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.router.PageTitle;
@@ -86,12 +85,14 @@ public class ProfileView extends VerticalLayout {
         info.setWidthFull();
         info.getStyle().set("gap", "24px").set("flex-wrap", "wrap");
 
-        info.add(infoBox(getTranslation("profile.username"),
-                attrs.getOrDefault("username", "—")));
-        info.add(infoBox(getTranslation("profile.name"),
-                attrs.getOrDefault("firstName", "") + " " + attrs.getOrDefault("lastName", "")));
-        info.add(infoBox(getTranslation("profile.email"),
-                attrs.getOrDefault("email", "—")));
+        info.add(infoBox(getTranslation("profile.username"), attrs.getOrDefault("username", "—")));
+        info.add(
+                infoBox(
+                        getTranslation("profile.name"),
+                        attrs.getOrDefault("firstName", "")
+                                + " "
+                                + attrs.getOrDefault("lastName", "")));
+        info.add(infoBox(getTranslation("profile.email"), attrs.getOrDefault("email", "—")));
 
         card.add(info);
 
@@ -99,7 +100,8 @@ public class ProfileView extends VerticalLayout {
         Div rolesSection = new Div();
         rolesSection.getStyle().set("margin-top", "var(--lumo-space-m)");
         Span rolesLabel = new Span(getTranslation("profile.roles"));
-        rolesLabel.getStyle()
+        rolesLabel
+                .getStyle()
                 .set("font-family", "'JetBrains Mono', monospace")
                 .set("font-size", "10px")
                 .set("text-transform", "uppercase")
@@ -112,7 +114,8 @@ public class ProfileView extends VerticalLayout {
         HorizontalLayout roleBadges = new HorizontalLayout();
         roleBadges.getStyle().set("gap", "6px").set("flex-wrap", "wrap");
         for (String role : roles) {
-            if (role.startsWith("default-roles-") || role.equals("offline_access")
+            if (role.startsWith("default-roles-")
+                    || role.equals("offline_access")
                     || role.equals("uma_authorization")) {
                 continue;
             }
@@ -147,13 +150,16 @@ public class ProfileView extends VerticalLayout {
 
         themeSelect = new ComboBox<>(getTranslation("profile.theme"));
         themeSelect.setItems("dark-amber", "dark-teal", "light");
-        themeSelect.setItemLabelGenerator(t -> switch (t) {
-            case "dark-amber" -> "Dark (Amber)";
-            case "dark-teal" -> "Dark (Teal)";
-            case "light" -> "Light";
-            default -> t;
-        });
-        themeSelect.setValue(UiThemeUtil.normalize(attrs.getOrDefault("theme", UiThemeUtil.DEFAULT_THEME)));
+        themeSelect.setItemLabelGenerator(
+                t ->
+                        switch (t) {
+                            case "dark-amber" -> "Dark (Amber)";
+                            case "dark-teal" -> "Dark (Teal)";
+                            case "light" -> "Light";
+                            default -> t;
+                        });
+        themeSelect.setValue(
+                UiThemeUtil.normalize(attrs.getOrDefault("theme", UiThemeUtil.DEFAULT_THEME)));
         themeSelect.setWidth("200px");
 
         fpjSelect = new ComboBox<>(getTranslation("profile.defaultFpj"));
@@ -164,12 +170,14 @@ public class ProfileView extends VerticalLayout {
 
         countrySelect = new ComboBox<>(getTranslation("profile.defaultCountry"));
         countrySelect.setItems("CHE", "DEU");
-        countrySelect.setItemLabelGenerator(c -> "CHE".equals(c) ? "Schweiz (CH)" : "Deutschland (DE)");
+        countrySelect.setItemLabelGenerator(
+                c -> "CHE".equals(c) ? "Schweiz (CH)" : "Deutschland (DE)");
         countrySelect.setValue(attrs.getOrDefault("defaultCountry", null));
         countrySelect.setWidth("200px");
 
         timezoneSelect = new ComboBox<>(getTranslation("profile.timezone"));
-        timezoneSelect.setItems("Europe/Zurich", "Europe/Berlin", "Europe/Vienna", "Europe/Paris", "UTC");
+        timezoneSelect.setItems(
+                "Europe/Zurich", "Europe/Berlin", "Europe/Vienna", "Europe/Paris", "UTC");
         timezoneSelect.setValue(attrs.getOrDefault("timezone", "Europe/Zurich"));
         timezoneSelect.setWidth("200px");
 
@@ -200,16 +208,23 @@ public class ProfileView extends VerticalLayout {
     }
 
     private void savePreferences() {
-        Map<String, String> prefs = Map.of(
-                "locale", localeSelect.getValue() != null ? localeSelect.getValue() : "de",
-                "theme", UiThemeUtil.normalize(themeSelect.getValue()),
-                "defaultFpj", fpjSelect.getValue() != null ? fpjSelect.getValue() : "",
-                "defaultCountry", countrySelect.getValue() != null ? countrySelect.getValue() : "",
-                "timezone", timezoneSelect.getValue() != null ? timezoneSelect.getValue() : "Europe/Zurich");
+        Map<String, String> prefs =
+                Map.of(
+                        "locale", localeSelect.getValue() != null ? localeSelect.getValue() : "de",
+                        "theme", UiThemeUtil.normalize(themeSelect.getValue()),
+                        "defaultFpj", fpjSelect.getValue() != null ? fpjSelect.getValue() : "",
+                        "defaultCountry",
+                                countrySelect.getValue() != null ? countrySelect.getValue() : "",
+                        "timezone",
+                                timezoneSelect.getValue() != null
+                                        ? timezoneSelect.getValue()
+                                        : "Europe/Zurich");
 
         boolean ok = keycloakService.updateUserAttributes(userId, prefs);
         if (ok) {
-            Notification.show(getTranslation("common.save") + " ✓", 3000,
+            Notification.show(
+                            getTranslation("common.save") + " ✓",
+                            3000,
                             Notification.Position.BOTTOM_END)
                     .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
 
@@ -220,7 +235,9 @@ public class ProfileView extends VerticalLayout {
             }
             UiThemeUtil.applyToCurrentUi(prefs.get("theme"));
         } else {
-            Notification.show(getTranslation("settings.import.error"), 3000,
+            Notification.show(
+                            getTranslation("settings.import.error"),
+                            3000,
                             Notification.Position.BOTTOM_END)
                     .addThemeVariants(NotificationVariant.LUMO_ERROR);
         }

@@ -57,6 +57,10 @@ public class OrderPosition {
     @Column(length = 100)
     private String serviceType;
 
+    /** Operational Train Number (OTN) — free text, e.g. "95345" or "95xxx". */
+    @Column(length = 20)
+    private String operationalTrainNumber;
+
     private String fromLocation;
 
     private String toLocation;

@@ -45,6 +45,10 @@ public class TimetableArchive {
     @Column(length = 500)
     private String routeSummary;
 
+    /** Operational Train Number (OTN) — free text, e.g. "95345" or "95xxx". */
+    @Column(length = 20)
+    private String operationalTrainNumber;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "table_data", columnDefinition = "jsonb", nullable = false)
     private String tableData;

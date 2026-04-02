@@ -15,12 +15,12 @@ import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
+import com.vaadin.flow.component.combobox.ComboBox;
 import com.vaadin.flow.component.details.Details;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.icon.VaadinIcon;
-import com.vaadin.flow.component.combobox.ComboBox;
 import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
@@ -78,7 +78,8 @@ public class OrderListView extends VerticalLayout {
                 .set("margin", "0");
 
         countLabel = new Span();
-        countLabel.getStyle()
+        countLabel
+                .getStyle()
                 .set("color", "var(--rom-text-muted)")
                 .set("font-size", "var(--lumo-font-size-s)")
                 .set("margin-left", "var(--lumo-space-s)");
@@ -198,14 +199,16 @@ public class OrderListView extends VerticalLayout {
                 .set("min-width", "120px");
 
         Span metricLabel = new Span(label);
-        metricLabel.getStyle()
+        metricLabel
+                .getStyle()
                 .set("font-size", "10px")
                 .set("text-transform", "uppercase")
                 .set("letter-spacing", "0.06em")
                 .set("color", "var(--rom-text-muted)");
 
         Span metricValue = new Span(value);
-        metricValue.getStyle()
+        metricValue
+                .getStyle()
                 .set("font-size", "12px")
                 .set("font-weight", "600")
                 .set("color", "var(--rom-text-primary)")
@@ -239,7 +242,9 @@ public class OrderListView extends VerticalLayout {
     }
 
     private String formatTimestamp(Instant value) {
-        return value != null ? TS_FMT.withZone(java.time.ZoneId.systemDefault()).format(value) : "—";
+        return value != null
+                ? TS_FMT.withZone(java.time.ZoneId.systemDefault()).format(value)
+                : "—";
     }
 
     private List<String> splitTags(String rawTags) {
@@ -307,12 +312,14 @@ public class OrderListView extends VerticalLayout {
                         Comparator.comparing(
                                         OrderPosition::getStart,
                                         Comparator.nullsLast(Comparator.naturalOrder()))
-                                .thenComparing(OrderPosition::getName, String.CASE_INSENSITIVE_ORDER))
+                                .thenComparing(
+                                        OrderPosition::getName, String.CASE_INSENSITIVE_ORDER))
                 .toList();
     }
 
     private void preventSummaryToggle(Component component) {
-        component.getElement()
+        component
+                .getElement()
                 .executeJs(
                         "this.addEventListener('click', function(event){ event.stopPropagation(); });"
                                 + "this.addEventListener('keydown', function(event){"
@@ -379,7 +386,8 @@ public class OrderListView extends VerticalLayout {
                     .set("color", "var(--rom-text-secondary)");
 
             Span orderName = new Span(order.getName());
-            orderName.getStyle()
+            orderName
+                    .getStyle()
                     .set("font-size", "15px")
                     .set("font-weight", "700")
                     .set("line-height", "1.3")
@@ -437,13 +445,15 @@ public class OrderListView extends VerticalLayout {
                     .set("min-width", "280px");
 
             meta.add(
-                    createSummaryMetric(getTranslation("order.customer"),
+                    createSummaryMetric(
+                            getTranslation("order.customer"),
                             order.getCustomer() != null ? order.getCustomer().getName() : "—"),
                     createSummaryMetric(getTranslation("order.validity"), formatValidity(order)),
                     createSummaryMetric(
                             getTranslation("order.positionCount"),
                             String.valueOf(order.getPositions().size())),
-                    createSummaryMetric(getTranslation("order.tags"), previewTags(order.getTags())));
+                    createSummaryMetric(
+                            getTranslation("order.tags"), previewTags(order.getTags())));
 
             if (order.getInternalStatus() != null && !order.getInternalStatus().isBlank()) {
                 meta.add(
@@ -499,8 +509,7 @@ public class OrderListView extends VerticalLayout {
             return chips;
         }
 
-        private Div createStatusChip(
-                String label, long count, String color, Runnable onClick) {
+        private Div createStatusChip(String label, long count, String color, Runnable onClick) {
             Span text = new Span(label);
             text.getStyle()
                     .set("font-size", "10px")
@@ -508,7 +517,8 @@ public class OrderListView extends VerticalLayout {
                     .set("line-height", "1");
 
             Span countBadge = new Span(String.valueOf(count));
-            countBadge.getStyle()
+            countBadge
+                    .getStyle()
                     .set("font-size", "10px")
                     .set("font-family", "'JetBrains Mono', monospace")
                     .set("font-weight", "700")
@@ -554,16 +564,11 @@ public class OrderListView extends VerticalLayout {
                     .set("padding", "4px 0 0 0");
 
             Div meta = new Div();
-            meta.getStyle()
-                    .set("display", "flex")
-                    .set("gap", "8px")
-                    .set("flex-wrap", "wrap");
+            meta.getStyle().set("display", "flex").set("gap", "8px").set("flex-wrap", "wrap");
 
             meta.add(
                     createInfoPill(
-                            getTranslation("order.updated")
-                                    + ": "
-                                    + formatUpdatedMeta(order),
+                            getTranslation("order.updated") + ": " + formatUpdatedMeta(order),
                             "var(--rom-text-muted)"));
 
             if (order.getInternalStatus() != null && !order.getInternalStatus().isBlank()) {
@@ -578,7 +583,8 @@ public class OrderListView extends VerticalLayout {
             content.add(meta);
 
             Div positionsHeader = new Div();
-            positionsHeader.getStyle()
+            positionsHeader
+                    .getStyle()
                     .set("display", "flex")
                     .set("justify-content", "space-between")
                     .set("align-items", "center")
@@ -593,7 +599,8 @@ public class OrderListView extends VerticalLayout {
                     .set("letter-spacing", "0.06em")
                     .set("color", "var(--rom-text-primary)");
 
-            visibleCount.getStyle()
+            visibleCount
+                    .getStyle()
                     .set("font-size", "11px")
                     .set("font-family", "'JetBrains Mono', monospace")
                     .set("color", "var(--rom-text-muted)");
@@ -601,7 +608,8 @@ public class OrderListView extends VerticalLayout {
             positionsHeader.add(title, visibleCount);
             content.add(positionsHeader);
 
-            positionsContainer.getStyle()
+            positionsContainer
+                    .getStyle()
                     .set("display", "grid")
                     .set("grid-template-columns", "repeat(auto-fill, minmax(340px, 1fr))")
                     .set("gap", "10px")
@@ -654,7 +662,8 @@ public class OrderListView extends VerticalLayout {
                                 activeStatus == null
                                         ? getTranslation("order.positions.empty")
                                         : getTranslation("order.positions.filtered.empty"));
-                emptyMessage.getStyle()
+                emptyMessage
+                        .getStyle()
                         .set("color", "var(--rom-text-muted)")
                         .set("font-size", "12px")
                         .set("padding", "8px 0");
@@ -674,7 +683,9 @@ public class OrderListView extends VerticalLayout {
                     activeStatus == null
                             ? order.getPositions()
                             : order.getPositions().stream()
-                                    .filter(position -> position.getInternalStatus() == activeStatus)
+                                    .filter(
+                                            position ->
+                                                    position.getInternalStatus() == activeStatus)
                                     .toList();
             return sortedPositions(positions);
         }
@@ -682,7 +693,10 @@ public class OrderListView extends VerticalLayout {
         private void refreshChipStyles() {
             styleChip(allChip, "var(--rom-text-primary)", activeStatus == null);
             for (Map.Entry<PositionStatus, Div> entry : statusChips.entrySet()) {
-                styleChip(entry.getValue(), statusColor(entry.getKey()), activeStatus == entry.getKey());
+                styleChip(
+                        entry.getValue(),
+                        statusColor(entry.getKey()),
+                        activeStatus == entry.getKey());
             }
         }
 
@@ -692,11 +706,11 @@ public class OrderListView extends VerticalLayout {
             }
             chip.getStyle()
                     .set("color", active ? "var(--rom-bg-primary)" : color)
-                    .set("background",
-                            active
-                                    ? color
-                                    : "color-mix(in srgb, " + color + " 8%, transparent)")
-                    .set("border",
+                    .set(
+                            "background",
+                            active ? color : "color-mix(in srgb, " + color + " 8%, transparent)")
+                    .set(
+                            "border",
                             active
                                     ? "1px solid " + color
                                     : "1px solid color-mix(in srgb, "

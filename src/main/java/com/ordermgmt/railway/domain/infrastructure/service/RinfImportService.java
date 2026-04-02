@@ -56,15 +56,19 @@ public class RinfImportService {
     }
 
     /**
-     * Import OPs: parse first, then delete+insert atomically.
-     * On any error the transaction rolls back — no partial state.
+     * Import OPs: parse first, then delete+insert atomically. On any error the transaction rolls
+     * back — no partial state.
      */
     public ImportLog importOperationalPoints(InputStream csvStream, String country) {
         try {
             List<String[]> rows = parseCsv(csvStream);
             List<OperationalPoint> items = toOperationalPoints(rows, country);
             int count = replaceOperationalPoints(items, country);
-            return saveLog("RINF_OP", country, "SUCCESS", count,
+            return saveLog(
+                    "RINF_OP",
+                    country,
+                    "SUCCESS",
+                    count,
                     count + " operational points imported for " + country);
         } catch (Exception e) {
             log.error("OP import failed for {}", country, e);
@@ -72,15 +76,17 @@ public class RinfImportService {
         }
     }
 
-    /**
-     * Import SoLs: parse first, then delete+insert atomically.
-     */
+    /** Import SoLs: parse first, then delete+insert atomically. */
     public ImportLog importSectionsOfLine(InputStream csvStream, String country) {
         try {
             List<String[]> rows = parseCsv(csvStream);
             List<SectionOfLine> items = toSectionsOfLine(rows, country);
             int count = replaceSectionsOfLine(items, country);
-            return saveLog("RINF_SOL", country, "SUCCESS", count,
+            return saveLog(
+                    "RINF_SOL",
+                    country,
+                    "SUCCESS",
+                    count,
                     count + " sections of line imported for " + country);
         } catch (Exception e) {
             log.error("SoL import failed for {}", country, e);
@@ -90,27 +96,31 @@ public class RinfImportService {
 
     /** Atomic delete+insert in a single transaction. Rolls back on any error. */
     protected int replaceOperationalPoints(List<OperationalPoint> items, String country) {
-        Integer count = transactionOperations.execute(status -> {
-            opRepo.deleteByCountry(country);
-            saveInBatches(items, opRepo::saveAll);
-            log.info("Imported {} OPs for {}", items.size(), country);
-            return items.size();
-        });
+        Integer count =
+                transactionOperations.execute(
+                        status -> {
+                            opRepo.deleteByCountry(country);
+                            saveInBatches(items, opRepo::saveAll);
+                            log.info("Imported {} OPs for {}", items.size(), country);
+                            return items.size();
+                        });
         return count != null ? count : 0;
     }
 
     protected int replaceSectionsOfLine(List<SectionOfLine> items, String country) {
-        Integer count = transactionOperations.execute(status -> {
-            solRepo.deleteByCountry(country);
-            saveInBatches(items, solRepo::saveAll);
-            log.info("Imported {} SoLs for {}", items.size(), country);
-            return items.size();
-        });
+        Integer count =
+                transactionOperations.execute(
+                        status -> {
+                            solRepo.deleteByCountry(country);
+                            saveInBatches(items, solRepo::saveAll);
+                            log.info("Imported {} SoLs for {}", items.size(), country);
+                            return items.size();
+                        });
         return count != null ? count : 0;
     }
 
-    private ImportLog saveLog(String source, String country, String status,
-                              int count, String message) {
+    private ImportLog saveLog(
+            String source, String country, String status, int count, String message) {
         ImportLog entry = new ImportLog();
         entry.setSource(source);
         entry.setCountry(country);
@@ -218,8 +228,10 @@ public class RinfImportService {
         StringBuilder sb = new StringBuilder();
         for (char c : line.toCharArray()) {
             if (c == '"') inQuotes = !inQuotes;
-            else if (c == ',' && !inQuotes) { fields.add(sb.toString()); sb.setLength(0); }
-            else sb.append(c);
+            else if (c == ',' && !inQuotes) {
+                fields.add(sb.toString());
+                sb.setLength(0);
+            } else sb.append(c);
         }
         fields.add(sb.toString());
         return fields.toArray(new String[0]);
@@ -232,13 +244,21 @@ public class RinfImportService {
     private Integer parseInteger(String[] row, int index) {
         String v = valueAt(row, index);
         if (v.isBlank()) return null;
-        try { return Integer.parseInt(v); } catch (NumberFormatException e) { return null; }
+        try {
+            return Integer.parseInt(v);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     private Double parseDouble(String[] row, int index) {
         String v = valueAt(row, index);
         if (v.isBlank()) return null;
-        try { return Double.parseDouble(v); } catch (NumberFormatException e) { return null; }
+        try {
+            return Double.parseDouble(v);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     private <T> void saveInBatches(List<T> items, Consumer<List<T>> saver) {

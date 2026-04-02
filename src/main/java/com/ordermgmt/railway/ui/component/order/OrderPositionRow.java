@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 
+import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.html.Div;
@@ -15,6 +16,7 @@ import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
+import com.ordermgmt.railway.domain.order.model.PositionType;
 import com.ordermgmt.railway.domain.order.model.PurchasePosition;
 import com.ordermgmt.railway.ui.component.PurchaseCalendarPanel;
 import com.ordermgmt.railway.ui.component.StatusBadge;
@@ -90,6 +92,13 @@ public class OrderPositionRow extends Div {
         }
         calBtn.addClickListener(e -> toggleCalendar());
 
+        // View button for FAHRPLAN positions (eye icon -> archive view)
+        Button viewBtn = new Button(VaadinIcon.EYE.create());
+        viewBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
+        viewBtn.getStyle().set("color", "var(--rom-status-info)");
+        viewBtn.addClickListener(e -> navigateToArchiveView());
+        viewBtn.setVisible(position.getType() == PositionType.FAHRPLAN);
+
         // Edit + Delete (smaller, secondary)
         Button editBtn = new Button(VaadinIcon.EDIT.create());
         editBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
@@ -101,7 +110,7 @@ public class OrderPositionRow extends Div {
         delBtn.getStyle().set("color", "var(--rom-status-danger)");
         delBtn.addClickListener(e -> onDelete.accept(position));
 
-        HorizontalLayout actions = new HorizontalLayout(calBtn, editBtn, delBtn);
+        HorizontalLayout actions = new HorizontalLayout(calBtn, viewBtn, editBtn, delBtn);
         actions.setSpacing(true);
         actions.setAlignItems(FlexComponent.Alignment.START);
 
@@ -140,11 +149,13 @@ public class OrderPositionRow extends Div {
         info.add(header);
 
         Div meta = new Div();
-        meta.getStyle()
-                .set("display", "flex")
-                .set("flex-wrap", "wrap")
-                .set("gap", "6px");
+        meta.getStyle().set("display", "flex").set("flex-wrap", "wrap").set("gap", "6px");
 
+        if (hasText(position.getOperationalTrainNumber())) {
+            meta.add(
+                    createMetaBadge(
+                            "OTN: " + position.getOperationalTrainNumber(), "var(--rom-accent)"));
+        }
         String route = formatRoute();
         if (!"—".equals(route)) {
             meta.add(createMetaBadge(route, "var(--rom-text-secondary)"));
@@ -271,6 +282,17 @@ public class OrderPositionRow extends Div {
             }
         }
         return values;
+    }
+
+    private void navigateToArchiveView() {
+        if (position.getOrder() != null) {
+            UI.getCurrent()
+                    .navigate(
+                            "orders/"
+                                    + position.getOrder().getId()
+                                    + "/timetable/"
+                                    + position.getId());
+        }
     }
 
     private boolean hasText(String value) {

@@ -17,8 +17,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
- * Reads and writes user attributes from Keycloak via the Admin REST API.
- * Preferences (theme, locale, timezone, etc.) are stored as Keycloak user attributes.
+ * Reads and writes user attributes from Keycloak via the Admin REST API. Preferences (theme,
+ * locale, timezone, etc.) are stored as Keycloak user attributes.
  */
 @Service
 public class KeycloakUserService {
@@ -50,8 +50,8 @@ public class KeycloakUserService {
 
             HttpHeaders headers = new HttpHeaders();
             headers.setBearerAuth(token);
-            ResponseEntity<JsonNode> resp = rest.exchange(
-                    url, HttpMethod.GET, new HttpEntity<>(headers), JsonNode.class);
+            ResponseEntity<JsonNode> resp =
+                    rest.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), JsonNode.class);
 
             Map<String, String> result = new LinkedHashMap<>();
             JsonNode body = resp.getBody();
@@ -63,12 +63,14 @@ public class KeycloakUserService {
 
                 JsonNode attrs = body.path("attributes");
                 if (attrs.isObject()) {
-                    attrs.fields().forEachRemaining(e -> {
-                        JsonNode val = e.getValue();
-                        if (val.isArray() && !val.isEmpty()) {
-                            result.put(e.getKey(), val.get(0).asText());
-                        }
-                    });
+                    attrs.fields()
+                            .forEachRemaining(
+                                    e -> {
+                                        JsonNode val = e.getValue();
+                                        if (val.isArray() && !val.isEmpty()) {
+                                            result.put(e.getKey(), val.get(0).asText());
+                                        }
+                                    });
                 }
             }
             return result;
@@ -82,13 +84,18 @@ public class KeycloakUserService {
     public List<String> getUserRoles(String keycloakUserId) {
         try {
             String token = getAdminToken();
-            String url = keycloakUrl + "/admin/realms/" + realm
-                    + "/users/" + keycloakUserId + "/role-mappings/realm";
+            String url =
+                    keycloakUrl
+                            + "/admin/realms/"
+                            + realm
+                            + "/users/"
+                            + keycloakUserId
+                            + "/role-mappings/realm";
 
             HttpHeaders headers = new HttpHeaders();
             headers.setBearerAuth(token);
-            ResponseEntity<JsonNode> resp = rest.exchange(
-                    url, HttpMethod.GET, new HttpEntity<>(headers), JsonNode.class);
+            ResponseEntity<JsonNode> resp =
+                    rest.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), JsonNode.class);
 
             List<String> roles = new java.util.ArrayList<>();
             if (resp.getBody() != null && resp.getBody().isArray()) {
@@ -117,8 +124,11 @@ public class KeycloakUserService {
             headers.setBearerAuth(token);
             headers.setContentType(MediaType.APPLICATION_JSON);
 
-            rest.exchange(url, HttpMethod.PUT,
-                    new HttpEntity<>(mapper.writeValueAsString(body), headers), Void.class);
+            rest.exchange(
+                    url,
+                    HttpMethod.PUT,
+                    new HttpEntity<>(mapper.writeValueAsString(body), headers),
+                    Void.class);
             return true;
         } catch (Exception e) {
             log.error("Failed to update user attributes in Keycloak", e);
@@ -138,9 +148,12 @@ public class KeycloakUserService {
         params.add("password", adminPassword);
         params.add("grant_type", "password");
 
-        ResponseEntity<JsonNode> resp = rest.exchange(
-                tokenUrl, HttpMethod.POST,
-                new HttpEntity<>(params, headers), JsonNode.class);
+        ResponseEntity<JsonNode> resp =
+                rest.exchange(
+                        tokenUrl,
+                        HttpMethod.POST,
+                        new HttpEntity<>(params, headers),
+                        JsonNode.class);
 
         return resp.getBody().path("access_token").asText();
     }

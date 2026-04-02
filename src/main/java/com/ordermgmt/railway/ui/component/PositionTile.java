@@ -79,10 +79,12 @@ public class PositionTile extends Div {
                 .set("font-size", "12px")
                 .set("color", "var(--rom-text-secondary)");
 
+        String otn = pos.getOperationalTrainNumber();
         String from = pos.getFromLocation();
         String to = pos.getToLocation();
+        String prefix = otn != null && !otn.isBlank() ? "OTN " + otn + " · " : "";
         if (from != null && to != null) {
-            route.setText(from + " → " + to);
+            route.setText(prefix + from + " → " + to);
         } else if (from != null) {
             route.setText(from);
         } else if (to != null) {
@@ -114,10 +116,7 @@ public class PositionTile extends Div {
 
     private Div createMeta(OrderPosition pos) {
         Div meta = new Div();
-        meta.getStyle()
-                .set("display", "flex")
-                .set("flex-wrap", "wrap")
-                .set("gap", "6px");
+        meta.getStyle().set("display", "flex").set("flex-wrap", "wrap").set("gap", "6px");
 
         if (pos.getStart() != null || pos.getEnd() != null) {
             meta.add(createMetaBadge(formatTimeWindow(pos), "var(--rom-status-info)"));
@@ -153,7 +152,8 @@ public class PositionTile extends Div {
     }
 
     private Span createPurchaseBadge(OrderPosition pos) {
-        int purchaseCount = pos.getPurchasePositions() != null ? pos.getPurchasePositions().size() : 0;
+        int purchaseCount =
+                pos.getPurchasePositions() != null ? pos.getPurchasePositions().size() : 0;
         Span badge = new Span(purchaseCount + " " + t("purchase.calendar.btn"));
         badge.getStyle()
                 .set("font-size", "10px")
@@ -162,11 +162,11 @@ public class PositionTile extends Div {
                 .set("padding", "2px 8px")
                 .set("border-radius", "4px")
                 .set("color", purchaseCount > 0 ? "var(--rom-accent)" : "var(--rom-text-muted)")
-                .set("background",
-                        purchaseCount > 0
-                                ? "rgba(45,212,191,0.08)"
-                                : "rgba(148,163,184,0.08)")
-                .set("border",
+                .set(
+                        "background",
+                        purchaseCount > 0 ? "rgba(45,212,191,0.08)" : "rgba(148,163,184,0.08)")
+                .set(
+                        "border",
                         purchaseCount > 0
                                 ? "1px solid rgba(45,212,191,0.25)"
                                 : "1px solid var(--rom-border)");

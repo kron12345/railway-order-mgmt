@@ -10,18 +10,18 @@ import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.Span;
 
 /**
- * Multi-date picker calendar with single-click toggle, weekday bulk select,
- * and shift-click range selection. Only dates within the allowed range are selectable.
- * Selected dates are visualized with amber highlight.
+ * Multi-date picker calendar with single-click toggle, weekday bulk select, and shift-click range
+ * selection. Only dates within the allowed range are selectable. Selected dates are visualized with
+ * amber highlight.
  *
- * Architecture: Div-based grid with client-side JS for fast interaction,
- * server-side Set<LocalDate> as source of truth, synced via Element API.
+ * <p>Architecture: Div-based grid with client-side JS for fast interaction, server-side
+ * Set<LocalDate> as source of truth, synced via Element API.
  */
 public class ValidityCalendar extends Div {
 
     private static final String[] WEEKDAY_SHORT = {"Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"};
     private static final String[] WEEKDAY_FULL = {
-            "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"
+        "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"
     };
 
     private final LocalDate minDate;
@@ -188,8 +188,8 @@ public class ValidityCalendar extends Div {
 
         // Month label
         Div label = new Div();
-        label.setText(ym.getMonth().getDisplayName(TextStyle.SHORT, Locale.GERMAN)
-                + " " + ym.getYear());
+        label.setText(
+                ym.getMonth().getDisplayName(TextStyle.SHORT, Locale.GERMAN) + " " + ym.getYear());
         label.getStyle()
                 .set("font-family", "'JetBrains Mono', monospace")
                 .set("font-size", "10px")
@@ -236,8 +236,11 @@ public class ValidityCalendar extends Div {
         // Actually the layout with "80px label + days sub-grid" won't work well
         // Let me restructure: remove the sub-grid, use a proper layout
         row.removeAll();
-        row.getStyle().set("grid-template-columns", "none").set("display", "flex")
-                .set("align-items", "flex-start").set("gap", "4px");
+        row.getStyle()
+                .set("grid-template-columns", "none")
+                .set("display", "flex")
+                .set("align-items", "flex-start")
+                .set("gap", "4px");
         label.getStyle().set("min-width", "70px").set("padding-top", "4px");
         daysGrid.getStyle().set("flex", "1");
         row.add(label, daysGrid);
@@ -260,9 +263,7 @@ public class ValidityCalendar extends Div {
                 .set("transition", "all 0.1s");
 
         if (!selectable) {
-            cell.getStyle()
-                    .set("color", "rgba(148,163,184,0.15)")
-                    .set("background", "transparent");
+            cell.getStyle().set("color", "rgba(148,163,184,0.15)").set("background", "transparent");
         } else {
             applyUnselectedStyle(cell);
             cell.addClickListener(e -> toggleDate(date));
@@ -289,7 +290,8 @@ public class ValidityCalendar extends Div {
                 .set("padding-top", "8px")
                 .set("border-top", "1px solid var(--rom-border)");
 
-        countLabel.getStyle()
+        countLabel
+                .getStyle()
                 .set("font-family", "'JetBrains Mono', monospace")
                 .set("font-size", "12px")
                 .set("font-weight", "600")
@@ -297,9 +299,7 @@ public class ValidityCalendar extends Div {
         updateCount();
 
         Span hint = new Span("Klick = einzeln, Wochentag-Button = alle gleichen Tage");
-        hint.getStyle()
-                .set("font-size", "10px")
-                .set("color", "var(--rom-text-muted)");
+        hint.getStyle().set("font-size", "10px").set("color", "var(--rom-text-muted)");
 
         footer.add(countLabel, hint);
         return footer;
@@ -376,13 +376,14 @@ public class ValidityCalendar extends Div {
     }
 
     private void updateAllCells() {
-        cellMap.forEach((date, cell) -> {
-            if (selectedDates.contains(date)) {
-                applySelectedStyle(cell);
-            } else {
-                applyUnselectedStyle(cell);
-            }
-        });
+        cellMap.forEach(
+                (date, cell) -> {
+                    if (selectedDates.contains(date)) {
+                        applySelectedStyle(cell);
+                    } else {
+                        applyUnselectedStyle(cell);
+                    }
+                });
     }
 
     private void applySelectedStyle(Div cell) {

@@ -24,9 +24,9 @@ import com.ordermgmt.railway.domain.infrastructure.repository.PredefinedTagRepos
 import com.ordermgmt.railway.domain.order.model.Order;
 
 /**
- * Order form for creation and editing. Only shows fields relevant to the user.
- * ProcessStatus defaults to AUFTRAG on creation and is not editable here.
- * InternalStatus and timetableYearLabel are removed.
+ * Order form for creation and editing. Only shows fields relevant to the user. ProcessStatus
+ * defaults to AUFTRAG on creation and is not editable here. InternalStatus and timetableYearLabel
+ * are removed.
  */
 public class OrderFormPanel extends Div {
 
@@ -162,7 +162,8 @@ public class OrderFormPanel extends Div {
             validTo.setInvalid(true);
             valid = false;
         }
-        if (validFrom.getValue() != null && validTo.getValue() != null
+        if (validFrom.getValue() != null
+                && validTo.getValue() != null
                 && validTo.getValue().isBefore(validFrom.getValue())) {
             validTo.setInvalid(true);
             validTo.setErrorMessage(t("order.validTo") + " < " + t("order.validFrom"));
@@ -182,10 +183,15 @@ public class OrderFormPanel extends Div {
     private List<PredefinedTag> loadAvailableTags(PredefinedTagRepository predefinedTagRepository) {
         return predefinedTagRepository.findAllByOrderByCategoryAscSortOrderAsc().stream()
                 .filter(PredefinedTag::isActive)
-                .filter(tag -> "ORDER".equals(tag.getCategory()) || "GENERAL".equals(tag.getCategory()))
-                .sorted(Comparator.comparingInt(this::categoryRank)
-                        .thenComparingInt(PredefinedTag::getSortOrder)
-                        .thenComparing(PredefinedTag::getName, String.CASE_INSENSITIVE_ORDER))
+                .filter(
+                        tag ->
+                                "ORDER".equals(tag.getCategory())
+                                        || "GENERAL".equals(tag.getCategory()))
+                .sorted(
+                        Comparator.comparingInt(this::categoryRank)
+                                .thenComparingInt(PredefinedTag::getSortOrder)
+                                .thenComparing(
+                                        PredefinedTag::getName, String.CASE_INSENSITIVE_ORDER))
                 .toList();
     }
 

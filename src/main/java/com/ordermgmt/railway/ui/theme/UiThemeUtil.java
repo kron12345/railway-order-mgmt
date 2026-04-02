@@ -8,8 +8,7 @@ import com.vaadin.flow.component.UI;
 public final class UiThemeUtil {
 
     public static final String DEFAULT_THEME = "dark-amber";
-    private static final Set<String> SUPPORTED_THEMES =
-            Set.of(DEFAULT_THEME, "dark-teal", "light");
+    private static final Set<String> SUPPORTED_THEMES = Set.of(DEFAULT_THEME, "dark-teal", "light");
 
     private UiThemeUtil() {}
 

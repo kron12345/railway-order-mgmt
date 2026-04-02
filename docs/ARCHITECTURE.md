@@ -123,6 +123,82 @@ sequenceDiagram
     AS-->>TB: Saved position
 ```
 
+### Timetable Component Hierarchy
+
+The timetable builder is decomposed into the following component tree:
+
+```mermaid
+graph TD
+    TBV["TimetableBuilderView<br/>(Full-screen, @Route)"]
+    TRS["TimetableRouteStep<br/>(Step 1: Route definition)"]
+    TTS["TimetableTableStep<br/>(Step 2: Timetable editing)"]
+    ASF["AddStopForm<br/>(Inline form for new stops)"]
+    REP["TimetableRowEditorPanel<br/>(Right-side row editor)"]
+    TM["TimetableMap<br/>(Leaflet/OpenStreetMap)"]
+    VC["ValidityCalendar<br/>(Multi-date picker)"]
+
+    TBV --> TRS
+    TBV --> TTS
+    TBV --> TM
+    TTS --> ASF
+    TTS --> REP
+    TTS --> VC
+
+    TAV["TimetableArchiveView<br/>(Read-only, @Route)"]
+    TAT["TimetableArchiveTable<br/>(Div-based table)"]
+    TAS2["TimetableArchiveSidebar<br/>(Map + Validity + Metadata)"]
+
+    TAV --> TAT
+    TAV --> TAS2
+    TAS2 --> TM
+
+    style TBV fill:#f3e5f5
+    style TTS fill:#e1f5fe
+    style REP fill:#e1f5fe
+    style ASF fill:#e1f5fe
+    style TAV fill:#f3e5f5
+    style TAT fill:#e1f5fe
+    style TAS2 fill:#e1f5fe
+```
+
+| Component | File | Responsibility |
+|---|---|---|
+| `TimetableBuilderView` | `ui/view/order/` | Full-screen view orchestrating both steps, map, and save logic |
+| `TimetableArchiveView` | `ui/view/order/` | Read-only timetable detail view with split layout (table + sidebar) |
+| `TimetableRouteStep` | `ui/component/timetable/` | Step 1: from/via/to selection, anchor time, route calculation |
+| `TimetableTableStep` | `ui/component/timetable/` | Step 2: editable grid of all route points with split layout |
+| `TimetableRowEditorPanel` | `ui/component/timetable/` | Right-side panel for editing a single row: times (shift/stretch), halt/activity, time modes (NONE/EXACT/WINDOW/COMMERCIAL), pinning |
+| `AddStopForm` | `ui/component/timetable/` | Inline form shown below the grid for adding a new stop with OP selection and activity code |
+| `TimetableArchiveTable` | `ui/component/timetable/` | Read-only Div-based timetable table with color-coded rows (origin/destination amber, halts teal, pass-through muted, deleted strikethrough) |
+| `TimetableArchiveSidebar` | `ui/component/timetable/` | Right-side sidebar for archive view: map card, validity card, metadata card |
+| `TimetableEditingService` | `domain/timetable/service/` | Backend service for insertStop, softDeleteStop, propagateTimeChange, resolveRelativeTime |
+| `TimetableFormatUtils` | `ui/component/timetable/` | Static formatting helpers for times, distances, roles, TTT qualifier codes |
+
+### Time Propagation Architecture
+
+When a user edits a time in the timetable, the change can propagate to other rows via `TimetableEditingService.propagateTimeChange()`. Two modes are supported:
+
+**SHIFT mode** translates all following times by the same delta (e.g., +15 minutes). Propagation stops at the next pinned row, creating a boundary. This is the default mode and is suitable when the overall schedule should move forward or backward.
+
+**STRETCH mode** proportionally distributes time between the changed row and the next pinned row. If the available time between two pins changes, intermediate travel times are scaled by the same ratio. This is suitable for adjusting dwell times without shifting the entire downstream schedule.
+
+The **pin** concept acts as an anchor: pinned rows are never modified by propagation. Users can pin key commercial stops (e.g., border crossings, interchange points) to preserve their times while editing surrounding rows.
+
+```mermaid
+flowchart LR
+    subgraph SHIFT["SHIFT Mode"]
+        S1["Stop A<br/>dep 08:00"] -->|"+15 min"| S2["Stop B<br/>arr 08:30 -> 08:45"]
+        S2 --> S3["Stop C<br/>arr 09:00 -> 09:15"]
+        S3 -->|"PINNED"| S4["Stop D<br/>arr 09:30 (unchanged)"]
+    end
+
+    subgraph STRETCH["STRETCH Mode"]
+        T1["Stop A<br/>dep 08:00 -> 08:15"] -->|"ratio"| T2["Stop B<br/>arr 08:20 -> 08:23"]
+        T2 -->|"ratio"| T3["Stop C<br/>arr 08:40 -> 08:38"]
+        T3 -->|"PINNED"| T4["Stop D<br/>arr 09:00 (unchanged)"]
+    end
+```
+
 ## Live Updates (Push)
 
 ```mermaid
@@ -149,9 +225,9 @@ graph LR
     end
 
     subgraph Timetable["Timetable Context"]
-        T_M["TimetableArchive<br/>TimetableRowData"]
+        T_M["TimetableArchive<br/>TimetableRowData<br/>TimePropagationMode<br/>JourneyLocationType"]
         T_R["TimetableArchiveRepository"]
-        T_S["Routing + Archive Services"]
+        T_S["Routing + Archive + Editing Services"]
     end
 
     subgraph InfraDomain["Infrastructure Context"]

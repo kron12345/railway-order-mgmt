@@ -180,7 +180,9 @@ public class PurchaseCalendarGrid extends Div {
         }
 
         String statusText = status != null ? status.name() : (weekend ? "WE" : "—");
-        String tip = String.format("%02d.%02d.%d %s", day, date.getMonthValue(), date.getYear(), statusText);
+        String tip =
+                String.format(
+                        "%02d.%02d.%d %s", day, date.getMonthValue(), date.getYear(), statusText);
         cell.getElement().setAttribute("aria-label", tip);
         com.vaadin.flow.component.shared.Tooltip.forComponent(cell)
                 .withText(tip)

@@ -17,3 +17,9 @@
 | Rangierbahnhof | Marshalling Yard | Scalo di Smistamento | Gare de Triage | Yard for sorting and assembling trains |
 | Ladeeinheit | Loading Unit | Unità di Carico | Unité de Chargement | Container, swap body, or similar unit |
 | Gefahrgut | Dangerous Goods | Merci Pericolose | Marchandises Dangereuses | Hazardous materials requiring special handling |
+| Zeitverschiebung (Shift) | Shift Propagation | Propagazione a Spostamento | Propagation par Décalage | Time propagation mode where all following stops are moved by the same delta until the next pinned stop |
+| Zeitstreckung (Stretch) | Stretch Propagation | Propagazione Proporzionale | Propagation par Étirement | Time propagation mode where travel times between two pins are scaled proportionally |
+| Pin (Zeitanker) | Pin (Time Anchor) | Pin (Ancora Temporale) | Pin (Ancre Temporelle) | A row marked as pinned acts as an immovable anchor for shift/stretch propagation — its times are never modified by propagation |
+| Kommerzielle Zeit | Commercial Time | Orario Commerciale | Horaire Commercial | Published timetable time (PLA/PLD) as shown in public timetables, may differ from operational time |
+| TimingQualifierCode | TimingQualifierCode | TimingQualifierCode | TimingQualifierCode | TTT standard code qualifying a time value: ALA/ALD (exact), ELA/LLA/ELD/LLD (window), PLA/PLD (commercial) |
+| Zugaktivitaet | Train Activity (TrainActivityType) | Attività Treno | Activité du Train | TTT activity code describing the reason for a stop (e.g., 0001 = boarding, 0012 = loco change, 0040 = pass-through) |

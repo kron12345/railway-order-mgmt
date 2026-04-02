@@ -42,7 +42,8 @@ public class OrderDetailView extends VerticalLayout implements BeforeEnterObserv
     private final OrderService orderService;
     private final CustomerRepository customerRepository;
     private final PredefinedTagRepository predefinedTagRepository;
-    private final com.ordermgmt.railway.domain.infrastructure.repository.OperationalPointRepository opRepo;
+    private final com.ordermgmt.railway.domain.infrastructure.repository.OperationalPointRepository
+            opRepo;
     private Order order;
     private boolean isNew;
 
@@ -52,7 +53,8 @@ public class OrderDetailView extends VerticalLayout implements BeforeEnterObserv
             OrderService orderService,
             CustomerRepository customerRepository,
             PredefinedTagRepository predefinedTagRepository,
-            com.ordermgmt.railway.domain.infrastructure.repository.OperationalPointRepository opRepo) {
+            com.ordermgmt.railway.domain.infrastructure.repository.OperationalPointRepository
+                    opRepo) {
         this.orderService = orderService;
         this.customerRepository = customerRepository;
         this.predefinedTagRepository = predefinedTagRepository;
@@ -126,8 +128,9 @@ public class OrderDetailView extends VerticalLayout implements BeforeEnterObserv
     private void buildDetailView() {
         removeAll();
         add(createCompactHeader());
-        var positionPanel = new OrderPositionPanel(
-                order, orderService, opRepo, predefinedTagRepository, this::getTranslation);
+        var positionPanel =
+                new OrderPositionPanel(
+                        order, orderService, opRepo, predefinedTagRepository, this::getTranslation);
         add(positionPanel);
     }
 

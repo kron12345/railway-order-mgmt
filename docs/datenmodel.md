@@ -66,6 +66,7 @@ classDiagram
     class Fahrplanarchiv {
         id
         timetableNumber
+        operationalTrainNumber
         timetableType
         routeSummary
         tableData
@@ -152,6 +153,7 @@ Alle Auftragspositionen liegen physisch in `order_positions`. Der Typ wird ueber
 | serviceType | string? | nein | Leistungsart; vor allem fuer `LEISTUNG` relevant |
 | comment | string? | nein | Freitext (max. 2000 Zeichen) |
 | internalStatus | enum | nein | `IN_BEARBEITUNG`, `FREIGEGEBEN`, `UEBERARBEITEN`, `UEBERMITTELT`, `BEANTRAGT`, `ABGESCHLOSSEN`, `ANNULLIERT` |
+| operationalTrainNumber | string? | nein | Betriebliche Zugnummer (OTN), max. 20 Zeichen. Dupliziert aus `timetable_archives` fuer Anzeige in Positionslisten und -kacheln. |
 | variantOf / mergeTarget | FK? | nein | Vorbereitete Varianten-/Merge-Beziehungen |
 | resourceNeeds | `ResourceNeed[]` | nein | Ressourcenbedarfe zur Position |
 | purchasePositions | `PurchasePosition[]` | nein | Zugeordnete Bestellpositionen |
@@ -225,9 +227,56 @@ TTT-nahe Zeitlogik:
 - `NONE`: keine explizite Vorgabe, nur geschaetzte Zeit
 - `EXACT`: exakte Zeit (`ALA` / `ALD`-Denke)
 - `WINDOW`: frueheste/spaeteste Zeit (`ELA`/`LLA`, `ELD`/`LLD`)
+- `COMMERCIAL`: publizierte/kommerzielle Zeit (`PLA` / `PLD`)
 - Zwischenhalte mit `halt = true` brauchen Zeiten und Activity
 - Reine Durchfahrten koennen ohne Activity und ohne explizite Zeitvorgabe bestehen bleiben
 - Eine Zeile wird als `tttRelevant` markiert, sobald explizite fachliche Angaben fuer den spaeteren Export vorhanden sind
+
+#### TTT TimingQualifierCode Mapping
+
+| TimeConstraintMode | Ankunft (Arrival) | Abfahrt (Departure) | Beschreibung |
+| --- | --- | --- | --- |
+| `NONE` | — (kein Code) | — (kein Code) | Keine Zeitvorgabe, nur geschaetzte Zeit |
+| `EXACT` | ALA (Actual/Latest Arrival) | ALD (Actual/Latest Departure) | Exakte Zeitvorgabe |
+| `WINDOW` | ELA + LLA (Earliest + Latest Arrival) | ELD + LLD (Earliest + Latest Departure) | Zeitfenster mit fruehester und spaetester Zeit |
+| `COMMERCIAL` | PLA (Published/Commercial Arrival) | PLD (Published/Commercial Departure) | Kommerzielle/publizierte Fahrplanzeit |
+
+#### JourneyLocationType (TTT JourneyLocationTypeCode)
+
+Klassifiziert die Rolle eines Betriebspunkts im Sinne der TSI TAF/TAP (TTT Anlage 1, Abschnitt 5.5).
+
+| Enum-Wert | TTT Code | Beschreibung |
+| --- | --- | --- |
+| `ORIGIN` | 01 | Ausgangspunkt der Fahrt |
+| `INTERMEDIATE` | 02 | Zwischenpunkt |
+| `DESTINATION` | 03 | Zielpunkt der Fahrt |
+| `HANDOVER` | 04 | Uebergabepunkt |
+| `INTERCHANGE` | 05 | Umsteigepunkt |
+| `HANDOVER_AND_INTERCHANGE` | 06 | Uebergabe- und Umsteigepunkt |
+| `STATE_BORDER` | 07 | Staatsgrenze |
+| `NETWORK_BORDER` | 09 | Netzgrenze |
+
+#### TimePropagationMode
+
+Definiert, wie eine Zeitaenderung an einem Halt auf andere Halte wirkt.
+
+| Modus | Verhalten |
+| --- | --- |
+| `SHIFT` | Alle folgenden (nicht gepinnten) Zeiten werden um denselben Deltabetrag verschoben. Propagation stoppt am naechsten gepinnten Halt. |
+| `STRETCH` | Fahrzeiten zwischen dem geaenderten Halt und dem naechsten gepinnten Halt werden proportional gestreckt oder gestaucht. Der Gesamtzeitraum zwischen den beiden Fixpunkten aendert sich, die Verhaeltnisse bleiben erhalten. |
+
+#### TimetableEditingService
+
+Zentraler Service fuer Fahrplan-Bearbeitungsoperationen. Liegt in `domain/timetable/service/`.
+
+| Methode | Beschreibung |
+| --- | --- |
+| `insertStop(rows, index, operationalPoint, activityCode)` | Fuegt einen neuen Halt an der gegebenen Position ein. Setzt `manuallyAdded = true`, interpoliert Zeiten aus den Nachbarzeilen, weist Default-Haltezeit (2 min) zu und nummeriert die Sequenz neu. |
+| `softDeleteStop(rows, index)` | Markiert einen Halt als `deleted` (Toggle). Origin und Destination sind geschuetzt und koennen nicht geloescht werden. Soft-Delete ist umkehrbar. |
+| `purgeDeleted(rows)` | Entfernt alle soft-deleted Zeilen dauerhaft und nummeriert die Sequenz neu. |
+| `propagateTimeChange(rows, index, isArrival, newTime, mode)` | Propagiert eine Zeitaenderung gemaess dem gewaehlten `TimePropagationMode` (SHIFT oder STRETCH). Bei SHIFT werden alle folgenden Zeiten um dasselbe Delta verschoben bis zum naechsten Pin. Bei STRETCH werden die Zeiten proportional gestreckt. |
+| `resolveRelativeTime(input, baseTime)` | Loest relative Zeiteingaben wie `+5` oder `-3` gegen eine Basiszeit auf. Gibt `null` zurueck, wenn die Eingabe nicht relativ ist. |
+| `resequence(rows)` | Nummeriert die Sequenz aller Zeilen ab 1 neu durch. |
 
 #### Persistenz von `FAHRPLAN`
 
@@ -236,7 +285,7 @@ Beim Speichern passiert fachlich und technisch Folgendes:
 1. Die vollstaendige Fahrplantabelle wird als JSON in `timetable_archives.table_data` gespeichert
 2. `routeSummary` fasst die Route fachlich zusammen
 3. Die `OrderPosition` bekommt `type = FAHRPLAN`
-4. `fromLocation`, `toLocation`, `start`, `end`, `validity`, `tags`, `comment` werden auf der Position gespiegelt
+4. `fromLocation`, `toLocation`, `start`, `end`, `validity`, `tags`, `comment` und `operationalTrainNumber` werden auf der Position gespiegelt
 5. Genau ein `ResourceNeed` mit `resourceType = CAPACITY` und `coverageType = EXTERNAL` wird erstellt oder wiederverwendet
 6. Dieser Ressourcenbedarf verlinkt ueber `linkedFahrplanId` auf das `TimetableArchive`
 
@@ -292,6 +341,7 @@ Das Fahrplanarchiv ist heute konkret implementiert und nicht mehr nur Zielbild.
 | timetableNumber | string? | nein | Optionale fachliche Kennung |
 | timetableType | string? | nein | Aktuell `FAHRPLAN` |
 | routeSummary | string? | nein | Fachliche Kurzbeschreibung der Route |
+| operationalTrainNumber | string? | nein | Betriebliche Zugnummer (OTN), max. 20 Zeichen. Freitext, unterstuetzt auch Platzhaltermuster wie `95xxx`. Mappt auf TTT `OperationalTrainNumber`. |
 | tableData | jsonb | ja | Vollstaendige Fahrplantabelle |
 | createdAt / updatedAt | datetime | ja | Technische Zeitstempel |
 | version | int | ja | Optimistic Locking |
@@ -307,7 +357,7 @@ Jede JSON-Zeile entspricht einem Betriebspunkt der berechneten Route.
 | name | string | Anzeigename |
 | country | string | Laendercode |
 | routePointRole | enum | `ORIGIN`, `VIA`, `DESTINATION`, `AUTO` |
-| journeyLocationType | string | TTT-nahe Rollenklassifikation |
+| journeyLocationType | enum | TTT JourneyLocationTypeCode (siehe unten) |
 | fromName / toName | string | Vorheriger bzw. naechster Betriebspunkt |
 | segmentLengthMeters | number | Kantenlaenge vom Vorgaenger |
 | distanceFromStartMeters | number | Kumulierte Distanz |
@@ -316,10 +366,15 @@ Jede JSON-Zeile entspricht einem Betriebspunkt der berechneten Route.
 | activityCode | string? | TTT-Activity / Haltegrund |
 | dwellMinutes | int? | Haltezeit |
 | estimatedArrival / estimatedDeparture | string? | Geschaetzte Zeiten `HH:mm` |
-| arrivalMode / departureMode | enum | `NONE`, `EXACT`, `WINDOW` |
+| arrivalMode / departureMode | enum | `NONE`, `EXACT`, `WINDOW`, `COMMERCIAL` |
 | arrivalExact / departureExact | string? | Exakte Zeit |
 | arrivalEarliest / arrivalLatest | string? | Zeitfenster Ankunft |
 | departureEarliest / departureLatest | string? | Zeitfenster Abfahrt |
+| commercialArrival | string? | Kommerzielle Ankunftszeit (PLA — Publizierter Fahrplan) |
+| commercialDeparture | string? | Kommerzielle Abfahrtszeit (PLD — Publizierter Fahrplan) |
+| pinned | boolean | Ob die Zeiten dieser Zeile bei Shift/Stretch fixiert sind |
+| manuallyAdded | boolean | Ob dieser Halt manuell hinzugefuegt wurde (nicht aus Routing) |
+| deleted | boolean | Ob dieser Halt soft-deleted ist (Durchstreichung, wiederherstellbar) |
 
 ## Bestellposition
 
@@ -370,7 +425,8 @@ Eine `Bestellposition` deckt einen extern zu beschaffenden Ressourcenbedarf.
 - Alle Positionstypen koennen Tags, Kommentar, Status, Gueltigkeit und Kauf-/Ressourcenbezug tragen
 - `LEISTUNG` speichert ihre fachlichen Daten direkt auf der Position
 - `FAHRPLAN` speichert die detaillierte Fahrplantabelle ausschliesslich im Fahrplanarchiv
-- `FAHRPLAN` spiegelt nur die wichtigsten Metadaten auf `order_positions`
+- `FAHRPLAN` spiegelt nur die wichtigsten Metadaten auf `order_positions` (inkl. OTN, falls gesetzt)
+- Die betriebliche Zugnummer (OTN) ist ein Freitextfeld (VARCHAR 20), nicht strikt numerisch — Platzhaltermuster wie `95xxx` sind zulaessig
 - Eine `FAHRPLAN`-Position hat heute genau einen `CAPACITY`-Ressourcenbedarf und genau ein verlinktes Archiv
 - Die fachliche Gueltigkeit liegt an der Position, nicht am Archiv
 - Halte in Fahrplanzeilen brauchen Activity und Zeiten
@@ -397,6 +453,13 @@ Die Daten werden im UI heute an drei Stellen unterschiedlich verdichtet dargeste
 
 - `LEISTUNG`: Dialog
 - `FAHRPLAN`: Full-screen Builder mit Karte und Tabelleneditor
+
+### 4. Fahrplan-Detailansicht (`/orders/{orderId}/timetable/{positionId}`)
+
+- Read-only Darstellung einer gespeicherten `FAHRPLAN`-Position
+- Erreichbar ueber das Auge-Icon in der `OrderPositionRow` fuer FAHRPLAN-Positionen
+- SplitLayout 65/35: links Div-basierte Fahrplantabelle, rechts Karte + Gueltigkeit + Metadaten
+- "Bearbeiten"-Button navigiert zum Timetable Builder zur Weiterbearbeitung
 
 ## Prozesskontext
 

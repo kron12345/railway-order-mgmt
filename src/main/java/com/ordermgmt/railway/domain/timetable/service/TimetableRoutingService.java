@@ -1,7 +1,9 @@
 package com.ordermgmt.railway.domain.timetable.service;
 
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -12,9 +14,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.PriorityQueue;
 import java.util.Set;
-import java.time.LocalTime;
-import java.time.format.DateTimeFormatter;
-import java.time.temporal.ChronoUnit;
 
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -65,8 +64,10 @@ public class TimetableRoutingService {
             return Math.toIntExact(operationalPointRepository.count());
         }
         String normalized = filter.trim();
-        return Math.toIntExact(operationalPointRepository
-                .countByNameContainingIgnoreCaseOrUopidContainingIgnoreCase(normalized, normalized));
+        return Math.toIntExact(
+                operationalPointRepository
+                        .countByNameContainingIgnoreCaseOrUopidContainingIgnoreCase(
+                                normalized, normalized));
     }
 
     public Optional<OperationalPoint> resolveLegacyPoint(String name) {
@@ -74,16 +75,20 @@ public class TimetableRoutingService {
             return Optional.empty();
         }
 
-        Optional<OperationalPoint> exact = operationalPointRepository.findFirstByNameIgnoreCase(name.trim());
+        Optional<OperationalPoint> exact =
+                operationalPointRepository.findFirstByNameIgnoreCase(name.trim());
         if (exact.isPresent()) {
             return exact;
         }
 
         for (String variant : legacyNameVariants(name)) {
-            List<OperationalPoint> matches = operationalPointRepository.findByNameContainingIgnoreCase(variant);
+            List<OperationalPoint> matches =
+                    operationalPointRepository.findByNameContainingIgnoreCase(variant);
             if (!matches.isEmpty()) {
                 return matches.stream()
-                        .sorted(Comparator.comparing(OperationalPoint::getName, String.CASE_INSENSITIVE_ORDER))
+                        .sorted(
+                                Comparator.comparing(
+                                        OperationalPoint::getName, String.CASE_INSENSITIVE_ORDER))
                         .findFirst();
             }
         }
@@ -139,18 +144,21 @@ public class TimetableRoutingService {
                 distanceFromStart += segmentLength;
             }
             RoutePointRole role = roles.getOrDefault(index, RoutePointRole.AUTO);
-            points.add(new TimetableRoutePoint(
-                    point.getUopid(),
-                    point.getName(),
-                    point.getCountry(),
-                    point.getLatitude(),
-                    point.getLongitude(),
-                    segmentLength,
-                    distanceFromStart,
-                    role,
-                    journeyLocationType(role),
-                    index > 0 ? pointsByUopid.get(fullPath.get(index - 1)).getName() : null,
-                    index < fullPath.size() - 1 ? pointsByUopid.get(fullPath.get(index + 1)).getName() : null));
+            points.add(
+                    new TimetableRoutePoint(
+                            point.getUopid(),
+                            point.getName(),
+                            point.getCountry(),
+                            point.getLatitude(),
+                            point.getLongitude(),
+                            segmentLength,
+                            distanceFromStart,
+                            role,
+                            journeyLocationType(role),
+                            index > 0 ? pointsByUopid.get(fullPath.get(index - 1)).getName() : null,
+                            index < fullPath.size() - 1
+                                    ? pointsByUopid.get(fullPath.get(index + 1)).getName()
+                                    : null));
         }
 
         return new TimetableRouteResult(points, distanceFromStart);
@@ -176,29 +184,34 @@ public class TimetableRoutingService {
                     row.getDistanceFromStartMeters() != null
                             ? row.getDistanceFromStartMeters()
                             : totalDistance + segmentLength;
-            points.add(new TimetableRoutePoint(
-                    point.getUopid(),
-                    point.getName(),
-                    point.getCountry(),
-                    point.getLatitude(),
-                    point.getLongitude(),
-                    segmentLength,
-                    totalDistance,
-                    row.getRoutePointRole(),
-                    row.getJourneyLocationType(),
-                    row.getFromName(),
-                    row.getToName()));
+            points.add(
+                    new TimetableRoutePoint(
+                            point.getUopid(),
+                            point.getName(),
+                            point.getCountry(),
+                            point.getLatitude(),
+                            point.getLongitude(),
+                            segmentLength,
+                            totalDistance,
+                            row.getRoutePointRole(),
+                            row.getJourneyLocationType(),
+                            row.getFromName(),
+                            row.getToName()));
         }
         return new TimetableRouteResult(points, totalDistance);
     }
 
     public List<TimetableRowData> estimateRows(
-            TimetableRouteResult routeResult, LocalTime originDeparture, LocalTime destinationArrival) {
+            TimetableRouteResult routeResult,
+            LocalTime originDeparture,
+            LocalTime destinationArrival) {
         if (originDeparture == null && destinationArrival == null) {
-            throw new IllegalArgumentException("Either origin departure or destination arrival is required.");
+            throw new IllegalArgumentException(
+                    "Either origin departure or destination arrival is required.");
         }
         if (originDeparture != null && destinationArrival != null) {
-            throw new IllegalArgumentException("Use either departure-oriented or arrival-oriented planning.");
+            throw new IllegalArgumentException(
+                    "Use either departure-oriented or arrival-oriented planning.");
         }
 
         List<TimetableRowData> rows = baseRows(routeResult);
@@ -210,7 +223,8 @@ public class TimetableRoutingService {
             rows.getFirst().setEstimatedDeparture(formatTime(originDeparture));
             LocalTime cursor = originDeparture;
             for (int index = 1; index < rows.size(); index++) {
-                cursor = cursor.plusSeconds(travelSeconds(rows.get(index).getSegmentLengthMeters()));
+                cursor =
+                        cursor.plusSeconds(travelSeconds(rows.get(index).getSegmentLengthMeters()));
                 rows.get(index).setEstimatedArrival(formatTime(cursor));
                 if (index < rows.size() - 1) {
                     rows.get(index).setEstimatedDeparture(formatTime(cursor));
@@ -220,7 +234,9 @@ public class TimetableRoutingService {
             rows.getLast().setEstimatedArrival(formatTime(destinationArrival));
             LocalTime cursor = destinationArrival;
             for (int index = rows.size() - 2; index >= 0; index--) {
-                cursor = cursor.minusSeconds(travelSeconds(rows.get(index + 1).getSegmentLengthMeters()));
+                cursor =
+                        cursor.minusSeconds(
+                                travelSeconds(rows.get(index + 1).getSegmentLengthMeters()));
                 rows.get(index).setEstimatedDeparture(formatTime(cursor));
                 if (index > 0) {
                     rows.get(index).setEstimatedArrival(formatTime(cursor));
@@ -255,7 +271,8 @@ public class TimetableRoutingService {
         return graph;
     }
 
-    private PathSegment shortestPath(String startUopid, String endUopid, Map<String, List<Edge>> graph) {
+    private PathSegment shortestPath(
+            String startUopid, String endUopid, Map<String, List<Edge>> graph) {
         if (startUopid.equals(endUopid)) {
             return new PathSegment(List.of(startUopid), List.of(0D));
         }

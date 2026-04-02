@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import com.ordermgmt.railway.domain.order.model.CoverageType;
 import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
@@ -56,7 +57,8 @@ public class TimetableArchiveService {
             return List.of();
         }
         try {
-            return List.of(OBJECT_MAPPER.readValue(archive.getTableData(), TimetableRowData[].class));
+            return List.of(
+                    OBJECT_MAPPER.readValue(archive.getTableData(), TimetableRowData[].class));
         } catch (IOException exception) {
             throw new IllegalStateException("Could not parse archived timetable data.", exception);
         }
@@ -127,7 +129,8 @@ public class TimetableArchiveService {
             String tags,
             String comment,
             List<LocalDate> validityDates,
-            List<TimetableRowData> rows) {
+            List<TimetableRowData> rows,
+            String operationalTrainNumber) {
         if (rows == null || rows.isEmpty()) {
             throw new IllegalArgumentException("Timetable rows are required.");
         }
@@ -135,8 +138,10 @@ public class TimetableArchiveService {
         List<TimetableRowData> preparedRows = prepareRows(rows);
         validateRows(preparedRows);
 
-        TimetableArchive archive = findArchiveForExistingPosition(existingPosition).orElseGet(TimetableArchive::new);
+        TimetableArchive archive =
+                findArchiveForExistingPosition(existingPosition).orElseGet(TimetableArchive::new);
         archive.setTimetableType("FAHRPLAN");
+        archive.setOperationalTrainNumber(blankToNull(operationalTrainNumber));
         archive.setRouteSummary(routeSummary(preparedRows));
         archive.setTableData(writeRows(preparedRows));
         archive = timetableArchiveRepository.save(archive);
@@ -149,6 +154,7 @@ public class TimetableArchiveService {
         position.setComment(blankToNull(comment));
         position.setFromLocation(preparedRows.getFirst().getName());
         position.setToLocation(preparedRows.getLast().getName());
+        position.setOperationalTrainNumber(blankToNull(operationalTrainNumber));
         position.setValidity(toValidityJson(validityDates));
         position.setStart(resolvePositionStart(validityDates, preparedRows));
         position.setEnd(resolvePositionEnd(validityDates, preparedRows));
@@ -162,12 +168,15 @@ public class TimetableArchiveService {
         return orderPositionRepository.save(position);
     }
 
-    private Optional<TimetableArchive> findArchiveForExistingPosition(OrderPosition existingPosition) {
+    private Optional<TimetableArchive> findArchiveForExistingPosition(
+            OrderPosition existingPosition) {
         if (existingPosition == null) {
             return Optional.empty();
         }
         return findArchive(
-                orderPositionRepository.findById(existingPosition.getId()).orElse(existingPosition));
+                orderPositionRepository
+                        .findById(existingPosition.getId())
+                        .orElse(existingPosition));
     }
 
     private Optional<ResourceNeed> capacityNeed(OrderPosition position) {
@@ -212,17 +221,25 @@ public class TimetableArchiveService {
             boolean isOrigin = index == 0;
             boolean isDestination = index == rows.size() - 1;
 
-            validateTimeMode(row.getArrivalMode(), row.getArrivalExact(), row.getArrivalEarliest(), row.getArrivalLatest());
+            validateTimeMode(
+                    row.getArrivalMode(),
+                    row.getArrivalExact(),
+                    row.getArrivalEarliest(),
+                    row.getArrivalLatest());
             validateTimeMode(
                     row.getDepartureMode(),
                     row.getDepartureExact(),
                     row.getDepartureEarliest(),
                     row.getDepartureLatest());
 
-            if (isOrigin && row.getDepartureMode() == TimeConstraintMode.NONE && blank(row.getEstimatedDeparture())) {
+            if (isOrigin
+                    && row.getDepartureMode() == TimeConstraintMode.NONE
+                    && blank(row.getEstimatedDeparture())) {
                 throw new IllegalArgumentException("Origin requires a departure time.");
             }
-            if (isDestination && row.getArrivalMode() == TimeConstraintMode.NONE && blank(row.getEstimatedArrival())) {
+            if (isDestination
+                    && row.getArrivalMode() == TimeConstraintMode.NONE
+                    && blank(row.getEstimatedArrival())) {
                 throw new IllegalArgumentException("Destination requires an arrival time.");
             }
 
@@ -270,16 +287,25 @@ public class TimetableArchiveService {
         return rows.getFirst().getName() + " → " + rows.getLast().getName();
     }
 
-    private LocalDateTime resolvePositionStart(List<LocalDate> validityDates, List<TimetableRowData> rows) {
-        LocalDate date = validityDates.isEmpty() ? LocalDate.now() : validityDates.stream().sorted().findFirst().orElse(LocalDate.now());
+    private LocalDateTime resolvePositionStart(
+            List<LocalDate> validityDates, List<TimetableRowData> rows) {
+        LocalDate date =
+                validityDates.isEmpty()
+                        ? LocalDate.now()
+                        : validityDates.stream().sorted().findFirst().orElse(LocalDate.now());
         LocalTime time = firstMeaningfulTime(rows.getFirst(), false);
         return date.atTime(time != null ? time : LocalTime.MIDNIGHT);
     }
 
-    private LocalDateTime resolvePositionEnd(List<LocalDate> validityDates, List<TimetableRowData> rows) {
-        LocalDate date = validityDates.isEmpty()
-                ? LocalDate.now()
-                : validityDates.stream().sorted().reduce((first, second) -> second).orElse(LocalDate.now());
+    private LocalDateTime resolvePositionEnd(
+            List<LocalDate> validityDates, List<TimetableRowData> rows) {
+        LocalDate date =
+                validityDates.isEmpty()
+                        ? LocalDate.now()
+                        : validityDates.stream()
+                                .sorted()
+                                .reduce((first, second) -> second)
+                                .orElse(LocalDate.now());
         LocalTime time = firstMeaningfulTime(rows.getLast(), true);
         return date.atTime(time != null ? time : LocalTime.of(23, 59));
     }
@@ -305,7 +331,8 @@ public class TimetableArchiveService {
 
     private boolean isTttRelevant(TimetableRowData row) {
         return row.getArrivalMode() != null && row.getArrivalMode() != TimeConstraintMode.NONE
-                || row.getDepartureMode() != null && row.getDepartureMode() != TimeConstraintMode.NONE
+                || row.getDepartureMode() != null
+                        && row.getDepartureMode() != TimeConstraintMode.NONE
                 || !blank(row.getActivityCode())
                 || Boolean.TRUE.equals(row.getHalt());
     }
