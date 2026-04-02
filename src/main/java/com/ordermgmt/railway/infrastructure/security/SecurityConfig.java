@@ -9,6 +9,7 @@ import java.util.Set;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.builders.WebSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -24,13 +25,15 @@ public class SecurityConfig extends VaadinWebSecurity {
 
     @Override
     protected void configure(HttpSecurity http) throws Exception {
-        // Allow REST API and Swagger UI without Vaadin session
-        http.authorizeHttpRequests(
-                auth ->
-                        auth.requestMatchers("/api/**", "/swagger-ui/**", "/v3/api-docs/**")
-                                .permitAll());
         super.configure(http);
         setOAuth2LoginPage(http, "/login");
+    }
+
+    @Override
+    protected void configure(WebSecurity web) throws Exception {
+        super.configure(web);
+        // Allow REST API and Swagger UI without authentication
+        web.ignoring().requestMatchers("/api/**", "/swagger-ui/**", "/v3/api-docs/**");
     }
 
     /** Maps Keycloak realm roles from the OIDC token to Spring Security GrantedAuthorities. */
