@@ -258,3 +258,76 @@ Look for the tags:
 - **Timetable Diff** — Version comparison (1 endpoint)
 
 For the complete endpoint listing with request/response schemas, see the [Architecture documentation](../ARCHITECTURE.md) or the [data model documentation](../datenmodel.md#path-manager-rest-api).
+
+## Swagger UI
+
+The Path Manager REST API is fully documented via interactive Swagger UI.
+
+### Zugriff
+
+Oeffnen Sie im Browser:
+
+```
+http://localhost:8085/swagger-ui/index.html
+```
+
+### Navigieren in Swagger UI
+
+Die Endpoints sind nach Tags gruppiert:
+
+| Tag | Endpoints | Beschreibung |
+|---|---|---|
+| **Path Manager** | 7 | CRUD-Operationen fuer Referenzzuege, Versionen und Betriebspunkte |
+| **TTT Process Simulation** | 3 | State-Machine-Operationen (Transition, History, Available Actions) |
+| **Timetable Diff** | 1 | Versionsvergleich zwischen Order-Seite und PM-Version |
+
+### Authentifizierung
+
+Die API-Endpoints sind aktuell ohne separate Authentifizierung zugaenglich (stateless SecurityFilterChain fuer `/api/**`). In einer Produktionsumgebung sollte ein API-Token oder OAuth2-Bearer-Token konfiguriert werden.
+
+### Beispielaufrufe direkt in Swagger
+
+1. Klicken Sie auf einen Endpoint (z.B. `GET /api/v1/pathmanager/trains`)
+2. Klicken Sie auf **"Try it out"**
+3. Fuellen Sie die Parameter aus (falls noetig)
+4. Klicken Sie auf **"Execute"**
+5. Die Antwort wird unterhalb angezeigt mit Status-Code, Headers und Body
+
+## Haeufige Fehler
+
+### "LazyInitializationException" bei API-Aufrufen
+
+**Ursache**: Ein Entity-Feld wird ausserhalb einer aktiven Hibernate-Session geladen. Dies tritt auf, wenn lazy-geladene Collections in der Serialisierung aufgeloest werden.
+
+**Loesung**: Die Controller-Schicht ist mit `@Transactional(readOnly = true)` annotiert und die Repositories verwenden `@EntityGraph` fuer Eager-Loading kritischer Collections (z.B. JourneyLocations). Falls der Fehler erneut auftritt, pruefen Sie, ob ein neues Feld im DTO-Mapper auf eine nicht eager-geladene Collection zugreift.
+
+### "Invalid transition" bei Prozessschritt
+
+**Ursache**: Die gewuenschte Aktion ist im aktuellen Zustand des Referenzzugs nicht erlaubt. Die TTT State Machine hat definierte Transitionen.
+
+**Loesung**: Pruefen Sie den aktuellen Zustand des Zugs und die erlaubten Aktionen:
+```
+GET /api/v1/pathmanager/process/{referenceTrainId}/available-actions
+```
+Nur die zurueckgegebenen Aktionen koennen ausgefuehrt werden.
+
+### Referenzzug wird nicht im TreeGrid angezeigt
+
+**Ursache**: Der Zug wurde moeglicherweise einem Fahrplanjahr zugeordnet, das nicht im aktuellen Anzeigebereich liegt, oder der Zug-Datensatz wurde nicht korrekt persistiert.
+
+**Loesung**:
+1. Pruefen Sie ueber die API, ob der Zug existiert: `GET /api/v1/pathmanager/trains`
+2. Pruefen Sie, ob ein Fahrplanjahr fuer den Gueltigkeitszeitraum existiert
+3. Laden Sie die Path Manager-Ansicht neu (F5)
+
+### "Position has already been sent" beim Senden
+
+**Ursache**: Die FAHRPLAN-Position wurde bereits an den Fahrplanmanager gesendet. Das Feld `pmReferenceTrainId` auf der Position ist bereits belegt.
+
+**Loesung**: Klicken Sie auf das teal-farbene Zug-Icon, um den bereits gesendeten Referenzzug im Fahrplanmanager anzuzeigen. Ein erneutes Senden derselben Position ist nicht moeglich.
+
+### Diff zeigt keine Unterschiede
+
+**Ursache**: Die Order-seitige Fahrplandaten und die aktuelle PM-Version sind identisch. Dies ist normal, wenn der Fahrplan nach dem Senden nicht vom IM modifiziert wurde.
+
+**Loesung**: Fuehren Sie einen IM-Prozessschritt aus (z.B. IM_DRAFT_OFFER), der eine neue Version mit geaenderten Zeiten erstellt. Danach zeigt der Diff die Unterschiede.

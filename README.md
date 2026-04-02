@@ -2,6 +2,15 @@
 
 Order management system for railway operations, built with Vaadin Flow, Spring Boot, and PostgreSQL.
 
+## Documentation
+
+- [Bedienungsanleitung (User Guide)](docs/wiki/BEDIENUNGSANLEITUNG.md)
+- [Fahrplan-Builder](docs/wiki/timetable-builder.md)
+- [Path Manager](docs/wiki/path-manager.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Glossary](docs/GLOSSARY.md)
+- [Project Status](docs/PROJECT_STATUS.md)
+
 ## Current Capabilities
 
 - `/orders`: compact accordion overview with summary metrics, inline comment preview, status chips with counters, and per-order filtering of order positions

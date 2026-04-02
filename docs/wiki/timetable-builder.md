@@ -239,6 +239,46 @@ The reference train appears in the Path Manager view under the appropriate timet
 - The position must have a saved timetable archive (i.e., the timetable builder must have been completed and saved at least once)
 - The position must not have been sent already (`pmReferenceTrainId` must be null)
 
+## Tastaturkuerzel
+
+| Kuerzel | Aktion | Kontext |
+|---|---|---|
+| **Enter** | Route berechnen | Schritt 1 — wenn ein Formularfeld (Von, Nach, Via) fokussiert ist, loest Enter die Routenberechnung aus |
+| **Ctrl+S** | Fahrplan speichern | Schritt 2 — speichert den aktuellen Fahrplan und navigiert zurueck zur Auftragsdetailansicht |
+| **Tab / Shift+Tab** | Naechstes / Vorheriges Feld | Beide Schritte — Navigation durch Formularfelder |
+| **Escape** | Dialog schliessen | Schliesst offene Dropdown-Auswahlen |
+
+## Fehlerbehebung
+
+### "No route found" / Route kann nicht berechnet werden
+
+**Ursache**: Im importierten Infrastruktur-Graph fehlt eine Streckenverbindung (Section of Line) zwischen zwei aufeinanderfolgenden Betriebspunkten.
+
+**Loesung**:
+1. Pruefen Sie in den Einstellungen (Settings > Topologie), ob die RINF-Daten fuer das betreffende Land importiert sind
+2. Pruefen Sie, ob Start und Ziel im gleichen Netz liegen oder ueber Grenzverbinder erreichbar sind (aktuell CH/DE ueber Basel Bad Bf, Schaffhausen, Konstanz, Kreuzlingen)
+3. Setzen Sie einen Via-Punkt, um die Route ueber bekannte Strecken zu leiten
+
+### "Position name is required"
+
+Das Pflichtfeld **Name** in Schritt 1 ist leer. Geben Sie einen aussagekraeftigen Namen ein (z.B. "IC 123 Zuerich - Basel").
+
+### "Route geaendert — bitte neu berechnen"
+
+Sie haben Von/Nach/Via geaendert, aber die Route noch nicht neu berechnet. Klicken Sie auf "Route berechnen" oder druecken Sie Enter, bevor Sie zu Schritt 2 wechseln.
+
+### Halt ohne Aktivitaet
+
+Im Zeilen-Editor ist der Halt-Schalter aktiviert, aber keine TTT-Aktivitaet ausgewaehlt. Waehlen Sie eine Aktivitaet aus der Liste oder deaktivieren Sie den Halt.
+
+### Karte wird nicht angezeigt
+
+Die Karte benoetigt eine Internetverbindung zu `*.tile.openstreetmap.org`. Pruefen Sie Ihre Verbindung und Firewall-Einstellungen. Die Routenberechnung funktioniert auch ohne Karte.
+
+### Zeiten verschieben sich unerwartet
+
+Pruefen Sie den aktiven Propagationsmodus (Shift/Stretch) und die gesetzten Pins. Pins begrenzen die Zeitpropagation. Setzen Sie Pins an wichtigen Fixpunkten (Grenzuebergaenge, kommerzielle Zeiten, Anschluesse).
+
 ## Saving
 
 Click "Save" to persist the timetable. The system:

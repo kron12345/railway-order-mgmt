@@ -41,3 +41,8 @@
 | PAID | PAID (Path Allocation ID) | PAID | PAID | Composite identifier for an allocated path, structured like TRID |
 | PRID | PRID (Path Request ID) | PRID | PRID | Composite identifier for a path request, structured like TRID |
 | ROID | ROID (Route ID) | ROID | ROID | Composite identifier for a route, structured like TRID |
+| Bestellkalender | Purchase Calendar | Calendario Ordini | Calendrier de Commandes | UI panel for managing capacity orders (purchase positions) per order position, organized by TTR phases (X-11, X-8, X-5, Ad-hoc) |
+| Benutzerrolle | User Role | Ruolo Utente | Role Utilisateur | One of three application roles assigned via Keycloak: ADMIN (full access incl. settings), DISPATCHER (order and timetable management), VIEWER (read-only access) |
+| Theme | Theme | Tema | Theme | Visual appearance of the application UI — available options: Dark Amber, Dark Teal, Light. Stored per user profile and applied immediately on change |
+| Audit Trail | Audit Trail | Traccia di Audit | Piste d'Audit | Automatic history of all entity changes recorded by Hibernate Envers. Tracks who changed what and when for orders, positions, resources, archives, and path manager entities |
+| Filter | Filter | Filtro | Filtre | UI mechanism for narrowing down displayed data — used in the order list (by status, text search) and in the accordion view (position type filter within an expanded order) |
