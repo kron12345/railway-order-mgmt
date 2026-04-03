@@ -36,6 +36,7 @@ import com.ordermgmt.railway.ui.layout.MainLayout;
 /** Vehicle rotation planning view with Gantt chart, train palette, and conflict detection. */
 @Route(value = "vehicleplanning", layout = MainLayout.class)
 @PageTitle("Vehicle Planning")
+@jakarta.annotation.security.PermitAll
 public class VehiclePlanningView extends VerticalLayout {
 
     private final VehiclePlanningService planningService;
