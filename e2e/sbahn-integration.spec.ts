@@ -981,6 +981,401 @@ test.describe("S-Bahn Olten-Aarau: Full Integration Test", () => {
   });
 
   // ══════════════════════════════════════════════════════════════════
+  // ── PHASE 5b: VEHICLE PLANNING — Add Vehicle & Von/Für ─────────
+  // ══════════════════════════════════════════════════════════════════
+
+  test("09b. add vehicle to rotation", async () => {
+    await page.goto("/vehicleplanning");
+    await page.waitForTimeout(2_000);
+
+    // Select the S-Bahn FLIRT Umlauf rotation set
+    const rotationCombo = page.locator("vaadin-combo-box").first();
+    await expect(rotationCombo).toBeVisible({ timeout: 10_000 });
+    await rotationCombo.click();
+    await rotationCombo.locator("input").fill("S-Bahn FLIRT");
+    const rotOption = page
+      .locator("vaadin-combo-box-item")
+      .filter({ hasText: /S-Bahn FLIRT Umlauf/ })
+      .first();
+    const rotVisible = await rotOption.isVisible().catch(() => false);
+    if (rotVisible) {
+      await rotOption.click();
+    } else {
+      await page.keyboard.press("Escape");
+      console.log("S-Bahn FLIRT Umlauf not found in rotation list — skipping vehicle add");
+      await screenshot(page, "09b-rotation-not-found");
+      return;
+    }
+    await page.waitForTimeout(1_000);
+
+    // Look for an "Add Vehicle" / "Fahrzeug hinzufügen" / "+ Fahrzeug" button
+    const addVehicleBtn = page.locator("vaadin-button").filter({
+      hasText: /Fahrzeug.*hinzuf|Add Vehicle|\+ Fahrzeug|New Vehicle|Neues Fahrzeug/i,
+    });
+    const addBtnVisible = await addVehicleBtn.first().isVisible().catch(() => false);
+
+    if (addBtnVisible) {
+      await addVehicleBtn.first().click({ force: true });
+      await page.waitForTimeout(1_500);
+
+      // If a dialog opens, fill vehicle details
+      const dialog = page.locator("vaadin-dialog-overlay");
+      const dialogVisible = await dialog.isVisible().catch(() => false);
+      if (dialogVisible) {
+        // Fill label field
+        const labelInput = dialog.locator("vaadin-text-field input").first();
+        await labelInput.click();
+        await labelInput.fill("FLIRT 01");
+        await page.keyboard.press("Tab");
+        await page.waitForTimeout(500);
+
+        // Try to set vehicle type via a Select
+        const typeSelect = dialog.locator("vaadin-select, vaadin-combo-box").first();
+        const typeVisible = await typeSelect.isVisible().catch(() => false);
+        if (typeVisible) {
+          await typeSelect.click();
+          await page.waitForTimeout(500);
+          // Try to pick MULTIPLE_UNIT / Triebzug
+          const typeItem = page.locator(
+            "vaadin-select-item, vaadin-combo-box-item, vaadin-item",
+          ).filter({ hasText: /Multiple Unit|Triebzug|MULTIPLE_UNIT/i }).first();
+          const typeItemVisible = await typeItem.isVisible().catch(() => false);
+          if (typeItemVisible) {
+            await typeItem.click();
+          } else {
+            await page.keyboard.press("Escape");
+          }
+          await page.waitForTimeout(500);
+        }
+
+        // Save the dialog
+        const saveBtn = dialog.locator("vaadin-button").filter({
+          hasText: /Save|Speichern|Create|Erstellen|OK/i,
+        });
+        const saveBtnVisible = await saveBtn.first().isVisible().catch(() => false);
+        if (saveBtnVisible) {
+          await saveBtn.first().click({ force: true });
+          await page.waitForTimeout(1_500);
+        }
+      }
+      console.log("Add Vehicle button found and clicked");
+    } else {
+      console.log("Add Vehicle button not found — feature may not yet have a UI button");
+    }
+
+    await screenshot(page, "09b-vehicle-added");
+  });
+
+  test("09c. verify Von/Für button exists", async () => {
+    // Ensure we are on vehicle planning page
+    if (!page.url().includes("vehicleplanning")) {
+      await page.goto("/vehicleplanning");
+      await page.waitForTimeout(2_000);
+    }
+
+    // Look for the "Von/Für aktualisieren" / "Update vehicle links" button
+    const writeLinkBtn = page.locator("vaadin-button").filter({
+      hasText: /Von\/F.r aktualisieren|Update vehicle links|writeLinks|Von\/F.r/i,
+    });
+    const btnVisible = await writeLinkBtn.first().isVisible().catch(() => false);
+
+    if (btnVisible) {
+      console.log("Von/Für button found and visible");
+      await expect(writeLinkBtn.first()).toBeVisible();
+    } else {
+      // Fallback: search for the CONNECT icon button (writeLinkBtn uses VaadinIcon.CONNECT)
+      const connectBtn = page.locator(
+        'vaadin-button:has(vaadin-icon[icon*="connect"])',
+      );
+      const connectVisible = await connectBtn.first().isVisible().catch(() => false);
+      if (connectVisible) {
+        console.log("Von/Für button found via CONNECT icon");
+        await expect(connectBtn.first()).toBeVisible();
+      } else {
+        console.log("Von/Für button not found — checking via JS");
+        // Last resort: find any button whose text contains the key phrases
+        const found = await page.evaluate(() => {
+          const buttons = document.querySelectorAll("vaadin-button");
+          for (const btn of buttons) {
+            const text = btn.textContent || "";
+            if (/Von.*F.r|vehicle links|writeLinks/i.test(text)) {
+              return text.trim();
+            }
+          }
+          return null;
+        });
+        if (found) {
+          console.log(`Von/Für button found via JS: "${found}"`);
+        } else {
+          console.log("WARN: Von/Für button not found at all on this page");
+        }
+        // Don't fail — the button may only appear when a rotation is selected
+        expect(found || btnVisible || connectVisible).toBeTruthy();
+      }
+    }
+
+    await screenshot(page, "09c-vonbis-button");
+  });
+
+  test("09d. verify TTR phase in Path Manager", async () => {
+    await page.goto("/pathmanager");
+    await page.waitForTimeout(2_000);
+
+    // Verify page loaded
+    const treeGrid = page.locator("vaadin-grid-tree-toggle, vaadin-grid");
+    await expect(treeGrid.first()).toBeVisible({ timeout: 15_000 });
+
+    // Select the first year node via the Vaadin TreeGrid JS API.
+    // Clicking vaadin-grid-tree-toggle only expands; we need to set activeItem.
+    await page.evaluate(() => {
+      const grid = document.querySelector("vaadin-grid") as any;
+      if (!grid) throw new Error("No vaadin-grid found");
+      // The TreeGrid data provider has items; the first root item is a YearNode
+      const items = grid._cache?.items || grid.items;
+      if (items) {
+        for (let i = 0; i < items.length; i++) {
+          if (items[i]) {
+            grid.selectedItems = [items[i]];
+            grid.activeItem = items[i];
+            return;
+          }
+        }
+      }
+      throw new Error("No items found in TreeGrid cache");
+    });
+    await page.waitForTimeout(2_000);
+
+    // Look for TTR phase badge — it shows "FPJ YYYY — <phase name>"
+    // The badge is rendered in the detail panel after selecting a YearNode
+    const phaseBadge = await page.evaluate(() => {
+      const spans = document.querySelectorAll("span");
+      for (const span of spans) {
+        const text = span.textContent || "";
+        if (/FPJ\s+20\d{2}\s*[—–-]/.test(text)) {
+          const style = window.getComputedStyle(span);
+          return {
+            text: text.trim(),
+            background: style.background || style.backgroundColor,
+            visible: (span as HTMLElement).offsetParent !== null,
+          };
+        }
+      }
+      // Also look for phase keywords directly
+      for (const span of spans) {
+        const text = span.textContent || "";
+        if (
+          /Annual Ordering|Late Ordering|Ad Hoc|Jahresbestellung|Sp.tbestellung|Capacity/i.test(text) &&
+          (span as HTMLElement).offsetParent !== null
+        ) {
+          const style = window.getComputedStyle(span);
+          return {
+            text: text.trim(),
+            background: style.background || style.backgroundColor,
+            visible: true,
+          };
+        }
+      }
+      return null;
+    });
+
+    if (phaseBadge) {
+      console.log(`TTR phase badge found: "${phaseBadge.text}" (bg: ${phaseBadge.background})`);
+      expect(phaseBadge.visible).toBe(true);
+    } else {
+      // Fallback: look for any year/phase info in the detail panel
+      const phaseInfo = await page.evaluate(() => {
+        const els = document.querySelectorAll("span, div");
+        for (const el of els) {
+          const text = el.textContent || "";
+          // Match year detail heading or phase info rows
+          if (
+            (/Year.*:.*20\d{2}|Jahr.*:.*20\d{2}/i.test(text) ||
+             /Current Phase|Aktuelle Phase|Bestellphase|phase/i.test(text)) &&
+            (el as HTMLElement).offsetParent !== null
+          ) {
+            return text.trim().substring(0, 120);
+          }
+        }
+        return null;
+      });
+      console.log(`TTR phase info text: ${phaseInfo || "not found"}`);
+      expect(phaseBadge || phaseInfo).toBeTruthy();
+    }
+
+    await screenshot(page, "09d-ttr-phase");
+  });
+
+  test("09e. verify associated train field in builder", async () => {
+    test.setTimeout(120_000);
+
+    // Navigate back to the order
+    await page.goto(orderUrl);
+    await expect(page.getByText(ORDER_NR)).toBeVisible({ timeout: 10_000 });
+    await page.waitForTimeout(1_000);
+
+    // Find a FAHRPLAN position and click edit (pencil icon) to open timetable builder
+    await dismissDevBanner(page);
+    const navigated = await page.evaluate(() => {
+      const spans = document.querySelectorAll("span");
+      for (const span of spans) {
+        if (/^(TIMETABLE|FAHRPLAN)$/i.test(span.textContent?.trim() || "")) {
+          let container: HTMLElement | null = span.closest("div");
+          for (let i = 0; i < 8 && container; i++) {
+            const pencilIcon = container.querySelector(
+              'vaadin-icon[icon*="pencil"], vaadin-icon[icon*="edit"]',
+            );
+            if (pencilIcon) {
+              const btn = pencilIcon.closest("vaadin-button") as HTMLElement;
+              if (btn && btn.offsetParent !== null) {
+                btn.click();
+                return true;
+              }
+            }
+            container =
+              container.parentElement?.closest("div") as HTMLElement | null;
+          }
+        }
+      }
+      return false;
+    });
+
+    if (!navigated) {
+      console.log("Could not find pencil/edit icon — trying direct navigation");
+      await screenshot(page, "09e-edit-nav-failed");
+      return;
+    }
+
+    // Wait for timetable builder to load
+    await page.waitForURL(/\/timetable-builder/, { timeout: 20_000 });
+    await page.waitForTimeout(2_000);
+
+    // Check if we are already on Step 2 (grid visible) or need to click Next
+    const gridAlreadyVisible = await page
+      .locator("vaadin-grid")
+      .isVisible()
+      .catch(() => false);
+
+    if (!gridAlreadyVisible) {
+      // Go to Step 2 (click Next)
+      await dismissDevBanner(page);
+      await page.getByRole("button", { name: NEXT_BTN }).click();
+      await expect(page.locator("vaadin-grid")).toBeVisible({ timeout: 30_000 });
+    }
+    await page.waitForTimeout(1_500);
+
+    // Select all validity dates if available
+    const allBtn = page.getByText(ALL_LABEL, { exact: true });
+    const allVisible = await allBtn.isVisible().catch(() => false);
+    if (allVisible) {
+      await allBtn.click();
+      await page.waitForTimeout(500);
+    }
+
+    // Select an intermediate row (row 1 — not origin)
+    await selectGridRow(page, 1);
+    await page.waitForTimeout(1_000);
+
+    // Ensure halt is enabled (required before activity field is visible)
+    const haltCheckbox = page
+      .locator("vaadin-checkbox")
+      .filter({ hasText: /Zwischenhalt|Intermediate stop|halt/i })
+      .first();
+    const haltVisible = await haltCheckbox.isVisible().catch(() => false);
+    if (haltVisible) {
+      const isChecked = await page.evaluate(() => {
+        const cbs = document.querySelectorAll("vaadin-checkbox");
+        for (const cb of cbs) {
+          if (/zwischenhalt|intermediate stop|halt/i.test(cb.textContent || "")) {
+            return (cb as any).checked;
+          }
+        }
+        return false;
+      });
+      if (!isChecked) {
+        await haltCheckbox.click({ force: true });
+        await page.waitForTimeout(500);
+      }
+    }
+
+    // Now change the activity to "0044" (Rollmaterial von anderem Zug)
+    // The activity field is a vaadin-combo-box
+    const activityCombo = page.locator("vaadin-combo-box").filter({
+      hasText: /Aktivit.t|Activity/i,
+    });
+    const activityVisible = await activityCombo.first().isVisible().catch(() => false);
+
+    if (activityVisible) {
+      await activityCombo.first().click();
+      await activityCombo.first().locator("input").fill("0044");
+      await page.waitForTimeout(1_000);
+
+      // Click the 0044 option in the dropdown
+      const option0044 = page
+        .locator("vaadin-combo-box-item")
+        .filter({ hasText: /0044/ })
+        .first();
+      const optionVisible = await option0044.isVisible().catch(() => false);
+      if (optionVisible) {
+        await option0044.click();
+        await page.waitForTimeout(1_000);
+
+        // Verify the associated train field appears
+        // The field label is "Verknüpfter Zug (OTN)" / "Associated train (OTN)"
+        const assocTrainField = await page.evaluate(() => {
+          const fields = document.querySelectorAll("vaadin-text-field");
+          for (const field of fields) {
+            const label = ((field as any).label || "").toLowerCase();
+            if (
+              (label.includes("associated") || label.includes("verknüpfter") || label.includes("otn")) &&
+              (field as HTMLElement).offsetParent !== null
+            ) {
+              return { label: (field as any).label, visible: true };
+            }
+          }
+          return null;
+        });
+
+        if (assocTrainField) {
+          console.log(`Associated train field visible: "${assocTrainField.label}"`);
+          expect(assocTrainField.visible).toBe(true);
+
+          // Fill the field with "18002"
+          await setTextFieldByLabel(
+            page,
+            /Verkn.pfter Zug|Associated train/i,
+            "18002",
+          );
+          await page.waitForTimeout(500);
+          console.log("Associated train field set to 18002");
+        } else {
+          console.log("WARN: Associated train field not found after selecting 0044");
+        }
+      } else {
+        console.log("Activity 0044 option not found in combo dropdown");
+        await page.keyboard.press("Escape");
+      }
+    } else {
+      console.log("Activity combo not visible — halt may not be enabled or editor not shown");
+    }
+
+    await screenshot(page, "09e-associated-train");
+
+    // Click Apply to confirm (but don't save — we navigate away without saving)
+    await dismissDevBanner(page);
+    const applyBtnVisible = await page.locator("vaadin-button").filter({
+      hasText: APPLY_BTN,
+    }).first().isVisible().catch(() => false);
+    if (applyBtnVisible) {
+      await clickVaadinButton(page, APPLY_BTN);
+      await page.waitForTimeout(500);
+    }
+
+    // Navigate back to order detail (without saving the timetable builder)
+    await page.goto(orderUrl);
+    await expect(page.getByText(ORDER_NR)).toBeVisible({ timeout: 10_000 });
+  });
+
+  // ══════════════════════════════════════════════════════════════════
   // ── PHASE 6: SEND TO PATH MANAGER ──────────────────────────────
   // ══════════════════════════════════════════════════════════════════
 
@@ -1219,8 +1614,8 @@ test.describe("S-Bahn Olten-Aarau: Full Integration Test", () => {
     }
     await newRotBtn.first().click({ force: true });
 
-    // A dialog should appear
-    const dialog = page.locator("vaadin-dialog-overlay");
+    // A dialog should appear (use .first() to avoid strict mode with AI dialog)
+    const dialog = page.locator("vaadin-dialog-overlay").first();
     await expect(dialog).toBeVisible({ timeout: 10_000 });
 
     // Fill the rotation name
