@@ -4,7 +4,9 @@
 
 ## Letzte Aktualisierung
 
-**2026-03-31** — TTR Phase / TTT Process Type Mapping: Automatische Zuordnung der TTR-Phase (Capacity Strategy, Capacity Model, Capacity Supply, Annual Ordering, Late Ordering, Ad Hoc, Past) zum TTT ProcessType basierend auf Fahrplanjahr-Startdatum. (1) Neuer Enum `TtrPhase` mit 7 Phasen und Timeline/Label-Metadaten. (2) Neuer Service `TtrPhaseResolver` mit 4 Methoden (resolvePhase, resolveProcessType, isDraftOfferAllowed, phaseDescription). (3) `PathProcessEngine` erweitert: Phase-basierte Filterung der verfuegbaren Aktionen (kein IM_DRAFT_OFFER in Bestellphase 3), dynamische Validierung fuer IM_FINAL_OFFER aus RECEIPT_CONFIRMED, neue Methoden resolvePhaseForTrain/resolveProcessTypeForTrain. (4) `PathManagerView`: TTR-Phasen-Badge (farbcodiert: gruen=Annual, gelb=Late, orange=AdHoc, grau=Past) und Phasen-Info bei Fahrplanjahr-Auswahl. (5) `ProcessSimulationPanel`: Phase-Info-Box bei NEW-Zustand mit ProcessType-Hinweis und Bestellphase-3-Warnung. (6) V14-Migration: Seed fuer FPJ 2025 und 2027 (2026 existiert bereits). (7) i18n: 10 ttr.*-Keys in DE/EN/IT/FR. (8) Unit Test: TtrPhaseResolverTest mit 25 Tests fuer alle Phasen und Grenzwerte. Alle 39 Tests bestanden.
+**2026-03-31** — Dokumentations-Gesamtupdate: Alle Dokumentation aktualisiert fuer Vehicle Planning, TTR Phase Resolver, S-Bahn E2E Test, V12-V14 Migrationen. Neue Dateien: wiki/vehicle-planning.md, ADR-012 (VP Gantt), ADR-013 (TTR Automation). Aktualisiert: datenmodel.md (+VP ER-Diagramm, +TTR Phasen), ARCHITECTURE.md (+VP Context, +TtrPhaseResolver), BEDIENUNGSANLEITUNG.md (+Kap. 13, +TTR in Kap. 7), path-manager.md (+TTR-Phasen), GLOSSARY.md (+12 Begriffe), PROJECT_STATUS.md (V12-V14, Tests, ADRs, Changelog).
+
+Davor: **2026-03-31** — TTR Phase / TTT Process Type Mapping: Automatische Zuordnung der TTR-Phase (Capacity Strategy, Capacity Model, Capacity Supply, Annual Ordering, Late Ordering, Ad Hoc, Past) zum TTT ProcessType basierend auf Fahrplanjahr-Startdatum. (1) Neuer Enum `TtrPhase` mit 7 Phasen und Timeline/Label-Metadaten. (2) Neuer Service `TtrPhaseResolver` mit 4 Methoden (resolvePhase, resolveProcessType, isDraftOfferAllowed, phaseDescription). (3) `PathProcessEngine` erweitert: Phase-basierte Filterung der verfuegbaren Aktionen (kein IM_DRAFT_OFFER in Bestellphase 3), dynamische Validierung fuer IM_FINAL_OFFER aus RECEIPT_CONFIRMED, neue Methoden resolvePhaseForTrain/resolveProcessTypeForTrain. (4) `PathManagerView`: TTR-Phasen-Badge (farbcodiert: gruen=Annual, gelb=Late, orange=AdHoc, grau=Past) und Phasen-Info bei Fahrplanjahr-Auswahl. (5) `ProcessSimulationPanel`: Phase-Info-Box bei NEW-Zustand mit ProcessType-Hinweis und Bestellphase-3-Warnung. (6) V14-Migration: Seed fuer FPJ 2025 und 2027 (2026 existiert bereits). (7) i18n: 10 ttr.*-Keys in DE/EN/IT/FR. (8) Unit Test: TtrPhaseResolverTest mit 25 Tests fuer alle Phasen und Grenzwerte. Alle 39 Tests bestanden.
 
 Davor: **2026-03-31** — Fahrzeugumlaufplanung (Vehicle Planning): Neuer Bounded Context `vehicleplanning` mit komplettem Domain Layer, UI und Navigation. (1) V11-Migration: 4 Tabellen (`vp_rotation_sets`, `vp_vehicles`, `vp_rotation_entries`, `vp_vehicle_operations`) mit FK auf `pm_timetable_years` und `pm_reference_trains`, 6 Indexes. (2) Domain Model: 2 Enums (`VehicleType`, `CouplingPosition`), 4 Entities (`VpRotationSet`, `VpVehicle`, `VpRotationEntry`, `VpVehicleOperation`) ohne `@Audited` (Planungsdaten), 1 Conflict-Record. (3) 4 Repositories. (4) 2 Services: `VehiclePlanningService` (CRUD, addTrainToVehicle, moveEntry, removeEntry) und `ConflictDetectionService` (Zeitueberlappung und Standort-Mismatch-Erkennung ueber PmJourneyLocation). (5) UI: `GanttChart` (Div-basiert mit Zeitlineal, Fahrzeugzeilen, absolut positionierte Zugbloecke, DragSource/DropTarget), `TrainPalette` (Sidebar mit Suchfeld und draggbaren PM-Zuegen), `ConflictPanel` (Konfliktliste mit Severity-Icons). (6) `VehiclePlanningView` unter Route `/vehicleplanning` mit Umlaufplan-Auswahl, Tagesauswahl, Neuer-Umlaufplan-Dialog, SplitLayout 20/80 (Palette/Gantt), Konfliktpanel. (7) MainLayout: Navigation und Breadcrumb ergaenzt. (8) i18n: 30 vp.*-Keys in DE/EN/IT/FR.
 
@@ -64,7 +66,7 @@ Davor: Fahrplanbuilder Phase 2-4: Timetable-Editing Features implementiert. Time
 | **i18n** | Aktiv | DE/EN/IT/FR, inkl. Builder, Settings, Order-Views |
 | **Push / Live Updates** | Skeleton | `BroadcastService` und `@Push` vorhanden |
 | **Audit Trail** | Aktiv | Hibernate Envers fuer Orders, Positionen, Ressourcen, Archive |
-| **Datenbank** | V1-V14 Migrationen | Orders, Positionen, Ressourcen, Bestellungen, Infrastruktur, Schlagwoerter, Positionskommentare, Fahrplanarchiv, OTN, Path Manager (8 `pm_*` Tabellen + Audit + Multi-Year Seed), Vehicle Planning (4 `vp_*` Tabellen) |
+| **Datenbank** | V1-V14 Migrationen | Orders, Positionen, Ressourcen, Bestellungen, Infrastruktur, Schlagwoerter, Positionskommentare, Fahrplanarchiv, OTN, Path Manager (8 `pm_*` Tabellen + Audit + Multi-Year Seed + Country-Code-Fix V12/V13), Vehicle Planning (4 `vp_*` Tabellen), TTR-Seed (FPJ 2025/2026/2027) |
 | **Theme** | Aktiv | Profile-basiertes Theme mit sofortigem Umschalten; Fallback auf Default abgesichert |
 | **Accessibility** | Aktiv | ARIA-Labels, Tastaturbedienbarkeit, lesbare Statuschips, Builder und Liste testbar |
 | **Laufzeit** | Lokal verifiziert | Anwendung laeuft ohne Docker auf `*:8085` |
@@ -79,7 +81,7 @@ Davor: Fahrplanbuilder Phase 2-4: Timetable-Editing Features implementiert. Time
 | **SpotBugs** | Aktiv | Statische Analyse |
 | **OWASP Dep Check** | Aktiv | CVE-Scanning bei PRs |
 | **Gitleaks** | Aktiv | Secret Scanning |
-| **Playwright** | Aktiv | 49 E2E-Tests: Login, Order CRUD/Lifecycle, Timetable Builder/Editing/Comprehensive, Path Manager |
+| **Playwright** | Aktiv | 49+ E2E-Tests in 8 Spec-Dateien + 14 S-Bahn E2E-Integration-Tests: Login, Order CRUD/Lifecycle, Timetable Builder/Editing/Comprehensive, Path Manager, S-Bahn Olten-Aarau Full Integration (14 Tests: Order, Route, Halte, Zeitfenster, Interval, PM, Archive, VP, Cleanup) |
 
 ## UI
 
@@ -136,6 +138,9 @@ Davor: Fahrplanbuilder Phase 2-4: Timetable-Editing Features implementiert. Time
 | V9 | `V9__path_manager_tables.sql` | `pm_timetable_years`, `pm_reference_trains`, `pm_routes`, `pm_path_requests`, `pm_paths`, `pm_train_versions`, `pm_journey_locations`, `pm_process_steps` + Audit-Tabellen + FK `pm_reference_train_id` auf `order_positions` + Seed FPJ 2026 |
 | V10 | `V10__fix_pm_audit_columns.sql` | Envers Audit-Spalten `revision_id` -> `rev`, `revision_type` -> `revtype` in allen `pm_*_aud` Tabellen |
 | V11 | `V11__vehicle_planning_tables.sql` | `vp_rotation_sets`, `vp_vehicles`, `vp_rotation_entries`, `vp_vehicle_operations` + 6 Indexes |
+| V12 | `V12__fix_pm_country_code_length.sql` | `pm_journey_locations.country_code_iso` VARCHAR(2) -> VARCHAR(5) (+ aud) |
+| V13 | `V13__fix_pm_country_code_aud.sql` | Nachtrags-Fix fuer Audit-Tabelle `country_code_iso` |
+| V14 | `V14__ttr_multi_year_seed.sql` | Seed fuer FPJ 2025 und 2027 (ON CONFLICT DO NOTHING) |
 
 ## ERA RINF Infrastrukturdaten
 
@@ -179,11 +184,16 @@ Hinweise:
 9. **ADR-009**: `FAHRPLAN`-Positionen speichern den Detailfahrplan nicht selbst, sondern verlinken 1:1 auf `timetable_archives` ueber einen `CAPACITY`-Ressourcenbedarf
 10. **ADR-010**: Shift/Stretch-Zeitpropagation mit Pin-Konzept fuer Fahrplan-Zeitbearbeitung
 11. **ADR-011**: Path Manager Architektur — REST API als Integrations-Boundary, Shared DB mit pm_-Prefix, statische State Machine
+12. **ADR-012**: Vehicle Planning mit Gantt Chart — CSS Grid + Vaadin DnD, direkter PM-Service-Aufruf, keine REST API fuer VP
+13. **ADR-013**: TTR Phase Automation — TtrPhaseResolver berechnet Phase aus Datum + Fahrplanjahrstart, Auto-ProcessType, phasenabhaengige State Machine
 
 ## Changelog
 
 | Datum | Aenderung |
 |---|---|
+| 2026-03-31 | Dokumentations-Update: datenmodel.md (VP ER-Diagramm + Feldtabellen, TTR-Phasen-Timeline + Phasentabelle + TtrPhaseResolver-Doku), ARCHITECTURE.md (VP Bounded Context + Komponentendiagramm, TtrPhaseResolver-Abschnitt), BEDIENUNGSANLEITUNG.md (Kapitel 13 Fahrzeugplanung, TTR-Phasen in Kap. 7), path-manager.md (TTR-Phasen-Abschnitt mit Badge-Farben + Bestellphase 2/3), vehicle-planning.md (neue Wiki-Seite), GLOSSARY.md (+12 Begriffe: VP, Gantt, TTR, Bestellphasen, CNA, Wendezeit, Mehrfachtraktion), ADR-012 (VP Gantt), ADR-013 (TTR Phase Automation), PROJECT_STATUS.md (Migrations V12-V14, Tests, ADRs) |
+| 2026-03-31 | S-Bahn Olten-Aarau Full Integration E2E Test: 14 Tests in `sbahn-integration.spec.ts` (Order-Erstellung, Route, Hin-/Rueckroute, Halte, Zeitfenster, Auto-Zeiten, Soft-Delete/Undo, Speichern, Taktfahrplan 38 Positionen, PM-Senden, PM-TreeGrid, Archivansicht, Vehicle Planning, Cleanup). Screenshots in test-results/sbahn-*.png |
+| 2026-03-31 | V12/V13-Migration: pm_journey_locations.country_code_iso VARCHAR(2)->VARCHAR(5) fuer dreistellige ISO-Codes (CHE, DEU). V12 fixte Haupttabelle + Audit, V13 Nachtrags-Fix fuer Audit-Tabelle |
 | 2026-03-31 | Fahrzeugumlaufplanung (Vehicle Planning): Bounded Context `vehicleplanning`, V11-Migration (4 vp_* Tabellen), 4 Entities + 2 Enums + Conflict Record, 4 Repos, 2 Services (Planning + Conflict Detection), 3 UI-Komponenten (GanttChart, TrainPalette, ConflictPanel), VehiclePlanningView, MainLayout Nav + Breadcrumb, i18n DE/EN/IT/FR |
 | 2026-03-31 | Timetable Builder 6 UX-Fixes: Eindeutige Zeitfenster-Labels (4 i18n-Keys), Grid 14->8 Spalten, PM Qualifier-Labels dynamisch, Route-Zeiten optional + Laufweg-Vorschau, Kompakter Kalender (setCompact), Gueltigkeit im Builder-Header |
 | 2026-04-02 | Security Pentest: Separate API SecurityFilterChain, @PreAuthorize auf OrderService, Credential-Sanitisierung, Error-Handler Sanitisierung, SecurityAuditorAware, simulatedBy in ProcessEngine, GH Actions SHA-Pinning, SSL-Hinweis, Dev-Logging reduziert |

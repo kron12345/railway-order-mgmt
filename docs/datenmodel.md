@@ -937,6 +937,289 @@ Die API stellt 11 REST Endpoints bereit, dokumentiert ueber Swagger UI unter `/s
 | 10 | GET | `/api/v1/pathmanager/process/{referenceTrainId}/history` | PathProcessController | Prozesshistorie abrufen |
 | 11 | POST | `/api/v1/pathmanager/diff?referenceTrainId=` | PathManagerDiffController | Diff zwischen Order-Daten und PM-Version |
 
+## Vehicle Planning (Umlaufplanung) Domain Model
+
+Die Fahrzeugumlaufplanung ordnet Referenzzuege aus dem Path Manager konkreten Fahrzeugen zu und stellt so den physischen Fahrzeugeinsatz fuer ein Fahrplanjahr sicher. Der Bounded Context `vehicleplanning` referenziert direkt auf `PmReferenceTrain` und `PmTimetableYear` aus dem Path Manager.
+
+### Entity-Relationship-Diagramm
+
+```mermaid
+erDiagram
+    PmTimetableYear ||--o{ VpRotationSet : "scoped to"
+    VpRotationSet ||--o{ VpVehicle : "contains"
+    VpVehicle ||--o{ VpRotationEntry : "has entries"
+    VpRotationEntry }o--|| PmReferenceTrain : "assigns train"
+    VpRotationEntry ||--o{ VpVehicleOperation : "has operations"
+
+    VpRotationSet {
+        UUID id PK
+        VARCHAR name
+        VARCHAR description
+        UUID timetable_year_id FK
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+        BIGINT version
+    }
+
+    VpVehicle {
+        UUID id PK
+        UUID rotation_set_id FK
+        VARCHAR label
+        VARCHAR vehicle_type
+        VARCHAR vehicle_class
+        INTEGER sequence
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+        BIGINT version
+    }
+
+    VpRotationEntry {
+        UUID id PK
+        UUID vehicle_id FK
+        UUID reference_train_id FK
+        INTEGER day_of_week
+        INTEGER sequence_in_day
+        VARCHAR coupling_type
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+        BIGINT version
+    }
+
+    VpVehicleOperation {
+        UUID id PK
+        UUID rotation_entry_id FK
+        VARCHAR location_name
+        VARCHAR activity_code
+        VARCHAR associated_train_otn
+        VARCHAR composition_section
+        VARCHAR comment
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+        BIGINT version
+    }
+```
+
+### Detaillierte Feldtabellen
+
+#### VpRotationSet (Umlaufplan)
+
+Ein Umlaufplan gruppiert Fahrzeuge fuer ein bestimmtes Fahrplanjahr. Er ist das Top-Level-Aggregat im Vehicle Planning Context.
+
+| Feld | Typ | Nullable | Beschreibung |
+| --- | --- | --- | --- |
+| `id` | UUID | nein | Primaerschluessel |
+| `name` | VARCHAR(100) | nein | Name des Umlaufplans (z.B. "FLIRT Olten-Aarau") |
+| `description` | VARCHAR(500) | ja | Optionale Beschreibung |
+| `timetable_year_id` | UUID (FK) | nein | Zugehoeriges Fahrplanjahr (`pm_timetable_years`) |
+| `created_at` | TIMESTAMP | nein | Erstellungszeitpunkt |
+| `updated_at` | TIMESTAMP | nein | Letzter Aenderungszeitpunkt |
+| `version` | BIGINT | nein | Optimistic Locking |
+
+#### VpVehicle (Fahrzeug)
+
+Ein Fahrzeug repraesentiert eine physische Einheit (Triebzug, Lokomotive oder Wagenkomposition) innerhalb eines Umlaufplans.
+
+| Feld | Typ | Nullable | Beschreibung |
+| --- | --- | --- | --- |
+| `id` | UUID | nein | Primaerschluessel |
+| `rotation_set_id` | UUID (FK) | nein | Zugehoeriger Umlaufplan |
+| `label` | VARCHAR(100) | nein | Bezeichnung (z.B. "FLIRT RABe 526 201") |
+| `vehicle_type` | VARCHAR(30) | nein | Fahrzeugtyp: `MULTIPLE_UNIT`, `LOCOMOTIVE`, `COACH_SET` |
+| `vehicle_class` | VARCHAR(50) | ja | Fahrzeugklasse (z.B. "RABe 526", "Re 460") |
+| `sequence` | INTEGER | nein | Sortierung innerhalb des Umlaufplans (Default 0) |
+| `created_at` | TIMESTAMP | nein | Erstellungszeitpunkt |
+| `updated_at` | TIMESTAMP | nein | Letzter Aenderungszeitpunkt |
+| `version` | BIGINT | nein | Optimistic Locking |
+
+#### VpRotationEntry (Umlaufeintrag)
+
+Ein Umlaufeintrag weist einen Referenzzug einem Fahrzeug an einem bestimmten Wochentag zu. Dies ist die zentrale Zuordnungsentitaet zwischen Fahrzeug und Fahrplan.
+
+| Feld | Typ | Nullable | Beschreibung |
+| --- | --- | --- | --- |
+| `id` | UUID | nein | Primaerschluessel |
+| `vehicle_id` | UUID (FK) | nein | Zugehoeriges Fahrzeug |
+| `reference_train_id` | UUID (FK) | nein | Zugewiesener Referenzzug aus dem Path Manager |
+| `day_of_week` | INTEGER | nein | Wochentag (1=Montag bis 7=Sonntag), CHECK 1-7 |
+| `sequence_in_day` | INTEGER | nein | Reihenfolge innerhalb des Tages (Default 0) |
+| `coupling_type` | VARCHAR(20) | nein | Kupplungsposition: `FULL`, `FRONT`, `REAR` (Default `FULL`) |
+| `created_at` | TIMESTAMP | nein | Erstellungszeitpunkt |
+| `updated_at` | TIMESTAMP | nein | Letzter Aenderungszeitpunkt |
+| `version` | BIGINT | nein | Optimistic Locking |
+
+#### VpVehicleOperation (Fahrzeugoperation)
+
+Operationsdetails fuer einen Umlaufeintrag, z.B. Kupplungs-/Abkupplungsvorgaenge an bestimmten Orten.
+
+| Feld | Typ | Nullable | Beschreibung |
+| --- | --- | --- | --- |
+| `id` | UUID | nein | Primaerschluessel |
+| `rotation_entry_id` | UUID (FK) | nein | Zugehoeriger Umlaufeintrag |
+| `location_name` | VARCHAR(255) | ja | Ortsname der Operation |
+| `activity_code` | VARCHAR(50) | ja | TTT-Aktivitaetscode (z.B. "0010" Kuppeln, "0017" Abkuppeln, "0044"/"0045" Richtungswechsel) |
+| `associated_train_otn` | VARCHAR(20) | ja | OTN des verbundenen Zuges (bei Fluegelungen) |
+| `composition_section` | VARCHAR(50) | ja | Kompositionsabschnitt |
+| `comment` | VARCHAR(500) | ja | Optionaler Kommentar |
+| `created_at` | TIMESTAMP | nein | Erstellungszeitpunkt |
+| `updated_at` | TIMESTAMP | nein | Letzter Aenderungszeitpunkt |
+| `version` | BIGINT | nein | Optimistic Locking |
+
+### Enums
+
+#### VehicleType
+
+| Wert | Beschreibung |
+| --- | --- |
+| `MULTIPLE_UNIT` | Triebzug (z.B. FLIRT, Giruno, ICE) |
+| `LOCOMOTIVE` | Lokomotive (z.B. Re 460, Vectron) |
+| `COACH_SET` | Wagenkomposition / Wagen-Set |
+
+#### CouplingPosition
+
+| Wert | Beschreibung |
+| --- | --- |
+| `FULL` | Gesamter Zug wird vom Fahrzeug gefuehrt (Default) |
+| `FRONT` | Fahrzeug am vorderen Zugteil (Fluegelung) |
+| `REAR` | Fahrzeug am hinteren Zugteil (Fluegelung) |
+
+### Conflict Record
+
+Konflikte werden nicht persistiert, sondern bei jeder Anzeige durch den `ConflictDetectionService` berechnet:
+
+| Feld | Typ | Beschreibung |
+| --- | --- | --- |
+| `vehicleId` | UUID | Betroffenes Fahrzeug |
+| `vehicleLabel` | String | Fahrzeugbezeichnung |
+| `dayOfWeek` | int | Betroffener Wochentag |
+| `description` | String | Menschenlesbare Konfliktbeschreibung |
+| `severity` | Severity | `WARNING` (z.B. Standort-Mismatch) oder `ERROR` (z.B. Zeitueberlappung) |
+
+**Konflikterkennung:**
+
+Der `ConflictDetectionService` prueft fuer jedes Fahrzeug und jeden Wochentag:
+
+1. **Zeitueberlappung (ERROR):** Zwei Umlaufeintraege desselben Fahrzeugs ueberlappen zeitlich (basierend auf Abfahrt/Ankunft der PmJourneyLocations des Referenzzugs)
+2. **Standort-Mismatch (WARNING):** Der Ankunftsort des vorherigen Zuges stimmt nicht mit dem Abfahrtsort des naechsten Zuges ueberein und es bleibt keine ausreichende Wendezeit
+
+### Gantt-Chart UI-Konzept
+
+Die Visualisierung erfolgt als Div-basiertes Gantt-Diagramm:
+
+- **Y-Achse:** Fahrzeuge des aktuellen Umlaufplans, eine Zeile pro Fahrzeug
+- **X-Achse:** Zeitlineal (00:00 bis 24:00 fuer den ausgewaehlten Wochentag)
+- **Zugbloecke:** Absolut positionierte `<div>`-Elemente pro Umlaufeintrag, breite proportional zur Fahrzeit
+- **Drag & Drop:** Zuege werden aus der TrainPalette (Sidebar) per DragSource auf die Gantt-Zeilen (DropTarget) gezogen
+- **Farben:** Zugbloecke sind farbcodiert nach Fahrzeugtyp, Konflikte werden rot hervorgehoben
+- **Konfliktpanel:** Unterhalb des Gantt-Charts zeigt ein Panel alle erkannten Konflikte mit Severity-Icons
+
+### VP-Tabellen und Indexes (V11-Migration)
+
+| Tabelle | Beschreibung |
+| --- | --- |
+| `vp_rotation_sets` | Umlaufplaene mit FK auf `pm_timetable_years` |
+| `vp_vehicles` | Fahrzeuge mit FK auf `vp_rotation_sets` (CASCADE DELETE) |
+| `vp_rotation_entries` | Umlaufeintraege mit FK auf `vp_vehicles` (CASCADE DELETE) und `pm_reference_trains` |
+| `vp_vehicle_operations` | Fahrzeugoperationen mit FK auf `vp_rotation_entries` (CASCADE DELETE) |
+
+6 Indexes: `timetable_year_id`, `rotation_set_id`, `vehicle_id`, `reference_train_id`, `day_of_week`, `rotation_entry_id`.
+
+> **Hinweis:** VP-Entitaeten sind bewusst nicht mit `@Audited` versehen, da es sich um Planungsdaten handelt, nicht um verbindliche Betriebsdaten.
+
+## TTR Phase Mapping (Timetable Redesign)
+
+Die TTR-Phasen bestimmen, in welcher Bestellphase sich ein Fahrplanjahr befindet. Der `TtrPhaseResolver` berechnet die aktuelle Phase automatisch aus dem Startdatum des Fahrplanjahres und leitet den zugehoerigen TTT ProcessType ab.
+
+### TTR-Timeline
+
+```mermaid
+gantt
+    title TTR-Phasen relativ zum Fahrplanwechsel (X)
+    dateFormat YYYY-MM
+    axisFormat %b %Y
+    section Phasen
+    Capacity Strategy (X-60 bis X-36)    :cs, 2021-12, 2023-06
+    Capacity Model (X-36 bis X-18)       :cm, 2023-06, 2025-06
+    Capacity Supply (X-18 bis X-11)      :csu, 2025-06, 2026-01
+    Annual Ordering / Bestellphase 2 (X-11 bis X-8.5) :ao, 2026-01, 2026-04
+    Late Ordering / Bestellphase 3 (X-8.5 bis X-2)    :lo, 2026-04, 2026-10
+    Ad Hoc Ordering (X-2 bis X)          :ah, 2026-10, 2026-12
+    section Fahrplanjahr 2027
+    FPJ 2027 Laufzeit                    :fpj, 2026-12, 2027-12
+```
+
+*Beispiel: Fahrplanjahr 2027 mit Start am 13.12.2026. X = Startdatum des Fahrplanjahres.*
+
+### Phasentabelle
+
+| TTR Phase | Zeitraum relativ zu X | TTT ProcessType | Code | Bestellphase | Beschreibung |
+| --- | --- | --- | --- | --- | --- |
+| **Capacity Strategy** | X-60 bis X-36 | — (kein Ordering) | — | — | Langfristige Kapazitaetsplanung |
+| **Capacity Model** | X-36 bis X-18 | — (kein Ordering) | — | — | Kapazitaetsmodellierung |
+| **Capacity Supply** | X-18 bis X-11 | — (kein Ordering) | — | — | Kapazitaetsbereitstellung |
+| **Annual Ordering** | X-11 bis X-8.5 | `ANNUAL_NEW` | 0 | **Bestellphase 2** | Regulaere Jahresbestellung. Draft Offers erlaubt. Voller Prozess: SEND_REQUEST > IM_RECEIPT > IM_DRAFT_OFFER > IM_FINAL_OFFER > ACCEPT_OFFER |
+| **Late Ordering** | X-8.5 bis X-2 | `ANNUAL_LATE` | 1 | **Bestellphase 3** | Spaetbestellung. Kein IM_DRAFT_OFFER moeglich. Direkt: SEND_REQUEST > IM_RECEIPT > IM_FINAL_OFFER > ACCEPT_OFFER |
+| **Ad Hoc Ordering** | X-2 bis X (und darueber) | `AD_HOC` | 2 | Ad-hoc | Kurzfristige Bestellungen |
+| **Past** | nach Fahrplanjahrende | — | — | — | Fahrplanjahr abgelaufen |
+
+### Kritische Stichtage (Beispiel FPJ 2027, Start 13.12.2026)
+
+| Stichtag | Datum | Bedeutung |
+| --- | --- | --- |
+| X-11 | ca. 13.01.2026 | Beginn Annual Ordering (Bestellphase 2) |
+| X-8.5 | ca. 29.03.2026 | Ende Bestellphase 2, Beginn Bestellphase 3 (Late Ordering) |
+| X-2 | ca. 13.10.2026 | Ende Late Ordering, Beginn Ad Hoc |
+| X | 13.12.2026 | Fahrplanwechsel |
+
+### TtrPhaseResolver — Logik
+
+Der `TtrPhaseResolver` ist ein zustandsloser Spring `@Service` mit vier Methoden:
+
+| Methode | Parameter | Rueckgabe | Beschreibung |
+| --- | --- | --- | --- |
+| `resolvePhase(year, today)` | PmTimetableYear, LocalDate | TtrPhase | Bestimmt die aktuelle Phase anhand der Datumsgrenzen relativ zum Fahrplanjahrstart |
+| `resolveProcessType(year, today)` | PmTimetableYear, LocalDate | PathProcessType oder null | Gibt den TTT ProcessType zurueck; null wenn Ordering noch nicht moeglich |
+| `isDraftOfferAllowed(year, today)` | PmTimetableYear, LocalDate | boolean | `true` nur in ANNUAL_ORDERING (Bestellphase 2) |
+| `phaseDescription(year, today)` | PmTimetableYear, LocalDate | String | Menschenlesbare Phasenbeschreibung, z.B. "FPJ 2027 — Late Ordering (ProcessType=1)" |
+
+**Phasenberechnung:** Der Resolver vergleicht das heutige Datum mit den aus `year.startDate` berechneten Grenzen:
+
+1. `today > year.endDate` → `PAST`
+2. `today < X - 36 Monate` → `CAPACITY_STRATEGY`
+3. `today < X - 18 Monate` → `CAPACITY_MODEL`
+4. `today < X - 11 Monate` → `CAPACITY_SUPPLY`
+5. `today < X - 8 Monate - 15 Tage` → `ANNUAL_ORDERING`
+6. `today < X - 2 Monate` → `LATE_ORDERING`
+7. sonst → `AD_HOC_ORDERING`
+
+### Auswirkung auf die State Machine
+
+Der `PathProcessEngine` nutzt den `TtrPhaseResolver` um:
+
+1. **Verfuegbare Aktionen zu filtern:** In Bestellphase 3 (Late Ordering) wird `IM_DRAFT_OFFER` aus den verfuegbaren Aktionen entfernt
+2. **Direkte Final Offers zu erlauben:** In Bestellphase 3 ist der Uebergang `RECEIPT_CONFIRMED → FINAL_OFFERED` via `IM_FINAL_OFFER` direkt moeglich (ohne vorheriges Draft Offer)
+3. **ProcessType automatisch zu setzen:** Beim Erstellen neuer Trassenantraege wird der ProcessType basierend auf der aktuellen Phase gesetzt
+
+### UI: TTR-Phasen-Badge
+
+In der PathManagerView wird neben jedem Fahrplanjahr ein farbcodierter Badge angezeigt:
+
+| Farbe | Phase | Bedeutung |
+| --- | --- | --- |
+| Gruen | Annual Ordering | Bestellphase 2, regulaere Bestellung |
+| Gelb | Late Ordering | Bestellphase 3, Spaetbestellung ohne Draft |
+| Orange | Ad Hoc | Kurzfristige Bestellung |
+| Grau | Past / Capacity Phases | Fahrplanjahr abgelaufen oder noch nicht in Bestellphase |
+
+### Multi-Year Seed-Daten (V14-Migration)
+
+| Fahrplanjahr | Start | Ende | Quelle |
+| --- | --- | --- | --- |
+| 2025 | 2024-12-15 | 2025-12-13 | V14 |
+| 2026 | 2025-12-14 | 2026-12-12 | V9 (existierend) |
+| 2027 | 2026-12-13 | 2027-12-11 | V14 |
+
+Die V14-Migration verwendet `ON CONFLICT (year) DO NOTHING` um bei bereits vorhandenen Eintraegen keinen Fehler auszuloesen.
+
 ## Prozesskontext
 
 ```mermaid

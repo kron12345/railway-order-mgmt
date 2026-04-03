@@ -17,8 +17,8 @@ graph LR
 graph TB
     subgraph UI["UI Layer"]
         Layout["MainLayout"]
-        Views["Views<br/>(Dashboard, Orders, Settings, Timetable Builder)"]
-        Components["Reusable Components<br/>(StatusBadge, PositionTile, TimetableMap, ValidityCalendar)"]
+        Views["Views<br/>(Dashboard, Orders, Settings, Timetable Builder,<br/>Path Manager, Vehicle Planning)"]
+        Components["Reusable Components<br/>(StatusBadge, PositionTile, TimetableMap, ValidityCalendar,<br/>GanttChart, TrainPalette, ConflictPanel)"]
     end
 
     subgraph Domain["Domain Layer (DDD)"]
@@ -242,9 +242,15 @@ graph LR
     end
 
     subgraph PathManager["Path Manager Context"]
-        PM_M["PmReferenceTrain<br/>PmTrainVersion<br/>PmJourneyLocation<br/>PmRoute<br/>PmPath<br/>PmPathRequest<br/>PmProcessStep<br/>PmTimetableYear"]
+        PM_M["PmReferenceTrain<br/>PmTrainVersion<br/>PmJourneyLocation<br/>PmRoute<br/>PmPath<br/>PmPathRequest<br/>PmProcessStep<br/>PmTimetableYear<br/>TtrPhase"]
         PM_R["Repositories"]
-        PM_S["PathManagerService<br/>PathProcessEngine<br/>DiffService<br/>IdentifierGenerator"]
+        PM_S["PathManagerService<br/>PathProcessEngine<br/>TtrPhaseResolver<br/>DiffService<br/>IdentifierGenerator"]
+    end
+
+    subgraph VehiclePlanning["Vehicle Planning Context"]
+        VP_M["VpRotationSet<br/>VpVehicle<br/>VpRotationEntry<br/>VpVehicleOperation<br/>Conflict Record"]
+        VP_R["Repositories"]
+        VP_S["VehiclePlanningService<br/>ConflictDetectionService"]
     end
 
     subgraph Customer["Customer Context"]
@@ -261,6 +267,7 @@ graph LR
     Order -.->|pm_reference_train_id| PathManager
     Timetable -.->|routes over| InfraDomain
     PathManager -.->|created from| Order
+    VehiclePlanning -.->|assigns trains from| PathManager
 ```
 
 ## Layers
@@ -278,7 +285,8 @@ graph LR
 - Organized by bounded context
 - `order/`: orders, positions, resource needs, purchase positions, status model
 - `timetable/`: route search, timetable archive, TTT-like row model
-- `pathmanager/`: TTT reference trains, versions, journey locations, routes, paths, process steps, state machine
+- `pathmanager/`: TTT reference trains, versions, journey locations, routes, paths, process steps, state machine, TTR phase resolver
+- `vehicleplanning/`: rotation sets, vehicles, rotation entries, vehicle operations, conflict detection
 - `infrastructure/`: operational points, sections of line, tag catalog, import logs
 - `customer/`, `business/`: supporting master/business data
 
@@ -365,6 +373,68 @@ This pattern avoids external state machine libraries while keeping the transitio
 | 10 | GET | `/api/v1/pathmanager/process/{referenceTrainId}/history` | Get process history |
 | 11 | POST | `/api/v1/pathmanager/diff?referenceTrainId=` | Compute diff vs. order data |
 
+### Vehicle Planning Component Architecture
+
+The Vehicle Planning module provides visual rotation planning with a Gantt chart interface. It operates directly on Path Manager entities (reference trains, timetable years) without a REST API layer.
+
+```mermaid
+graph TB
+    subgraph UI["UI Layer"]
+        VPV["VehiclePlanningView<br/>(SplitLayout 20/80, @Route)"]
+        TP["TrainPalette<br/>(Draggable PM trains)"]
+        GC["GanttChart<br/>(CSS-positioned blocks, DnD)"]
+        CP["ConflictPanel<br/>(Conflict list)"]
+    end
+
+    subgraph Domain["Domain Layer — vehicleplanning/"]
+        VPS["VehiclePlanningService<br/>(CRUD, addTrain, moveEntry)"]
+        CDS["ConflictDetectionService<br/>(Overlap + location mismatch)"]
+    end
+
+    subgraph PMDomain["Domain Layer — pathmanager/"]
+        PMS2["PathManagerService<br/>(Train queries)"]
+        RT2["PmReferenceTrain"]
+    end
+
+    subgraph Data["Data Layer"]
+        DB3["PostgreSQL<br/>vp_* tables (V11)"]
+    end
+
+    VPV --> TP
+    VPV --> GC
+    VPV --> CP
+    TP -->|"drag train"| GC
+    GC --> VPS
+    CP --> CDS
+    VPS --> DB3
+    VPS --> PMS2
+    CDS --> PMS2
+
+    style UI fill:#f3e5f5
+    style Domain fill:#e1f5fe
+    style PMDomain fill:#e1f5fe
+    style Data fill:#e8f5e9
+```
+
+| Component | File | Responsibility |
+|---|---|---|
+| `VehiclePlanningView` | `ui/view/vehicleplanning/` | Full-screen view with rotation set selector, day-of-week picker, new-rotation dialog, SplitLayout |
+| `GanttChart` | `ui/component/vehicleplanning/` | Div-based Gantt with time ruler, vehicle rows, absolutely positioned train blocks, DragSource/DropTarget |
+| `TrainPalette` | `ui/component/vehicleplanning/` | Sidebar with search field and draggable PM reference trains |
+| `ConflictPanel` | `ui/component/vehicleplanning/` | Lower panel displaying detected conflicts with severity icons |
+| `VehiclePlanningService` | `domain/vehicleplanning/service/` | CRUD for rotation sets/vehicles, addTrainToVehicle, moveEntry, removeEntry |
+| `ConflictDetectionService` | `domain/vehicleplanning/service/` | Detects time overlaps and location mismatches by inspecting PmJourneyLocation data |
+
+### TtrPhaseResolver in Path Manager Architecture
+
+The `TtrPhaseResolver` is a stateless Spring `@Service` that calculates the current TTR (Timetable Redesign) phase for any timetable year. It integrates into the Path Manager architecture as follows:
+
+- **PathProcessEngine** calls `TtrPhaseResolver` to determine whether `IM_DRAFT_OFFER` is available (only in Bestellphase 2 / Annual Ordering)
+- **PathManagerView** uses it to display color-coded TTR phase badges next to each timetable year
+- **ProcessSimulationPanel** shows a phase info box when a train is in NEW state, indicating the auto-resolved ProcessType and any Bestellphase 3 warnings
+
+The resolver has no persistence of its own -- it computes phases from `PmTimetableYear.startDate` and the current date using month-based offsets (X-60, X-36, X-18, X-11, X-8.5, X-2).
+
 ### Infrastructure Layer (`infrastructure/`)
 
 - `security/`: Spring Security + Keycloak OIDC
@@ -374,7 +444,7 @@ This pattern avoids external state machine libraries while keeping the transitio
 
 ## Database
 
-- PostgreSQL 16 with Flyway migrations `V1` to `V9`
+- PostgreSQL 16 with Flyway migrations `V1` to `V14`
 - Shared order-position table with typed behavior via `PositionType`
 - `timetable_archives` stores the detailed timetable rows as `jsonb`
 - `resource_needs.linked_fahrplan_id` provides the technical link from a `CAPACITY` need to an archived timetable

@@ -214,6 +214,48 @@ Content-Type: application/json
 }
 ```
 
+## TTR-Phasen und Bestellprozesse
+
+### Automatische ProcessType-Zuordnung
+
+Der Fahrplanmanager erkennt automatisch, in welcher TTR-Phase (Timetable Redesign) sich ein Fahrplanjahr befindet, und bestimmt daraus den TTT ProcessType fuer neue Trassenantraege. Diese Berechnung erfolgt durch den `TtrPhaseResolver` basierend auf dem Startdatum des Fahrplanjahres und dem aktuellen Datum.
+
+### Phasen-Badge im TreeGrid
+
+Neben jedem Fahrplanjahr im TreeGrid wird ein farbcodierter Badge angezeigt:
+
+| Badge-Farbe | Phase | ProcessType | Bestellphase |
+|---|---|---|---|
+| **Gruen** | Annual Ordering (X-11 bis X-8.5) | ANNUAL_NEW (0) | Bestellphase 2 |
+| **Gelb** | Late Ordering (X-8.5 bis X-2) | ANNUAL_LATE (1) | Bestellphase 3 |
+| **Orange** | Ad Hoc (X-2 bis X) | AD_HOC (2) | Ad-hoc |
+| **Grau** | Past oder Capacity Strategy/Model/Supply | — | — |
+
+### Bestellphase 2 vs. Bestellphase 3
+
+**Bestellphase 2 — Annual Ordering (regulaer):**
+
+In dieser Phase steht der vollstaendige TTT-Prozess zur Verfuegung:
+1. SEND_REQUEST → IM_RECEIPT → IM_DRAFT_OFFER → IM_FINAL_OFFER → ACCEPT_OFFER
+2. Der IM kann Vorangebote machen, die der RA pruefen und ggf. mit Revision ablehnen kann
+3. ProcessType = `ANNUAL_NEW` (Code 0)
+
+**Bestellphase 3 — Late Ordering (verkuerzt):**
+
+In dieser Phase entfaellt das Vorangebot:
+1. SEND_REQUEST → IM_RECEIPT → IM_FINAL_OFFER → ACCEPT_OFFER
+2. `IM_DRAFT_OFFER` ist **nicht** als Aktion verfuegbar
+3. Der IM kann aus `RECEIPT_CONFIRMED` direkt ein `IM_FINAL_OFFER` machen
+4. ProcessType = `ANNUAL_LATE` (Code 1)
+5. Im UI zeigt die Prozess-Simulation eine Warnung bei Zuegen im NEW-Zustand
+
+### Phasen-Info bei Prozess-Simulation
+
+Wenn ein Zug sich im Zustand `NEW` befindet, zeigt das `ProcessSimulationPanel` eine Info-Box mit:
+- Dem automatisch ermittelten ProcessType (z.B. "ProcessType=1 (ANNUAL_LATE)")
+- Einer Warnung in Bestellphase 3: "Kein Vorangebot moeglich — direktes Endangebot"
+- Dem Fahrplanjahr und der aktiven Phase
+
 ## Version Diff Feature
 
 The diff feature compares order-side timetable data with the latest PM train version. This is useful after an IM offer to see what changed compared to the original request.

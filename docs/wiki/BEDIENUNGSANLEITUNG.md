@@ -14,6 +14,7 @@
 - [10. Tastaturkuerzel](#10-tastaturkuerzel)
 - [11. Haeufige Fragen (FAQ)](#11-haeufige-fragen-faq)
 - [12. Fehlerbehebung](#12-fehlerbehebung)
+- [13. Fahrzeugplanung (Vehicle Planning)](#13-fahrzeugplanung-vehicle-planning)
 
 ---
 
@@ -81,6 +82,7 @@ Die Hauptnavigation befindet sich in der linken Seitenleiste (Drawer). Folgende 
 | **Settings (Einstellungen)** | `/settings` | Infrastruktur-Import, Schlagwort-Katalog | ADMIN |
 | **Profil** | `/profile` | Benutzerprofil, Theme, Sprache | VIEWER |
 | **Fahrplanmanager** | `/pathmanager` | TTT-Prozess-Simulation | VIEWER |
+| **Fahrzeugplanung** | `/vehicleplanning` | Umlaufplanung (Gantt-Ansicht) | DISPATCHER |
 
 Jede Seite zeigt eine **Breadcrumb-Navigation** unterhalb der Kopfzeile, die den aktuellen Pfad anzeigt und ein schnelles Zuruecknavigieren ermoeglicht.
 
@@ -462,6 +464,23 @@ Die Hauptansicht ist ein hierarchischer Baum mit vier Ebenen:
 3. Im Fahrplanmanager den TTT-Prozess durchspielen: Antrag senden, IM-Empfang, Vorangebot, Endgueltiges Angebot, Buchen
 4. Versionen vergleichen (Diff-Funktion)
 
+**TTR-Phasen und Bestellprozess:**
+
+Neben jedem Fahrplanjahr zeigt der Fahrplanmanager einen farbcodierten **TTR-Phasen-Badge** an, der automatisch die aktuelle Phase im europaeischen Fahrplanbestellprozess anzeigt:
+
+| Badge-Farbe | Phase | Bestellphase | Bedeutung |
+|---|---|---|---|
+| **Gruen** | Annual Ordering | Bestellphase 2 | Regulaere Jahresbestellung. Der volle TTT-Prozess mit Vor- und Endangebot steht zur Verfuegung |
+| **Gelb** | Late Ordering | Bestellphase 3 | Spaetbestellung. Kein Vorangebot (IM_DRAFT_OFFER) moeglich — der IM macht direkt ein endgueltiges Angebot |
+| **Orange** | Ad Hoc | Ad-hoc | Kurzfristige Bestellung ab 2 Monate vor Fahrplanwechsel |
+| **Grau** | Past / Fruehphasen | — | Fahrplanjahr abgelaufen oder Bestellung noch nicht moeglich |
+
+**Unterschied Bestellphase 2 und 3:**
+
+- In **Bestellphase 2** (Annual Ordering) durchlaeuft ein Zug den regulaeren Prozess: Antrag senden → IM-Empfang → Vorangebot → Endgueltiges Angebot → Buchen
+- In **Bestellphase 3** (Late Ordering) entfaellt das Vorangebot. Der Prozess lautet: Antrag senden → IM-Empfang → Endgueltiges Angebot → Buchen
+- Beim Erstellen eines neuen Zuges zeigt die Prozess-Simulation eine Info-Box mit dem automatisch ermittelten ProcessType und eine Warnung, falls Bestellphase 3 aktiv ist
+
 **REST API:**
 
 Der Fahrplanmanager stellt eine REST API bereit, die ueber Swagger UI dokumentiert ist:
@@ -775,6 +794,84 @@ Der Audit Trail ist aktuell ueber die Datenbank einsehbar; eine GUI-Darstellung 
 1. Laden Sie die Seite neu (F5 / Ctrl+R)
 2. Falls das Problem weiterhin besteht, melden Sie sich ab und erneut an
 3. Pruefen Sie die Browser-Konsole (F12) auf Fehlermeldungen
+
+---
+
+---
+
+## 13. Fahrzeugplanung (Vehicle Planning)
+
+Die Fahrzeugplanung ermoeglicht die visuelle Zuordnung von Referenzzuegen zu physischen Fahrzeugen in einem Gantt-Diagramm. So wird sichergestellt, dass jeder Zug einem konkreten Fahrzeug zugewiesen ist und keine Konflikte (Zeitueberlappung, Standort-Mismatch) auftreten.
+
+> Fuer die vollstaendige Anleitung siehe: [Fahrzeugplanung Anleitung](vehicle-planning.md)
+
+### Navigation
+
+Klicken Sie in der Seitenleiste auf **Fahrzeugplanung** oder navigieren Sie zu `/vehicleplanning`.
+
+### Umlaufplan erstellen
+
+1. Waehlen Sie oben links ein **Fahrplanjahr** aus dem Dropdown
+2. Klicken Sie auf **"+ Neuer Umlaufplan"**
+3. Geben Sie einen **Namen** ein (z.B. "FLIRT S-Bahn Olten-Aarau") und optional eine Beschreibung
+4. Der neue Umlaufplan erscheint in der Auswahl
+
+### Fahrzeug hinzufuegen
+
+1. Waehlen Sie einen bestehenden Umlaufplan aus
+2. Klicken Sie auf **"+ Fahrzeug"**
+3. Geben Sie eine **Bezeichnung** ein (z.B. "FLIRT RABe 526 201")
+4. Waehlen Sie den **Fahrzeugtyp**: Triebzug, Lokomotive oder Wagenkomposition
+5. Optional: Geben Sie eine **Fahrzeugklasse** ein (z.B. "RABe 526")
+
+### Gantt-Ansicht und Drag & Drop
+
+Die Hauptansicht zeigt ein Gantt-Diagramm:
+
+- **Links (20%)**: Die **Zugpalette** zeigt alle Referenzzuege des aktuellen Fahrplanjahrs. Nutzen Sie das Suchfeld, um nach OTN oder Route zu filtern.
+- **Rechts (80%)**: Das **Gantt-Diagramm** zeigt pro Fahrzeug eine horizontale Zeile. Das Zeitlineal oben zeigt die Stunden des Tages (00:00 - 24:00).
+
+**Zuege zuweisen:**
+1. Waehlen Sie den gewuenschten **Wochentag** (Mo-So)
+2. **Ziehen** Sie einen Zug aus der Zugpalette auf die gewuenschte Fahrzeugzeile im Gantt-Diagramm
+3. Der Zug erscheint als farbiger Block, dessen Breite proportional zur Fahrzeit ist
+4. Wiederholen Sie den Vorgang fuer alle Zuege des Tages
+
+**Zuege verschieben:**
+- Ziehen Sie einen bereits zugeordneten Zugblock auf eine andere Fahrzeugzeile, um ihn einem anderen Fahrzeug zuzuweisen
+
+**Zuege entfernen:**
+- Klicken Sie auf einen Zugblock und waehlen Sie "Entfernen"
+
+### Konflikterkennung
+
+Unterhalb des Gantt-Diagramms zeigt das **Konfliktpanel** automatisch erkannte Probleme:
+
+| Severity | Icon | Beschreibung |
+|---|---|---|
+| **ERROR** | Rot | Zeitueberlappung — zwei Zuege sind zur gleichen Zeit dem gleichen Fahrzeug zugewiesen |
+| **WARNING** | Gelb | Standort-Mismatch — der Ankunftsort des vorherigen Zuges stimmt nicht mit dem Abfahrtsort des naechsten Zuges ueberein (fehlende Wendezeit) |
+
+Konflikte werden live berechnet, nicht gespeichert. Jede Aenderung am Umlaufplan aktualisiert die Konfliktliste.
+
+### Fahrzeugoperationen (TTT-Codes)
+
+Fuer Kupplungs-/Abkupplungsvorgaenge und Richtungswechsel stehen folgende TTT-Aktivitaetscodes zur Verfuegung:
+
+| Code | Beschreibung |
+|---|---|
+| 0010 | Kuppeln |
+| 0017 | Abkuppeln |
+| 0044 | Wenden (Richtungswechsel) ohne Triebfahrzeugwechsel |
+| 0045 | Wenden (Richtungswechsel) mit Triebfahrzeugwechsel |
+
+### Berechtigungen
+
+| Funktion | ADMIN | DISPATCHER | VIEWER |
+|---|---|---|---|
+| Fahrzeugplanung ansehen | Ja | Ja | Ja |
+| Umlaufplan anlegen / bearbeiten | Ja | Ja | Nein |
+| Zuege per Drag & Drop zuweisen | Ja | Ja | Nein |
 
 ---
 
