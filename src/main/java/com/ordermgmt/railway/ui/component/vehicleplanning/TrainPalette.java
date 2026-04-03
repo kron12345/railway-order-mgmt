@@ -1,7 +1,6 @@
 package com.ordermgmt.railway.ui.component.vehicleplanning;
 
 import java.util.List;
-import java.util.UUID;
 
 import com.vaadin.flow.component.dnd.DragSource;
 import com.vaadin.flow.component.dnd.EffectAllowed;
@@ -15,15 +14,12 @@ import com.ordermgmt.railway.domain.pathmanager.model.PmReferenceTrain;
 /** Left sidebar palette listing available PM reference trains as draggable items. */
 public class TrainPalette extends Div {
 
+    /** Prefix for drag data originating from the train palette. */
+    public static final String DRAG_PREFIX_TRAIN = "TRAIN:";
+
     private final TextField searchField;
     private final Div trainList;
     private List<PmReferenceTrain> allTrains = List.of();
-
-    /** Callback for when a train is dragged from the palette. */
-    @FunctionalInterface
-    public interface TrainDragHandler {
-        void onTrainDrag(UUID trainId);
-    }
 
     public TrainPalette() {
         getStyle()
@@ -111,9 +107,9 @@ public class TrainPalette extends Div {
             item.add(nameSpan);
         }
 
-        // Make draggable
+        // Make draggable with typed prefix to distinguish from Gantt entry drops
         DragSource<Div> dragSource = DragSource.create(item);
-        dragSource.setDragData(train.getId());
+        dragSource.setDragData(DRAG_PREFIX_TRAIN + train.getId());
         dragSource.setEffectAllowed(EffectAllowed.COPY);
 
         return item;

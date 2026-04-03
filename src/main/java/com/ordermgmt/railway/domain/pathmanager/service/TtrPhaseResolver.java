@@ -26,6 +26,24 @@ import com.ordermgmt.railway.domain.pathmanager.model.TtrPhase;
 @Service
 public class TtrPhaseResolver {
 
+    /** Months before timetable start for Capacity Strategy / Capacity Model boundary. */
+    private static final int CAPACITY_MODEL_MONTHS_BEFORE = 36;
+
+    /** Months before timetable start for Capacity Model / Capacity Supply boundary. */
+    private static final int CAPACITY_SUPPLY_MONTHS_BEFORE = 18;
+
+    /** Months before timetable start for Capacity Supply / Annual Ordering boundary. */
+    private static final int ANNUAL_ORDERING_MONTHS_BEFORE = 11;
+
+    /** Months before timetable start for Annual Ordering / Late Ordering boundary (8.5 months). */
+    private static final int LATE_ORDERING_MONTHS_BEFORE = 8;
+
+    /** Additional days for the 8.5-month boundary (half month approximation). */
+    private static final int LATE_ORDERING_DAYS_BEFORE = 15;
+
+    /** Months before timetable start for Late Ordering / Ad Hoc boundary. */
+    private static final int AD_HOC_ORDERING_MONTHS_BEFORE = 2;
+
     /**
      * Determines the current TTR phase for a timetable year at the given date.
      *
@@ -34,25 +52,28 @@ public class TtrPhaseResolver {
      * @return the TTR phase
      */
     public TtrPhase resolvePhase(PmTimetableYear year, LocalDate today) {
-        LocalDate x = year.getStartDate();
+        LocalDate timetableStartDate = year.getStartDate();
 
         if (today.isAfter(year.getEndDate())) {
             return TtrPhase.PAST;
         }
-        if (today.isBefore(x.minusMonths(36))) {
+        if (today.isBefore(timetableStartDate.minusMonths(CAPACITY_MODEL_MONTHS_BEFORE))) {
             return TtrPhase.CAPACITY_STRATEGY;
         }
-        if (today.isBefore(x.minusMonths(18))) {
+        if (today.isBefore(timetableStartDate.minusMonths(CAPACITY_SUPPLY_MONTHS_BEFORE))) {
             return TtrPhase.CAPACITY_MODEL;
         }
-        if (today.isBefore(x.minusMonths(11))) {
+        if (today.isBefore(timetableStartDate.minusMonths(ANNUAL_ORDERING_MONTHS_BEFORE))) {
             return TtrPhase.CAPACITY_SUPPLY;
         }
         // X-8.5 months = X minus 8 months minus 15 days
-        if (today.isBefore(x.minusMonths(8).minusDays(15))) {
+        if (today.isBefore(
+                timetableStartDate
+                        .minusMonths(LATE_ORDERING_MONTHS_BEFORE)
+                        .minusDays(LATE_ORDERING_DAYS_BEFORE))) {
             return TtrPhase.ANNUAL_ORDERING;
         }
-        if (today.isBefore(x.minusMonths(2))) {
+        if (today.isBefore(timetableStartDate.minusMonths(AD_HOC_ORDERING_MONTHS_BEFORE))) {
             return TtrPhase.LATE_ORDERING;
         }
         return TtrPhase.AD_HOC_ORDERING;

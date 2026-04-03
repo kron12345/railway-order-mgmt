@@ -3,6 +3,7 @@ package com.ordermgmt.railway.domain.vehicleplanning.service;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,6 +27,18 @@ import com.ordermgmt.railway.domain.vehicleplanning.repository.VpVehicleReposito
 @Service
 @Transactional
 public class VehiclePlanningService {
+
+    /** TAF/TAP activity code: vehicle continues from previous train in rotation. */
+    private static final String ACTIVITY_FROM_PREVIOUS = "0044";
+
+    /** TAF/TAP activity code: vehicle continues to next train in rotation. */
+    private static final String ACTIVITY_TO_NEXT = "0045";
+
+    /** Minimum valid ISO day-of-week (Monday). */
+    private static final int MIN_DAY_OF_WEEK = 1;
+
+    /** Maximum valid ISO day-of-week (Sunday). */
+    private static final int MAX_DAY_OF_WEEK = 7;
 
     private final VpRotationSetRepository rotationSetRepo;
     private final VpVehicleRepository vehicleRepo;
@@ -54,11 +67,13 @@ public class VehiclePlanningService {
 
     // --- Rotation Set CRUD ---
 
+    /** Returns all rotation sets for the given timetable year, ordered by name. */
     @Transactional(readOnly = true)
     public List<VpRotationSet> getRotationSets(UUID timetableYearId) {
         return rotationSetRepo.findByTimetableYearIdOrderByNameAsc(timetableYearId);
     }
 
+    /** Returns a single rotation set by ID, or throws if not found. */
     @Transactional(readOnly = true)
     public VpRotationSet getRotationSet(UUID rotationSetId) {
         return rotationSetRepo
@@ -69,6 +84,8 @@ public class VehiclePlanningService {
                                         "Rotation set not found: " + rotationSetId));
     }
 
+    /** Creates a new rotation set with the given name and description for the specified year. */
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
     public VpRotationSet createRotationSet(String name, String description, int year) {
         PmTimetableYear tty =
                 timetableYearRepo
@@ -84,31 +101,41 @@ public class VehiclePlanningService {
         return rotationSetRepo.save(rs);
     }
 
+    /** Persists changes to an existing rotation set. */
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
     public VpRotationSet saveRotationSet(VpRotationSet rotationSet) {
         return rotationSetRepo.save(rotationSet);
     }
 
+    /** Deletes a rotation set and all its vehicles and entries. */
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
     public void deleteRotationSet(UUID rotationSetId) {
         rotationSetRepo.deleteById(rotationSetId);
     }
 
     // --- Vehicle CRUD ---
 
+    /** Returns all vehicles for the given rotation set, ordered by sequence. */
     @Transactional(readOnly = true)
     public List<VpVehicle> getVehicles(UUID rotationSetId) {
         return vehicleRepo.findByRotationSetIdOrderBySequenceAsc(rotationSetId);
     }
 
+    /** Persists changes to a vehicle. */
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
     public VpVehicle saveVehicle(VpVehicle vehicle) {
         return vehicleRepo.save(vehicle);
     }
 
+    /** Deletes a vehicle and all its rotation entries. */
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
     public void deleteVehicle(UUID vehicleId) {
         vehicleRepo.deleteById(vehicleId);
     }
 
     // --- Available trains ---
 
+    /** Returns all reference trains for the given timetable year, ordered by OTN. */
     @Transactional(readOnly = true)
     public List<PmReferenceTrain> getAvailableTrains(int year) {
         return trainRepo.findByTimetableYearYearOrderByOperationalTrainNumberAsc(year);
@@ -116,8 +143,21 @@ public class VehiclePlanningService {
 
     // --- Entry management ---
 
+    /**
+     * Assigns a reference train to a vehicle on a specific day of the week.
+     *
+     * @param vehicleId the target vehicle (must belong to a rotation set)
+     * @param trainId the PM reference train to assign
+     * @param dayOfWeek ISO day-of-week (1=Monday .. 7=Sunday)
+     * @param coupling the coupling position for this entry
+     * @return the persisted rotation entry
+     * @throws IllegalArgumentException if dayOfWeek is out of range or entities not found
+     */
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
     public VpRotationEntry addTrainToVehicle(
             UUID vehicleId, UUID trainId, int dayOfWeek, CouplingPosition coupling) {
+        validateDayOfWeek(dayOfWeek);
+
         VpVehicle vehicle =
                 vehicleRepo
                         .findById(vehicleId)
@@ -125,6 +165,11 @@ public class VehiclePlanningService {
                                 () ->
                                         new IllegalArgumentException(
                                                 "Vehicle not found: " + vehicleId));
+        if (vehicle.getRotationSet() == null) {
+            throw new IllegalArgumentException(
+                    "Vehicle does not belong to a rotation set: " + vehicleId);
+        }
+
         PmReferenceTrain train =
                 trainRepo
                         .findById(trainId)
@@ -146,7 +191,19 @@ public class VehiclePlanningService {
         return entryRepo.save(entry);
     }
 
+    /**
+     * Moves an existing rotation entry to a different vehicle and/or day.
+     *
+     * @param entryId the entry to move
+     * @param targetVehicleId the target vehicle (must belong to the same rotation set)
+     * @param targetDay ISO day-of-week (1=Monday .. 7=Sunday)
+     * @return the updated entry
+     * @throws IllegalArgumentException if validation fails
+     */
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
     public VpRotationEntry moveEntry(UUID entryId, UUID targetVehicleId, int targetDay) {
+        validateDayOfWeek(targetDay);
+
         VpRotationEntry entry =
                 entryRepo
                         .findById(entryId)
@@ -160,6 +217,17 @@ public class VehiclePlanningService {
                                         new IllegalArgumentException(
                                                 "Target vehicle not found: " + targetVehicleId));
 
+        UUID sourceSetId = entry.getVehicle().getRotationSet().getId();
+        UUID targetSetId = target.getRotationSet().getId();
+        if (!sourceSetId.equals(targetSetId)) {
+            throw new IllegalArgumentException(
+                    "Cannot move entry across rotation sets (source="
+                            + sourceSetId
+                            + ", target="
+                            + targetSetId
+                            + ")");
+        }
+
         List<VpRotationEntry> existing =
                 entryRepo.findByVehicleIdAndDayOfWeekOrderBySequenceInDayAsc(
                         targetVehicleId, targetDay);
@@ -171,6 +239,8 @@ public class VehiclePlanningService {
         return entryRepo.save(entry);
     }
 
+    /** Removes a rotation entry by ID. */
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
     public void removeEntry(UUID entryId) {
         entryRepo.deleteById(entryId);
     }
@@ -186,6 +256,7 @@ public class VehiclePlanningService {
      * @param rotationSetId the rotation set to process
      * @return number of journey locations updated
      */
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
     @Transactional
     public int writeVehicleLinksToPathManager(UUID rotationSetId) {
         rotationSetRepo
@@ -211,8 +282,8 @@ public class VehiclePlanningService {
                 String currentOtn = currentTrain.getOperationalTrainNumber();
                 String nextOtn = nextTrain.getOperationalTrainNumber();
 
-                setAssociatedOtnOnLastLocation(currentTrain, nextOtn, "0045");
-                setAssociatedOtnOnFirstLocation(nextTrain, currentOtn, "0044");
+                setAssociatedOtnOnLastLocation(currentTrain, nextOtn, ACTIVITY_TO_NEXT);
+                setAssociatedOtnOnFirstLocation(nextTrain, currentOtn, ACTIVITY_FROM_PREVIOUS);
                 updatedCount += 2;
             }
         }
@@ -265,6 +336,18 @@ public class VehiclePlanningService {
             location.setActivities(activityCode);
         } else if (!activities.contains(activityCode)) {
             location.setActivities(activities + "," + activityCode);
+        }
+    }
+
+    private void validateDayOfWeek(int dayOfWeek) {
+        if (dayOfWeek < MIN_DAY_OF_WEEK || dayOfWeek > MAX_DAY_OF_WEEK) {
+            throw new IllegalArgumentException(
+                    "dayOfWeek must be between "
+                            + MIN_DAY_OF_WEEK
+                            + " and "
+                            + MAX_DAY_OF_WEEK
+                            + ", got: "
+                            + dayOfWeek);
         }
     }
 }

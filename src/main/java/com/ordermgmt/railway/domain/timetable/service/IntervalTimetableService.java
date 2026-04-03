@@ -30,6 +30,25 @@ public class IntervalTimetableService {
         this.archiveService = archiveService;
     }
 
+    /**
+     * Generates interval-based timetable positions (Taktfahrplan) from a base route.
+     *
+     * <p>Creates one {@link OrderPosition} per departure slot. All times in the base route are
+     * shifted by the delta between the base route's first departure and the target departure time.
+     *
+     * @param order the parent order
+     * @param namePrefix prefix for generated position names (departure time is appended)
+     * @param otnStart starting operational train number (incremented per position)
+     * @param baseRows the template route rows to shift
+     * @param firstDeparture first interval departure time
+     * @param lastDeparture last interval departure time
+     * @param crossesMidnight whether the interval window crosses midnight
+     * @param intervalMinutes minutes between consecutive departures
+     * @param validityDates calendar dates on which the positions are valid
+     * @param tags comma-separated tags for the positions
+     * @param comment free-text comment
+     * @return list of created order positions
+     */
     @Transactional
     public List<OrderPosition> generateIntervalPositions(
             Order order,
@@ -48,26 +67,78 @@ public class IntervalTimetableService {
                 calculateDepartureTimes(
                         firstDeparture, lastDeparture, crossesMidnight, intervalMinutes);
 
-        // Delta base: first row's departure or the firstDeparture param
-        LocalTime baseDeparture = firstDeparture;
+        // Delta base: use the first row's departure so shifts are relative to the actual route data
+        LocalTime baseDeparture = parseFirstRowDeparture(baseRows, firstDeparture);
 
         List<OrderPosition> positions = new ArrayList<>();
         for (int i = 0; i < departures.size(); i++) {
             LocalTime dep = departures.get(i);
-            long delta =
-                    minutesBetween(
-                            baseDeparture, dep, crossesMidnight && dep.isBefore(baseDeparture));
-
-            List<TimetableRowData> shifted = cloneAndShiftRows(baseRows, delta);
-            String posName = namePrefix + " " + dep.format(HH_MM);
-            String otn = incrementOtn(otnStart, i);
-
-            OrderPosition pos =
-                    archiveService.saveTimetablePosition(
-                            order, null, posName, tags, comment, validityDates, shifted, otn);
-            positions.add(pos);
+            positions.add(
+                    createShiftedPosition(
+                            order,
+                            namePrefix,
+                            otnStart,
+                            baseRows,
+                            baseDeparture,
+                            dep,
+                            crossesMidnight,
+                            validityDates,
+                            tags,
+                            comment,
+                            i));
         }
         return positions;
+    }
+
+    /**
+     * Creates a single shifted position for a specific departure time.
+     *
+     * @return the persisted order position
+     */
+    private OrderPosition createShiftedPosition(
+            Order order,
+            String namePrefix,
+            String otnStart,
+            List<TimetableRowData> baseRows,
+            LocalTime baseDeparture,
+            LocalTime departure,
+            boolean crossesMidnight,
+            List<LocalDate> validityDates,
+            String tags,
+            String comment,
+            int index) {
+
+        long delta =
+                minutesBetween(
+                        baseDeparture,
+                        departure,
+                        crossesMidnight && departure.isBefore(baseDeparture));
+
+        List<TimetableRowData> shifted = cloneAndShiftRows(baseRows, delta);
+        String posName = namePrefix + " " + departure.format(HH_MM);
+        String otn = incrementOtn(otnStart, index);
+
+        return archiveService.saveTimetablePosition(
+                order, null, posName, tags, comment, validityDates, shifted, otn);
+    }
+
+    /**
+     * Extracts the estimated departure time from the first row of the base route. Falls back to the
+     * provided default if the first row has no departure set.
+     */
+    private LocalTime parseFirstRowDeparture(List<TimetableRowData> baseRows, LocalTime fallback) {
+        if (baseRows == null || baseRows.isEmpty()) {
+            return fallback;
+        }
+        String firstDep = baseRows.getFirst().getEstimatedDeparture();
+        if (firstDep == null || firstDep.isBlank()) {
+            return fallback;
+        }
+        try {
+            return LocalTime.parse(firstDep, HH_MM);
+        } catch (Exception e) {
+            return fallback;
+        }
     }
 
     /** Calculates all departure times from first to last at the given interval. */

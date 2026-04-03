@@ -36,7 +36,7 @@ import com.ordermgmt.railway.ui.layout.MainLayout;
 /** Vehicle rotation planning view with Gantt chart, train palette, and conflict detection. */
 @Route(value = "vehicleplanning", layout = MainLayout.class)
 @PageTitle("Vehicle Planning")
-@jakarta.annotation.security.PermitAll
+@jakarta.annotation.security.RolesAllowed({"ADMIN", "DISPATCHER"})
 public class VehiclePlanningView extends VerticalLayout {
 
     private final VehiclePlanningService planningService;
@@ -113,7 +113,7 @@ public class VehiclePlanningView extends VerticalLayout {
         // Main area: split palette / gantt
         trainPalette = new TrainPalette();
         ganttChart = new GanttChart();
-        ganttChart.setDropHandler(this::handleEntryDrop);
+        ganttChart.setDropHandler(this::handleDrop);
 
         SplitLayout splitLayout = new SplitLayout(trainPalette, ganttChart);
         splitLayout.setSplitterPosition(20);
@@ -179,9 +179,27 @@ public class VehiclePlanningView extends VerticalLayout {
         conflictPanel.setConflicts(conflicts);
     }
 
-    private void handleEntryDrop(UUID entryId, UUID targetVehicleId, int dayOfWeek) {
+    private void handleDrop(String dragPayload, UUID targetVehicleId, int dayOfWeek) {
         try {
-            planningService.moveEntry(entryId, targetVehicleId, dayOfWeek);
+            if (dragPayload.startsWith(GanttChart.DRAG_PREFIX_ENTRY)) {
+                UUID entryId =
+                        UUID.fromString(
+                                dragPayload.substring(GanttChart.DRAG_PREFIX_ENTRY.length()));
+                planningService.moveEntry(entryId, targetVehicleId, dayOfWeek);
+            } else if (dragPayload.startsWith(TrainPalette.DRAG_PREFIX_TRAIN)) {
+                UUID trainId =
+                        UUID.fromString(
+                                dragPayload.substring(TrainPalette.DRAG_PREFIX_TRAIN.length()));
+                planningService.addTrainToVehicle(
+                        targetVehicleId,
+                        trainId,
+                        dayOfWeek,
+                        com.ordermgmt.railway.domain.vehicleplanning.model.CouplingPosition.FULL);
+            } else {
+                Notification.show(
+                        getTranslation("vp.error.unknownDrag"), 3000, Notification.Position.MIDDLE);
+                return;
+            }
             refreshGantt();
             refreshConflicts();
         } catch (Exception ex) {

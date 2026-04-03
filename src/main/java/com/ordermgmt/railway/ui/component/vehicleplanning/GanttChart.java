@@ -23,15 +23,30 @@ public class GanttChart extends Div {
     private static final int ROW_HEIGHT = 48;
     private static final int RULER_HEIGHT = 32;
 
+    /**
+     * Placeholder width per block in pixels. Will be replaced with proper time-based positioning
+     * once departure/arrival times are available from the timetable data.
+     */
+    private static final int BLOCK_WIDTH_PX = 100;
+
+    /**
+     * Placeholder horizontal offset between consecutive blocks in pixels. Will be replaced with
+     * proper time-based positioning once departure/arrival times are available.
+     */
+    private static final int BLOCK_OFFSET_PX = 120;
+
+    /** Prefix for drag data originating from existing rotation entries in the Gantt chart. */
+    public static final String DRAG_PREFIX_ENTRY = "ENTRY:";
+
     private final Div rulerRow;
     private final Div vehicleRows;
 
-    private EntryDropHandler dropHandler;
+    private DropHandler dropHandler;
 
-    /** Callback for when an entry is dropped onto a vehicle row. */
+    /** Callback for when a draggable item is dropped onto a vehicle row. */
     @FunctionalInterface
-    public interface EntryDropHandler {
-        void onDrop(UUID entryId, UUID targetVehicleId, int dayOfWeek);
+    public interface DropHandler {
+        void onDrop(String dragPayload, UUID targetVehicleId, int dayOfWeek);
     }
 
     public GanttChart() {
@@ -61,7 +76,7 @@ public class GanttChart extends Div {
         add(rulerRow, vehicleRows);
     }
 
-    public void setDropHandler(EntryDropHandler handler) {
+    public void setDropHandler(DropHandler handler) {
         this.dropHandler = handler;
     }
 
@@ -107,8 +122,8 @@ public class GanttChart extends Div {
                     event.getDragData()
                             .ifPresent(
                                     data -> {
-                                        if (data instanceof UUID entryId) {
-                                            dropHandler.onDrop(entryId, vehicle.getId(), dayOfWeek);
+                                        if (data instanceof String payload) {
+                                            dropHandler.onDrop(payload, vehicle.getId(), dayOfWeek);
                                         }
                                     });
                 });
@@ -151,13 +166,13 @@ public class GanttChart extends Div {
                 .set("cursor", "grab")
                 .set("min-width", "40px");
 
-        // Position based on sequence (fallback: spread evenly)
-        int left = entry.getSequenceInDay() * 120;
-        block.getStyle().set("left", left + "px").set("width", "100px");
+        // Position based on sequence (placeholder until proper time-based positioning)
+        int left = entry.getSequenceInDay() * BLOCK_OFFSET_PX;
+        block.getStyle().set("left", left + "px").set("width", BLOCK_WIDTH_PX + "px");
 
-        // Make draggable
+        // Make draggable with typed prefix to distinguish from train palette drops
         DragSource<Div> dragSource = DragSource.create(block);
-        dragSource.setDragData(entry.getId());
+        dragSource.setDragData(DRAG_PREFIX_ENTRY + entry.getId());
         dragSource.setEffectAllowed(com.vaadin.flow.component.dnd.EffectAllowed.MOVE);
 
         return block;

@@ -30,6 +30,11 @@ public class SecurityConfig extends VaadinWebSecurity {
     /**
      * Separate filter chain for API and Swagger endpoints. Uses stateless sessions and no CSRF so
      * REST clients work without a Vaadin session. Takes precedence over the Vaadin filter chain.
+     *
+     * <p><strong>SECURITY NOTE (intentional design):</strong> The API endpoints are intentionally
+     * open ({@code permitAll}) because they serve as the simulation/demo interface for the path
+     * manager process engine. In a production deployment, these endpoints would be secured with
+     * OAuth2 resource server (Bearer token) authentication. See ADR-010 for details.
      */
     @Bean
     @Order(1)
