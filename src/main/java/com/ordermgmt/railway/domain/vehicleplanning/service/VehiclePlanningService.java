@@ -6,10 +6,14 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.ordermgmt.railway.domain.pathmanager.model.PmJourneyLocation;
 import com.ordermgmt.railway.domain.pathmanager.model.PmReferenceTrain;
 import com.ordermgmt.railway.domain.pathmanager.model.PmTimetableYear;
+import com.ordermgmt.railway.domain.pathmanager.model.PmTrainVersion;
+import com.ordermgmt.railway.domain.pathmanager.repository.PmJourneyLocationRepository;
 import com.ordermgmt.railway.domain.pathmanager.repository.PmReferenceTrainRepository;
 import com.ordermgmt.railway.domain.pathmanager.repository.PmTimetableYearRepository;
+import com.ordermgmt.railway.domain.pathmanager.repository.PmTrainVersionRepository;
 import com.ordermgmt.railway.domain.vehicleplanning.model.CouplingPosition;
 import com.ordermgmt.railway.domain.vehicleplanning.model.VpRotationEntry;
 import com.ordermgmt.railway.domain.vehicleplanning.model.VpRotationSet;
@@ -28,18 +32,24 @@ public class VehiclePlanningService {
     private final VpRotationEntryRepository entryRepo;
     private final PmReferenceTrainRepository trainRepo;
     private final PmTimetableYearRepository timetableYearRepo;
+    private final PmTrainVersionRepository trainVersionRepo;
+    private final PmJourneyLocationRepository journeyLocationRepo;
 
     public VehiclePlanningService(
             VpRotationSetRepository rotationSetRepo,
             VpVehicleRepository vehicleRepo,
             VpRotationEntryRepository entryRepo,
             PmReferenceTrainRepository trainRepo,
-            PmTimetableYearRepository timetableYearRepo) {
+            PmTimetableYearRepository timetableYearRepo,
+            PmTrainVersionRepository trainVersionRepo,
+            PmJourneyLocationRepository journeyLocationRepo) {
         this.rotationSetRepo = rotationSetRepo;
         this.vehicleRepo = vehicleRepo;
         this.entryRepo = entryRepo;
         this.trainRepo = trainRepo;
         this.timetableYearRepo = timetableYearRepo;
+        this.trainVersionRepo = trainVersionRepo;
+        this.journeyLocationRepo = journeyLocationRepo;
     }
 
     // --- Rotation Set CRUD ---
@@ -163,5 +173,98 @@ public class VehiclePlanningService {
 
     public void removeEntry(UUID entryId) {
         entryRepo.deleteById(entryId);
+    }
+
+    // --- Vehicle linking (0044/0045) ---
+
+    /**
+     * Writes 0044/0045 activity codes and associated OTN to the Path Manager journey locations
+     * based on the vehicle rotation sequence. For each consecutive pair of trains in a vehicle's
+     * rotation, the last location of the current train gets 0045 (to next), and the first location
+     * of the next train gets 0044 (from previous).
+     *
+     * @param rotationSetId the rotation set to process
+     * @return number of journey locations updated
+     */
+    @Transactional
+    public int writeVehicleLinksToPathManager(UUID rotationSetId) {
+        rotationSetRepo
+                .findById(rotationSetId)
+                .orElseThrow(
+                        () ->
+                                new IllegalArgumentException(
+                                        "Rotation set not found: " + rotationSetId));
+        List<VpVehicle> vehicles = vehicleRepo.findByRotationSetIdOrderBySequenceAsc(rotationSetId);
+        int updatedCount = 0;
+
+        for (VpVehicle vehicle : vehicles) {
+            List<VpRotationEntry> entries =
+                    entryRepo.findByVehicleIdOrderByDayOfWeekAscSequenceInDayAsc(vehicle.getId());
+
+            for (int i = 0; i < entries.size() - 1; i++) {
+                VpRotationEntry current = entries.get(i);
+                VpRotationEntry next = entries.get(i + 1);
+
+                PmReferenceTrain currentTrain = current.getReferenceTrain();
+                PmReferenceTrain nextTrain = next.getReferenceTrain();
+
+                String currentOtn = currentTrain.getOperationalTrainNumber();
+                String nextOtn = nextTrain.getOperationalTrainNumber();
+
+                setAssociatedOtnOnLastLocation(currentTrain, nextOtn, "0045");
+                setAssociatedOtnOnFirstLocation(nextTrain, currentOtn, "0044");
+                updatedCount += 2;
+            }
+        }
+        return updatedCount;
+    }
+
+    private void setAssociatedOtnOnLastLocation(
+            PmReferenceTrain train, String otn, String activityCode) {
+        PmTrainVersion latestVersion =
+                trainVersionRepo
+                        .findFirstByReferenceTrainIdOrderByVersionNumberDesc(train.getId())
+                        .orElse(null);
+        if (latestVersion == null) {
+            return;
+        }
+        List<PmJourneyLocation> locations =
+                journeyLocationRepo.findByTrainVersionIdOrderBySequenceAsc(latestVersion.getId());
+        if (locations.isEmpty()) {
+            return;
+        }
+        PmJourneyLocation last = locations.getLast();
+        last.setAssociatedTrainOtn(otn);
+        appendActivityCode(last, activityCode);
+        journeyLocationRepo.save(last);
+    }
+
+    private void setAssociatedOtnOnFirstLocation(
+            PmReferenceTrain train, String otn, String activityCode) {
+        PmTrainVersion latestVersion =
+                trainVersionRepo
+                        .findFirstByReferenceTrainIdOrderByVersionNumberDesc(train.getId())
+                        .orElse(null);
+        if (latestVersion == null) {
+            return;
+        }
+        List<PmJourneyLocation> locations =
+                journeyLocationRepo.findByTrainVersionIdOrderBySequenceAsc(latestVersion.getId());
+        if (locations.isEmpty()) {
+            return;
+        }
+        PmJourneyLocation first = locations.getFirst();
+        first.setAssociatedTrainOtn(otn);
+        appendActivityCode(first, activityCode);
+        journeyLocationRepo.save(first);
+    }
+
+    private void appendActivityCode(PmJourneyLocation location, String activityCode) {
+        String activities = location.getActivities();
+        if (activities == null || activities.isBlank()) {
+            location.setActivities(activityCode);
+        } else if (!activities.contains(activityCode)) {
+            location.setActivities(activities + "," + activityCode);
+        }
     }
 }

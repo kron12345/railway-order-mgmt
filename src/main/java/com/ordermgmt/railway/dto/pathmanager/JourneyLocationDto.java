@@ -16,4 +16,5 @@ public record JourneyLocationDto(
         String arrivalQualifier,
         String departureQualifier,
         String subsidiaryCode,
-        List<String> activityCodes) {}
+        List<String> activityCodes,
+        String associatedTrainOtn) {}

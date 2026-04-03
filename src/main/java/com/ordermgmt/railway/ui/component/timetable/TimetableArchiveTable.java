@@ -159,7 +159,18 @@ public class TimetableArchiveTable extends VerticalLayout {
 
     private Span activityCell(TimetableRowData row) {
         String code = row.getActivityCode();
-        Span cell = new Span(code != null && !code.isBlank() ? code : "\u2014");
+        String display = code != null && !code.isBlank() ? code : "\u2014";
+        String otn = row.getAssociatedTrainOtn();
+        if (otn != null && !otn.isBlank()) {
+            if ("0044".equals(code)) {
+                display += " \u2190 " + otn;
+            } else if ("0045".equals(code)) {
+                display += " \u2192 " + otn;
+            } else {
+                display += " \u00b7 " + otn;
+            }
+        }
+        Span cell = new Span(display);
         cell.getStyle().set("font-size", "11px");
         return cell;
     }

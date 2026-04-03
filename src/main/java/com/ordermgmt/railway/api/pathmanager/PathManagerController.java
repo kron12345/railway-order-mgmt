@@ -178,7 +178,8 @@ public class PathManagerController {
                 request.departureQualifier(),
                 request.activityCodes() != null ? String.join(",", request.activityCodes()) : null,
                 request.journeyLocationType(),
-                request.subsidiaryCode());
+                request.subsidiaryCode(),
+                request.associatedTrainOtn());
         PmJourneyLocation updated =
                 journeyLocationRepository
                         .findById(locationId)

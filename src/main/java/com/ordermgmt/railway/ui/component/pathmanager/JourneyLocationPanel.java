@@ -35,6 +35,7 @@ public class JourneyLocationPanel extends VerticalLayout {
     private ComboBox<String> departureQualifierField;
     private IntegerField dwellField;
     private TextField activitiesField;
+    private TextField associatedTrainOtnField;
     private TextField trackField;
 
     public JourneyLocationPanel(
@@ -147,6 +148,11 @@ public class JourneyLocationPanel extends VerticalLayout {
         activitiesField.setValue(safeString(location.getActivities()));
         activitiesField.setWidthFull();
 
+        associatedTrainOtnField = new TextField(t("pm.associatedTrain"));
+        associatedTrainOtnField.setValue(safeString(location.getAssociatedTrainOtn()));
+        associatedTrainOtnField.setWidthFull();
+        associatedTrainOtnField.setMaxLength(20);
+
         trackField = new TextField("Track");
         trackField.setValue(safeString(location.getSubsidiaryCode()));
         trackField.setWidthFull();
@@ -161,6 +167,7 @@ public class JourneyLocationPanel extends VerticalLayout {
                 departureQualifierField,
                 dwellField,
                 activitiesField,
+                associatedTrainOtnField,
                 trackField);
         return form;
     }
@@ -190,7 +197,8 @@ public class JourneyLocationPanel extends VerticalLayout {
                 departureQualifierField.getValue(),
                 activitiesField.getValue(),
                 locationTypeField.getValue() != null ? locationTypeField.getValue().code() : null,
-                trackField.getValue());
+                trackField.getValue(),
+                associatedTrainOtnField.getValue());
         Notification.show(t("pm.save"), 2000, Notification.Position.BOTTOM_END)
                 .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
     }

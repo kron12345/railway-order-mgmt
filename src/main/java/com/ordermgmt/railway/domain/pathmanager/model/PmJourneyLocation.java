@@ -90,6 +90,9 @@ public class PmJourneyLocation {
     @Column(columnDefinition = "jsonb")
     private String activities;
 
+    @Column(name = "associated_train_otn", length = 20)
+    private String associatedTrainOtn;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     private String networkSpecificParams;

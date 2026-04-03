@@ -98,7 +98,8 @@ public final class PathManagerDtoMapper {
                 loc.getArrivalQualifier(),
                 loc.getDepartureQualifier(),
                 loc.getSubsidiaryCode(),
-                activityCodes);
+                activityCodes,
+                loc.getAssociatedTrainOtn());
     }
 
     // ── Process Step → DTO ─────────────────────────────────────────────

@@ -49,4 +49,7 @@ public class TimetableRowData {
 
     /** Whether this stop is soft-deleted (strike-through, recoverable). */
     private Boolean deleted = false;
+
+    /** OTN of the associated train (Von/Fuer linking via 0044/0045). */
+    private String associatedTrainOtn;
 }

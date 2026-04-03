@@ -81,7 +81,9 @@ class ArchitectureTest {
                     .orShould()
                     .haveSimpleNameEndingWith("Engine")
                     .orShould()
-                    .haveSimpleNameEndingWith("Generator");
+                    .haveSimpleNameEndingWith("Generator")
+                    .orShould()
+                    .haveSimpleNameEndingWith("Resolver");
 
     @ArchTest
     static final ArchRule views_should_be_suffixed =

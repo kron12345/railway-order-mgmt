@@ -30,6 +30,7 @@ import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.select.Select;
+import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.component.timepicker.TimePicker;
 
 import com.ordermgmt.railway.domain.timetable.model.TimeConstraintMode;
@@ -60,6 +61,7 @@ class TimetableRowEditorPanel extends Div {
     private final com.vaadin.flow.component.textfield.IntegerField dwellMinutesField =
             new com.vaadin.flow.component.textfield.IntegerField();
     private final ComboBox<TimetableActivityOption> activityField = new ComboBox<>();
+    private final TextField associatedTrainField = new TextField();
 
     // ── Arrival Section ──────────────────────────────────────────────────
 
@@ -125,6 +127,9 @@ class TimetableRowEditorPanel extends Div {
         dwellMinutesField.setValue(row.getDwellMinutes());
         activityField.setValue(
                 findActivityOption(row.getActivityCode(), activityOptions).orElse(null));
+        associatedTrainField.setValue(
+                row.getAssociatedTrainOtn() != null ? row.getAssociatedTrainOtn() : "");
+        updateAssociatedTrainVisibility();
 
         populateEstimateLabel(arrivalEstimateLabel, row, true);
         populateEstimateLabel(departureEstimateLabel, row, false);
@@ -204,9 +209,12 @@ class TimetableRowEditorPanel extends Div {
                 return false;
             }
             row.setActivityCode(activityField.getValue().code());
+            String otnVal = associatedTrainField.getValue();
+            row.setAssociatedTrainOtn(otnVal != null && !otnVal.isBlank() ? otnVal.trim() : null);
             ensureStopTimes(row, isOrigin, isDestination);
         } else {
             row.setActivityCode(null);
+            row.setAssociatedTrainOtn(null);
         }
         return true;
     }
@@ -237,6 +245,7 @@ class TimetableRowEditorPanel extends Div {
 
         configureHaltField();
         configureActivityField();
+        configureAssociatedTrainField();
         configureDwellField();
         configureConstraintMode(arrivalModeField, "timetable.editor.arrivalMode");
         configureConstraintMode(departureModeField, "timetable.editor.departureMode");
@@ -289,6 +298,7 @@ class TimetableRowEditorPanel extends Div {
                 contextLabel,
                 rowFlags,
                 activityField,
+                associatedTrainField,
                 arrivalSection,
                 departureSection,
                 propagationSection,
@@ -312,6 +322,10 @@ class TimetableRowEditorPanel extends Div {
                 });
     }
 
+    private static final java.util.Set<String> VEHICLE_LINK_ACTIVITIES =
+            java.util.Set.of(
+                    "0010", "0011", "0012", "0013", "0014", "0015", "0016", "0017", "0044", "0045");
+
     private void configureActivityField() {
         activityField.setLabel(t("timetable.editor.activity"));
         activityField.setItems(activityOptions);
@@ -324,7 +338,22 @@ class TimetableRowEditorPanel extends Div {
                     } else if (Boolean.TRUE.equals(haltField.getValue())) {
                         activityField.getStyle().set("background", "rgba(250,204,21,0.15)");
                     }
+                    updateAssociatedTrainVisibility();
                 });
+    }
+
+    private void configureAssociatedTrainField() {
+        associatedTrainField.setLabel(t("timetable.editor.associatedTrain"));
+        associatedTrainField.setHelperText(t("timetable.editor.associatedTrain.help"));
+        associatedTrainField.setWidthFull();
+        associatedTrainField.setMaxLength(20);
+        associatedTrainField.setVisible(false);
+    }
+
+    private void updateAssociatedTrainVisibility() {
+        TimetableActivityOption selected = activityField.getValue();
+        boolean show = selected != null && VEHICLE_LINK_ACTIVITIES.contains(selected.code());
+        associatedTrainField.setVisible(show);
     }
 
     private void configureDwellField() {

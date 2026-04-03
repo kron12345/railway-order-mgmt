@@ -144,7 +144,8 @@ public class PathManagerService {
             String departureQualifier,
             String activities,
             String journeyLocationType,
-            String subsidiaryCode) {
+            String subsidiaryCode,
+            String associatedTrainOtn) {
         PmJourneyLocation location =
                 journeyLocationRepository
                         .findById(locationId)
@@ -175,6 +176,9 @@ public class PathManagerService {
         }
         if (subsidiaryCode != null) {
             location.setSubsidiaryCode(subsidiaryCode);
+        }
+        if (associatedTrainOtn != null) {
+            location.setAssociatedTrainOtn(associatedTrainOtn);
         }
         journeyLocationRepository.save(location);
     }
@@ -270,6 +274,7 @@ public class PathManagerService {
         location.setArrivalTime(row.getEstimatedArrival());
         location.setDepartureTime(row.getEstimatedDeparture());
         location.setDwellTime(row.getDwellMinutes());
+        location.setAssociatedTrainOtn(row.getAssociatedTrainOtn());
         return location;
     }
 }

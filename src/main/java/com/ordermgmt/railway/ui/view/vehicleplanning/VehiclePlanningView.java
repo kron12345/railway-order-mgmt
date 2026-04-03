@@ -84,8 +84,26 @@ public class VehiclePlanningView extends VerticalLayout {
         newRotationBtn.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
         newRotationBtn.addClickListener(e -> openNewRotationDialog());
 
+        Button writeLinkBtn =
+                new Button(getTranslation("vp.writeLinks"), VaadinIcon.CONNECT.create());
+        writeLinkBtn.addThemeVariants(ButtonVariant.LUMO_TERTIARY);
+        writeLinkBtn.setTooltipText(getTranslation("vp.writeLinks.help"));
+        writeLinkBtn.addClickListener(
+                e -> {
+                    VpRotationSet selected = rotationSelect.getValue();
+                    if (selected != null) {
+                        int count =
+                                planningService.writeVehicleLinksToPathManager(selected.getId());
+                        Notification.show(
+                                getTranslation("vp.writeLinks.success") + " (" + count + ")",
+                                3000,
+                                Notification.Position.BOTTOM_END);
+                    }
+                });
+
         HorizontalLayout header =
-                new HorizontalLayout(title, rotationSelect, daySelect, newRotationBtn);
+                new HorizontalLayout(
+                        title, rotationSelect, daySelect, newRotationBtn, writeLinkBtn);
         header.setDefaultVerticalComponentAlignment(FlexComponent.Alignment.BASELINE);
         header.setWidthFull();
         header.getStyle()
