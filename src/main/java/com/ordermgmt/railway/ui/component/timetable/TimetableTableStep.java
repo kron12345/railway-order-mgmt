@@ -455,11 +455,28 @@ public class TimetableTableStep extends Div {
      * back to estimated.
      */
     private String resolveEffectiveDeparture(TimetableRowData row) {
+        // Check all departure time sources: exact, window earliest, commercial, estimated
         if (row.getDepartureExact() != null && !row.getDepartureExact().isBlank()) {
             return row.getDepartureExact();
         }
+        if (row.getDepartureEarliest() != null && !row.getDepartureEarliest().isBlank()) {
+            return row.getDepartureEarliest();
+        }
+        if (row.getCommercialDeparture() != null && !row.getCommercialDeparture().isBlank()) {
+            return row.getCommercialDeparture();
+        }
         if (row.getEstimatedDeparture() != null && !row.getEstimatedDeparture().isBlank()) {
             return row.getEstimatedDeparture();
+        }
+        // Fallback: check arrival times (user may have set arrival but not departure)
+        if (row.getArrivalExact() != null && !row.getArrivalExact().isBlank()) {
+            return row.getArrivalExact();
+        }
+        if (row.getArrivalEarliest() != null && !row.getArrivalEarliest().isBlank()) {
+            return row.getArrivalEarliest();
+        }
+        if (row.getEstimatedArrival() != null && !row.getEstimatedArrival().isBlank()) {
+            return row.getEstimatedArrival();
         }
         return null;
     }
