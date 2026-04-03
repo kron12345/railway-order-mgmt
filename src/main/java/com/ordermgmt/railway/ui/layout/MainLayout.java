@@ -134,6 +134,11 @@ public class MainLayout extends AppLayout
                         VaadinIcon.TRAIN.create()));
         sideNav.addItem(
                 new SideNavItem(
+                        getTranslation("nav.vehicleplanning"),
+                        "vehicleplanning",
+                        VaadinIcon.COG.create()));
+        sideNav.addItem(
+                new SideNavItem(
                         getTranslation("nav.settings"), "settings", VaadinIcon.COG.create()));
         sideNav.addItem(
                 new SideNavItem(
@@ -183,6 +188,7 @@ public class MainLayout extends AppLayout
             case "new" -> getTranslation("order.new");
             case "timetable-builder" -> getTranslation("timetable.builder.title");
             case "pathmanager" -> getTranslation("nav.pathmanager");
+            case "vehicleplanning" -> getTranslation("nav.vehicleplanning");
             default -> {
                 if (segment.matches("[0-9a-f\\-]{36}")) {
                     yield segment.substring(0, 8) + "…";

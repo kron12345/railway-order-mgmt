@@ -4,7 +4,9 @@
 
 ## Letzte Aktualisierung
 
-**2026-03-31** — Timetable Builder 6 UX-Fixes: (1) Zeitfenster-Labels eindeutig: 4 neue i18n-Keys fuer kontextspezifische Labels (earliestArrival/ELA, latestArrival/LLA, earliestDeparture/ELD, latestDeparture/LLD) in DE/EN/IT/FR. (2) Grid-Spalten reduziert von 14 auf 8: Entfernt Role, From, To, Segment, Distance und getrennte Schaetzung/Constraint-Spalten; neu kombinierte An/Ab-Spalten mit Qualifier-Tags, Halt-Spalte mit Haekchen, Dwell-Spalte. (3) PM Zeitfeld-Labels: JourneyLocationPanel passt die Zeitfeld-Beschriftung dynamisch an den gewaehlten Qualifier an (ELA/LLA/ELD/LLD), korrekte Qualifier-Items fuer Arrival/Departure. (4) Route-Zeiten optional: Validation erlaubt Route-Berechnung ohne Ankerzeit (rein geographisch); TimetableRoutingService.estimateRows gibt Zeilen ohne Zeiten zurueck wenn keine Anker. Laufweg-Vorschau als kompakte Punkt-Liste nach Routenberechnung. (5) Kompakter Kalender: ValidityCalendar.setCompact() fuer Einzeilen-Monate mit 18x18px-Tages-Quadraten; TimetableTableStep nutzt compact-Modus. (6) Gueltigkeit im Builder-Header: Auftrags-Gueltigkeitsdaten (dd.MM.yyyy) im Subtitle angezeigt.
+**2026-03-31** — Fahrzeugumlaufplanung (Vehicle Planning): Neuer Bounded Context `vehicleplanning` mit komplettem Domain Layer, UI und Navigation. (1) V11-Migration: 4 Tabellen (`vp_rotation_sets`, `vp_vehicles`, `vp_rotation_entries`, `vp_vehicle_operations`) mit FK auf `pm_timetable_years` und `pm_reference_trains`, 6 Indexes. (2) Domain Model: 2 Enums (`VehicleType`, `CouplingPosition`), 4 Entities (`VpRotationSet`, `VpVehicle`, `VpRotationEntry`, `VpVehicleOperation`) ohne `@Audited` (Planungsdaten), 1 Conflict-Record. (3) 4 Repositories. (4) 2 Services: `VehiclePlanningService` (CRUD, addTrainToVehicle, moveEntry, removeEntry) und `ConflictDetectionService` (Zeitueberlappung und Standort-Mismatch-Erkennung ueber PmJourneyLocation). (5) UI: `GanttChart` (Div-basiert mit Zeitlineal, Fahrzeugzeilen, absolut positionierte Zugbloecke, DragSource/DropTarget), `TrainPalette` (Sidebar mit Suchfeld und draggbaren PM-Zuegen), `ConflictPanel` (Konfliktliste mit Severity-Icons). (6) `VehiclePlanningView` unter Route `/vehicleplanning` mit Umlaufplan-Auswahl, Tagesauswahl, Neuer-Umlaufplan-Dialog, SplitLayout 20/80 (Palette/Gantt), Konfliktpanel. (7) MainLayout: Navigation und Breadcrumb ergaenzt. (8) i18n: 30 vp.*-Keys in DE/EN/IT/FR.
+
+Davor: **2026-03-31** — Timetable Builder 6 UX-Fixes: (1) Zeitfenster-Labels eindeutig: 4 neue i18n-Keys fuer kontextspezifische Labels (earliestArrival/ELA, latestArrival/LLA, earliestDeparture/ELD, latestDeparture/LLD) in DE/EN/IT/FR. (2) Grid-Spalten reduziert von 14 auf 8: Entfernt Role, From, To, Segment, Distance und getrennte Schaetzung/Constraint-Spalten; neu kombinierte An/Ab-Spalten mit Qualifier-Tags, Halt-Spalte mit Haekchen, Dwell-Spalte. (3) PM Zeitfeld-Labels: JourneyLocationPanel passt die Zeitfeld-Beschriftung dynamisch an den gewaehlten Qualifier an (ELA/LLA/ELD/LLD), korrekte Qualifier-Items fuer Arrival/Departure. (4) Route-Zeiten optional: Validation erlaubt Route-Berechnung ohne Ankerzeit (rein geographisch); TimetableRoutingService.estimateRows gibt Zeilen ohne Zeiten zurueck wenn keine Anker. Laufweg-Vorschau als kompakte Punkt-Liste nach Routenberechnung. (5) Kompakter Kalender: ValidityCalendar.setCompact() fuer Einzeilen-Monate mit 18x18px-Tages-Quadraten; TimetableTableStep nutzt compact-Modus. (6) Gueltigkeit im Builder-Header: Auftrags-Gueltigkeitsdaten (dd.MM.yyyy) im Subtitle angezeigt.
 
 Davor: **2026-03-31** — Dokumentations-Ueberarbeitung: (1) Bedienungsanleitung (BEDIENUNGSANLEITUNG.md) als vollstaendiges deutsches Benutzerhandbuch erstellt (~600 Zeilen, 12 Kapitel: Ueberblick, Anmeldung/Navigation, Auftragsverwaltung, Positionen, Builder, Detailansicht, Fahrplanmanager, Einstellungen, Profil, Tastaturkuerzel, FAQ, Fehlerbehebung). (2) 6 fehlende ADRs erstellt: ADR-004 (Accordion+Status-Chips), ADR-005 (Order-Header+Dialoge), ADR-006 (Bestellkalender/TTR), ADR-007 (ERA RINF), ADR-008 (CSV-Tag-Import), ADR-009 (Fahrplan-Archiv-Link). (3) README.md um Dokumentations-Links erweitert. (4) timetable-builder.md um Tastaturkuerzel und Fehlerbehebung ergaenzt. (5) path-manager.md um Swagger-UI-Anleitung und haeufige Fehler ergaenzt. (6) GLOSSARY.md um 5 Begriffe erweitert (Bestellkalender, Benutzerrolle, Theme, Audit Trail, Filter).
 
@@ -36,7 +38,7 @@ Davor: Fahrplanbuilder Phase 2-4: Timetable-Editing Features implementiert. Time
 
 ## Projektstatus
 
-**Order CRUD + Auftragspositionen (`LEISTUNG` / `FAHRPLAN`) + Fahrplanbuilder + Bestellkalender + RINF Import + Schlagwort-Katalog**
+**Order CRUD + Auftragspositionen (`LEISTUNG` / `FAHRPLAN`) + Fahrplanbuilder + Bestellkalender + RINF Import + Schlagwort-Katalog + Fahrzeugumlaufplanung**
 
 ## Module / Bounded Contexts
 
@@ -48,6 +50,7 @@ Davor: Fahrplanbuilder Phase 2-4: Timetable-Editing Features implementiert. Time
 | **Customer** | Entity | `Customer`, `CustomerStatus` | — | Repository vorhanden, eigene UI noch offen |
 | **Business** | Entity | `Business`, `BusinessStatus` | — | Repository vorhanden, eigene UI noch offen |
 | **Path Manager** | Domain + REST API + UI + Integration | `PmReferenceTrain`, `PmTrainVersion`, `PmJourneyLocation`, `PmPath`, `PmPathRequest`, `PmRoute`, `PmTimetableYear`, `PmProcessStep` + 4 Enums | `PathManagerView`, `TrainHeaderPanel`, `ProcessSimulationPanel`, `JourneyLocationPanel`, `TreeNode` | TTT State Machine, CRUD, Diff, Identifier-Generator. V9-Migration. REST API: 11 Endpoints. UI: TreeGrid + Detail Panels mit Prozess-Simulation. Integration: Send-to-PM Button in OrderPositionRow. |
+| **Vehicle Planning** | Domain + UI | `VpRotationSet`, `VpVehicle`, `VpRotationEntry`, `VpVehicleOperation`, `Conflict` Record + 2 Enums (`VehicleType`, `CouplingPosition`) | `VehiclePlanningView`, `GanttChart`, `TrainPalette`, `ConflictPanel` | Fahrzeugumlaufplanung. V11-Migration (4 Tabellen). Services: VehiclePlanningService + ConflictDetectionService. Drag&Drop Gantt-Ansicht mit Zugpalette und Konfliktpanel. |
 
 ## Infrastruktur
 
@@ -59,7 +62,7 @@ Davor: Fahrplanbuilder Phase 2-4: Timetable-Editing Features implementiert. Time
 | **i18n** | Aktiv | DE/EN/IT/FR, inkl. Builder, Settings, Order-Views |
 | **Push / Live Updates** | Skeleton | `BroadcastService` und `@Push` vorhanden |
 | **Audit Trail** | Aktiv | Hibernate Envers fuer Orders, Positionen, Ressourcen, Archive |
-| **Datenbank** | V1-V10 Migrationen | Orders, Positionen, Ressourcen, Bestellungen, Infrastruktur, Schlagwoerter, Positionskommentare, Fahrplanarchiv, OTN, Path Manager (8 `pm_*` Tabellen + Audit) |
+| **Datenbank** | V1-V11 Migrationen | Orders, Positionen, Ressourcen, Bestellungen, Infrastruktur, Schlagwoerter, Positionskommentare, Fahrplanarchiv, OTN, Path Manager (8 `pm_*` Tabellen + Audit), Vehicle Planning (4 `vp_*` Tabellen) |
 | **Theme** | Aktiv | Profile-basiertes Theme mit sofortigem Umschalten; Fallback auf Default abgesichert |
 | **Accessibility** | Aktiv | ARIA-Labels, Tastaturbedienbarkeit, lesbare Statuschips, Builder und Liste testbar |
 | **Laufzeit** | Lokal verifiziert | Anwendung laeuft ohne Docker auf `*:8085` |
@@ -88,6 +91,7 @@ Davor: Fahrplanbuilder Phase 2-4: Timetable-Editing Features implementiert. Time
 | **TimetableBuilderView** | `/orders/{orderId}/timetable-builder` | Implementiert | Full-screen Fahrplanbuilder mit Route, Karte, Tabelle und Archiv-Save |
 | **TimetableArchiveView** | `/orders/{orderId}/timetable/{positionId}` | Implementiert | Read-only Fahrplan-Detailansicht mit Div-Tabelle, Karte, Gueltigkeit und Metadaten |
 | **PathManagerView** | `/pathmanager` | Implementiert | SplitLayout 40/60: TreeGrid (Year/Train/Version/Location) + kontextabhaengige Detail-Panels (Zug-Header, Prozess-Simulation, OP-Bearbeitung) |
+| **VehiclePlanningView** | `/vehicleplanning` | Implementiert | SplitLayout 20/80: Zugpalette (Drag) / Gantt-Chart (Drop) + Umlaufplan-Auswahl + Tageswahl + Konfliktpanel |
 | **SettingsView** | `/settings` | Implementiert | Topologie-Import + Schlagwort-Katalog + Datenbestand + Import-Verlauf (ADMIN only) |
 
 ## UI-Komponenten
@@ -111,6 +115,9 @@ Davor: Fahrplanbuilder Phase 2-4: Timetable-Editing Features implementiert. Time
 | `TrainHeaderPanel` | Editierbares Formular fuer Zugdaten (OTN, Typ, Gewicht, Laenge, Geschwindigkeit, Kalender) |
 | `ProcessSimulationPanel` | TTT-Prozesssimulation: Status-Badge, RA/IM-farbcodierte Aktionsbuttons, Kommentar, Prozesshistorie-Grid |
 | `JourneyLocationPanel` | Editierbares Formular fuer Betriebspunkte (Zeiten, Qualifier, Aktivitaeten, Gleis) |
+| `GanttChart` | Div-basiertes Gantt-Diagramm mit Zeitlineal, Fahrzeugzeilen und absolut positionierten Zugbloecken (DragSource/DropTarget) |
+| `TrainPalette` | Sidebar mit Suchfeld und draggbaren PM-Referenzzuegen fuer die Fahrzeugumlaufplanung |
+| `ConflictPanel` | Unteres Panel mit Konfliktliste (Zeitueberlappung, Standort-Mismatch) und Severity-Icons |
 
 ## Datenbank-Migrationen
 
@@ -126,6 +133,7 @@ Davor: Fahrplanbuilder Phase 2-4: Timetable-Editing Features implementiert. Time
 | V8 | `V8__timetable_otn.sql` | `operational_train_number` (VARCHAR 20, nullable) auf `timetable_archives` und `order_positions` |
 | V9 | `V9__path_manager_tables.sql` | `pm_timetable_years`, `pm_reference_trains`, `pm_routes`, `pm_path_requests`, `pm_paths`, `pm_train_versions`, `pm_journey_locations`, `pm_process_steps` + Audit-Tabellen + FK `pm_reference_train_id` auf `order_positions` + Seed FPJ 2026 |
 | V10 | `V10__fix_pm_audit_columns.sql` | Envers Audit-Spalten `revision_id` -> `rev`, `revision_type` -> `revtype` in allen `pm_*_aud` Tabellen |
+| V11 | `V11__vehicle_planning_tables.sql` | `vp_rotation_sets`, `vp_vehicles`, `vp_rotation_entries`, `vp_vehicle_operations` + 6 Indexes |
 
 ## ERA RINF Infrastrukturdaten
 
@@ -174,6 +182,7 @@ Hinweise:
 
 | Datum | Aenderung |
 |---|---|
+| 2026-03-31 | Fahrzeugumlaufplanung (Vehicle Planning): Bounded Context `vehicleplanning`, V11-Migration (4 vp_* Tabellen), 4 Entities + 2 Enums + Conflict Record, 4 Repos, 2 Services (Planning + Conflict Detection), 3 UI-Komponenten (GanttChart, TrainPalette, ConflictPanel), VehiclePlanningView, MainLayout Nav + Breadcrumb, i18n DE/EN/IT/FR |
 | 2026-03-31 | Timetable Builder 6 UX-Fixes: Eindeutige Zeitfenster-Labels (4 i18n-Keys), Grid 14->8 Spalten, PM Qualifier-Labels dynamisch, Route-Zeiten optional + Laufweg-Vorschau, Kompakter Kalender (setCompact), Gueltigkeit im Builder-Header |
 | 2026-04-02 | Security Pentest: Separate API SecurityFilterChain, @PreAuthorize auf OrderService, Credential-Sanitisierung, Error-Handler Sanitisierung, SecurityAuditorAware, simulatedBy in ProcessEngine, GH Actions SHA-Pinning, SSL-Hinweis, Dev-Logging reduziert |
 | 2026-04-02 | Code Review Backlog: 6 Findings (i18n Fallback sync, Route Graph Caching TTL 5min, Google Fonts CDN entfernt/GDPR, Leaflet map.destroy(), StatusBadge Dead Code, OrderAccordionRow extrahiert aus OrderListView) |
