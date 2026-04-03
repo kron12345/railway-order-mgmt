@@ -4,6 +4,7 @@ import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.
 import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.arrivalConstraintLabel;
 import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.createCard;
 import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.departureConstraintLabel;
+import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.formatTime;
 import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.helperSpan;
 import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.parseTime;
 import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.timeOrDash;
@@ -299,6 +300,7 @@ public class TimetableTableStep extends Div {
 
     private void handleAddStop(int insertAfterIndex, OperationalPoint point, String activityCode) {
         editingService.insertStop(timetableRows, insertAfterIndex + 1, point, activityCode);
+        recalculateEstimatesIfNeeded();
         rowGrid.setItems(timetableRows);
         TimetableRowData newRow = timetableRows.get(insertAfterIndex + 1);
         rowGrid.asSingleSelect().setValue(newRow);
@@ -331,6 +333,9 @@ public class TimetableTableStep extends Div {
         propagateIfNeeded(selectedRow, true);
         propagateIfNeeded(selectedRow, false);
 
+        // Phase 4: Fill in missing estimates when first time is entered
+        recalculateEstimatesIfNeeded();
+
         rowGrid.getDataProvider().refreshAll();
         editorPanel.populate(selectedRow, isOrigin(selectedRow), isDestination(selectedRow));
         return true;
@@ -350,6 +355,113 @@ public class TimetableTableStep extends Div {
             editingService.propagateTimeChange(
                     timetableRows, idx, isArrival, exactTime, editorPanel.getPropagationMode());
         }
+    }
+
+    // ── Estimate gap filling ─────────────────────────────────────────────
+
+    /** Assumed travel speed (m/s) equivalent to 70 km/h. */
+    private static final double ASSUMED_SPEED_MPS = 70_000D / 3_600D;
+
+    /**
+     * Checks if any rows after the first row with a departure time are missing estimates, and fills
+     * them based on segment distances and an assumed speed of 70 km/h.
+     */
+    private void recalculateEstimatesIfNeeded() {
+        TimetableRowData anchorRow = null;
+        int anchorIdx = -1;
+
+        // Find the first row that has any departure time set
+        for (int i = 0; i < timetableRows.size(); i++) {
+            TimetableRowData row = timetableRows.get(i);
+            String dep = resolveEffectiveDeparture(row);
+            if (dep != null && !dep.isBlank()) {
+                anchorRow = row;
+                anchorIdx = i;
+                break;
+            }
+        }
+        if (anchorRow == null || anchorIdx >= timetableRows.size() - 1) {
+            return;
+        }
+
+        // Check if any following rows lack estimated departure
+        boolean hasGaps = false;
+        for (int i = anchorIdx + 1; i < timetableRows.size(); i++) {
+            if (timetableRows.get(i).getEstimatedArrival() == null
+                    || timetableRows.get(i).getEstimatedArrival().isBlank()) {
+                hasGaps = true;
+                break;
+            }
+        }
+
+        if (hasGaps) {
+            fillEstimatesFromAnchor(anchorRow, anchorIdx);
+        }
+    }
+
+    /**
+     * Forward-fills estimated arrival/departure times from the given anchor row using segment
+     * distances and the assumed speed.
+     */
+    private void fillEstimatesFromAnchor(TimetableRowData anchorRow, int anchorIdx) {
+        String depStr = resolveEffectiveDeparture(anchorRow);
+        LocalTime cursor = parseTime(depStr);
+        if (cursor == null) {
+            return;
+        }
+        // Ensure the anchor row itself has the estimated departure set
+        if (anchorRow.getEstimatedDeparture() == null
+                || anchorRow.getEstimatedDeparture().isBlank()) {
+            anchorRow.setEstimatedDeparture(formatTime(cursor));
+        }
+
+        for (int i = anchorIdx + 1; i < timetableRows.size(); i++) {
+            TimetableRowData row = timetableRows.get(i);
+            double segmentMeters =
+                    row.getSegmentLengthMeters() != null ? row.getSegmentLengthMeters() : 0D;
+            long travelSec = Math.round(segmentMeters / ASSUMED_SPEED_MPS);
+            cursor = cursor.plusSeconds(travelSec);
+
+            // Only fill if currently empty
+            if (row.getEstimatedArrival() == null || row.getEstimatedArrival().isBlank()) {
+                row.setEstimatedArrival(formatTime(cursor));
+            } else {
+                cursor = parseTime(row.getEstimatedArrival());
+                if (cursor == null) {
+                    return;
+                }
+            }
+
+            // Add dwell time for halts
+            if (Boolean.TRUE.equals(row.getHalt()) && row.getDwellMinutes() != null) {
+                cursor = cursor.plusMinutes(row.getDwellMinutes());
+            }
+
+            if (i < timetableRows.size() - 1) {
+                if (row.getEstimatedDeparture() == null || row.getEstimatedDeparture().isBlank()) {
+                    row.setEstimatedDeparture(formatTime(cursor));
+                } else {
+                    cursor = parseTime(row.getEstimatedDeparture());
+                    if (cursor == null) {
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Returns the effective departure time string for a row: prefers exact/constraint time, falls
+     * back to estimated.
+     */
+    private String resolveEffectiveDeparture(TimetableRowData row) {
+        if (row.getDepartureExact() != null && !row.getDepartureExact().isBlank()) {
+            return row.getDepartureExact();
+        }
+        if (row.getEstimatedDeparture() != null && !row.getEstimatedDeparture().isBlank()) {
+            return row.getEstimatedDeparture();
+        }
+        return null;
     }
 
     // ── Speed plausibility ─────────────────────────────────────────────

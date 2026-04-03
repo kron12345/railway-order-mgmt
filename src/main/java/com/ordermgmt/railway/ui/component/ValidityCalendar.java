@@ -205,63 +205,114 @@ public class ValidityCalendar extends Div {
         return grid;
     }
 
-    // --- Compact calendar grid: one row per month, all days inline ---
+    // --- Compact calendar grid: 7-column weekday table, one section per month ---
 
     private Div createCompactCalendarGrid() {
         Div grid = new Div();
-        grid.getStyle().set("display", "flex").set("flex-direction", "column").set("gap", "4px");
+        grid.getStyle().set("display", "flex").set("flex-direction", "column").set("gap", "0");
+
+        // Sticky weekday header row: [Month label] [Mo] [Di] ... [So]
+        Div header = new Div();
+        header.getStyle()
+                .set("display", "grid")
+                .set("grid-template-columns", "56px repeat(7, 22px)")
+                .set("gap", "2px")
+                .set("margin-bottom", "2px")
+                .set("position", "sticky")
+                .set("top", "0")
+                .set("background", "var(--rom-bg-card)")
+                .set("z-index", "1");
+        Div corner = new Div();
+        header.add(corner);
+        for (String day : WEEKDAY_SHORT) {
+            Div h = new Div();
+            h.setText(day);
+            h.getStyle()
+                    .set("text-align", "center")
+                    .set("font-family", "'JetBrains Mono', monospace")
+                    .set("font-size", "9px")
+                    .set("font-weight", "600")
+                    .set("color", "var(--rom-text-muted)")
+                    .set("line-height", "18px");
+            header.add(h);
+        }
+        grid.add(header);
 
         YearMonth start = YearMonth.from(minDate);
         YearMonth end = YearMonth.from(maxDate);
         YearMonth current = start;
 
         while (!current.isAfter(end)) {
-            grid.add(createCompactMonthRow(current));
+            grid.add(createCompactMonthSection(current));
             current = current.plusMonths(1);
         }
         return grid;
     }
 
-    private Div createCompactMonthRow(YearMonth ym) {
-        Div row = new Div();
-        row.getStyle()
-                .set("display", "flex")
-                .set("align-items", "center")
-                .set("gap", "2px")
-                .set("flex-wrap", "nowrap");
+    /**
+     * Creates a compact month section with the month label spanning the first column and day cells
+     * aligned under their weekday columns (Mo-So).
+     */
+    private Div createCompactMonthSection(YearMonth ym) {
+        int daysInMonth = ym.lengthOfMonth();
+        int firstDow = ym.atDay(1).getDayOfWeek().getValue(); // Mo=1
+        // Calculate number of rows (weeks) needed for this month
+        int totalSlots = (firstDow - 1) + daysInMonth;
+        int weekCount = (totalSlots + 6) / 7;
 
+        Div section = new Div();
+        section.getStyle()
+                .set("display", "grid")
+                .set("grid-template-columns", "56px repeat(7, 22px)")
+                .set("grid-template-rows", "repeat(" + weekCount + ", 22px)")
+                .set("gap", "2px")
+                .set("margin-bottom", "2px");
+
+        // Month label in the first column, spanning all rows
         Div label = new Div();
         label.setText(
-                ym.getMonth().getDisplayName(TextStyle.SHORT, Locale.GERMAN) + " " + ym.getYear());
+                ym.getMonth().getDisplayName(TextStyle.SHORT, Locale.GERMAN)
+                        + " "
+                        + String.valueOf(ym.getYear()).substring(2));
         label.getStyle()
                 .set("font-family", "'JetBrains Mono', monospace")
                 .set("font-size", "9px")
                 .set("font-weight", "600")
                 .set("color", "var(--rom-text-secondary)")
-                .set("min-width", "60px")
-                .set("flex-shrink", "0");
-        row.add(label);
+                .set("grid-column", "1")
+                .set("grid-row", "1 / span " + weekCount)
+                .set("display", "flex")
+                .set("align-items", "flex-start")
+                .set("padding-top", "3px");
+        section.add(label);
 
-        int daysInMonth = ym.lengthOfMonth();
+        // Place each day in the correct weekday column and week row
         for (int d = 1; d <= daysInMonth; d++) {
             LocalDate date = ym.atDay(d);
+            int dow = date.getDayOfWeek().getValue(); // Mo=1 .. So=7
+            int weekOfMonth = ((firstDow - 1) + (d - 1)) / 7 + 1;
+            int gridCol = dow + 1; // +1 because col 1 is the month label
+
             boolean inRange = !date.isBefore(minDate) && !date.isAfter(maxDate);
             Div cell = compactDayCell(date, d, inRange);
+            cell.getStyle()
+                    .set("grid-column", String.valueOf(gridCol))
+                    .set("grid-row", String.valueOf(weekOfMonth));
             if (inRange) {
                 cellMap.put(date, cell);
             }
-            row.add(cell);
+            section.add(cell);
         }
-        return row;
+        return section;
     }
 
     private Div compactDayCell(LocalDate date, int day, boolean selectable) {
         Div cell = new Div();
         cell.setText(String.valueOf(day));
         cell.getStyle()
-                .set("width", "18px")
-                .set("height", "18px")
-                .set("line-height", "18px")
+                .set("width", "22px")
+                .set("height", "22px")
+                .set("line-height", "22px")
                 .set("text-align", "center")
                 .set("font-family", "'JetBrains Mono', monospace")
                 .set("font-size", "9px")

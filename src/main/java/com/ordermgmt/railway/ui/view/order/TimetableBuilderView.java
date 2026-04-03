@@ -57,6 +57,7 @@ import com.ordermgmt.railway.domain.timetable.service.TimetableArchiveService;
 import com.ordermgmt.railway.domain.timetable.service.TimetableEditingService;
 import com.ordermgmt.railway.domain.timetable.service.TimetableRoutingService;
 import com.ordermgmt.railway.ui.component.ValidityCalendar;
+import com.ordermgmt.railway.ui.component.timetable.IntervalTimetablePanel;
 import com.ordermgmt.railway.ui.component.timetable.TimetableDataLoader;
 import com.ordermgmt.railway.ui.component.timetable.TimetableRouteStep;
 import com.ordermgmt.railway.ui.component.timetable.TimetableTableStep;
@@ -83,6 +84,7 @@ public class TimetableBuilderView extends VerticalLayout implements BeforeEnterO
     private final Div contentSlot = new Div();
     private final Span stepOneBadge = new Span();
     private final Span stepTwoBadge = new Span();
+    private final Span stepThreeBadge = new Span();
     private final Button stepBackButton = new Button();
     private final Button stepNextButton = new Button();
     private final Button saveButton = new Button();
@@ -104,6 +106,7 @@ public class TimetableBuilderView extends VerticalLayout implements BeforeEnterO
     private List<TimetableActivityOption> activityOptions = List.of();
     private TimetableRouteStep routeStep;
     private TimetableTableStep tableStep;
+    private IntervalTimetablePanel intervalPanel;
 
     public TimetableBuilderView(
             OrderService orderService,
@@ -208,7 +211,7 @@ public class TimetableBuilderView extends VerticalLayout implements BeforeEnterO
         switchStep(Step.ROUTE);
     }
 
-    /** Creates route and table step components. */
+    /** Creates route, table, and interval step components. */
     private void initializeSteps() {
         routeStep =
                 new TimetableRouteStep(
@@ -216,6 +219,7 @@ public class TimetableBuilderView extends VerticalLayout implements BeforeEnterO
         tableStep =
                 new TimetableTableStep(
                         activityOptions, timetableEditingService, availableOperationalPoints);
+        intervalPanel = new IntervalTimetablePanel();
     }
 
     /** Wires the callback for when a route calculation completes or becomes dirty. */
@@ -253,44 +257,40 @@ public class TimetableBuilderView extends VerticalLayout implements BeforeEnterO
 
     /** Wires the interval panel's generate callback for bulk timetable creation. */
     private void wireIntervalGeneration() {
-        routeStep
-                .getIntervalPanel()
-                .setOnGenerate(
-                        config -> {
-                            if (timetableRows.isEmpty()) {
-                                notify(
-                                        t("timetable.interval.noRoute"),
-                                        NotificationVariant.LUMO_ERROR);
-                                return;
-                            }
-                            try {
-                                List<LocalDate> dates =
-                                        validityCalendar != null
-                                                ? validityCalendar.getSelectedDates()
-                                                : List.of();
-                                var positions =
-                                        intervalTimetableService.generateIntervalPositions(
-                                                order,
-                                                config.namePrefix(),
-                                                config.otnStart(),
-                                                new ArrayList<>(timetableRows),
-                                                config.firstDeparture(),
-                                                config.lastDeparture(),
-                                                config.crossMidnight(),
-                                                config.intervalMinutes(),
-                                                dates,
-                                                joinSelectedTags(),
-                                                commentField.getValue());
-                                Notification.show(
-                                                t("timetable.interval.generated", positions.size()),
-                                                3000,
-                                                Notification.Position.BOTTOM_END)
-                                        .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
-                                navigateToOrder();
-                            } catch (Exception ex) {
-                                notify(ex.getMessage(), NotificationVariant.LUMO_ERROR);
-                            }
-                        });
+        intervalPanel.setOnGenerate(
+                config -> {
+                    if (timetableRows.isEmpty()) {
+                        notify(t("timetable.interval.noRoute"), NotificationVariant.LUMO_ERROR);
+                        return;
+                    }
+                    try {
+                        List<LocalDate> dates =
+                                validityCalendar != null
+                                        ? validityCalendar.getSelectedDates()
+                                        : List.of();
+                        var positions =
+                                intervalTimetableService.generateIntervalPositions(
+                                        order,
+                                        config.namePrefix(),
+                                        config.otnStart(),
+                                        new ArrayList<>(timetableRows),
+                                        config.firstDeparture(),
+                                        config.lastDeparture(),
+                                        config.crossMidnight(),
+                                        config.intervalMinutes(),
+                                        dates,
+                                        joinSelectedTags(),
+                                        commentField.getValue());
+                        Notification.show(
+                                        t("timetable.interval.generated", positions.size()),
+                                        3000,
+                                        Notification.Position.BOTTOM_END)
+                                .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+                        navigateToOrder();
+                    } catch (Exception ex) {
+                        notify(ex.getMessage(), NotificationVariant.LUMO_ERROR);
+                    }
+                });
     }
 
     /** Assembles the main layout: header, status bar, metadata card, and content slot. */
@@ -325,7 +325,7 @@ public class TimetableBuilderView extends VerticalLayout implements BeforeEnterO
                 .set("font-size", "12px")
                 .set("font-family", "'JetBrains Mono', monospace")
                 .set("color", "var(--rom-text-muted)");
-        HorizontalLayout badges = new HorizontalLayout(stepOneBadge, stepTwoBadge);
+        HorizontalLayout badges = new HorizontalLayout(stepOneBadge, stepTwoBadge, stepThreeBadge);
         badges.setSpacing(true);
         badges.setAlignItems(FlexComponent.Alignment.CENTER);
         HorizontalLayout acts = new HorizontalLayout(stepBackButton, stepNextButton, saveButton);
@@ -393,10 +393,10 @@ public class TimetableBuilderView extends VerticalLayout implements BeforeEnterO
         stepBackButton.addThemeVariants(ButtonVariant.LUMO_SMALL);
         stepBackButton.addClickListener(
                 e -> {
-                    if (currentStep == Step.ROUTE) {
-                        navigateToOrder();
-                    } else {
-                        switchStep(Step.ROUTE);
+                    switch (currentStep) {
+                        case ROUTE -> navigateToOrder();
+                        case TABLE -> switchStep(Step.ROUTE);
+                        case INTERVAL -> switchStep(Step.TABLE);
                     }
                 });
         stepNextButton.setText(t("common.next"));
@@ -407,14 +407,16 @@ public class TimetableBuilderView extends VerticalLayout implements BeforeEnterO
                 .set("color", "var(--rom-bg-primary)");
         stepNextButton.addClickListener(
                 e -> {
-                    if (currentStep == Step.ROUTE) {
-                        if (!timetableRows.isEmpty()) {
-                            switchStep(Step.TABLE);
-                        } else {
-                            routeStep.calculateRoute();
+                    switch (currentStep) {
+                        case ROUTE -> {
+                            if (!timetableRows.isEmpty()) {
+                                switchStep(Step.TABLE);
+                            } else {
+                                routeStep.calculateRoute();
+                            }
                         }
-                    } else {
-                        switchStep(Step.ROUTE);
+                        case TABLE -> switchStep(Step.INTERVAL);
+                        case INTERVAL -> {} // No further step
                     }
                 });
         saveButton.setText(t("common.save"));
@@ -470,20 +472,74 @@ public class TimetableBuilderView extends VerticalLayout implements BeforeEnterO
     private void switchStep(Step step) {
         currentStep = step;
         contentSlot.removeAll();
-        if (step == Step.ROUTE) {
-            contentSlot.add(routeStep.createContent());
-        } else {
-            LocalDate from = order.getValidFrom() != null ? order.getValidFrom() : LocalDate.now();
-            LocalDate to = order.getValidTo() != null ? order.getValidTo() : from.plusMonths(3);
-            contentSlot.add(
-                    tableStep.createContent(
-                            from,
-                            to,
-                            validityCalendar,
-                            routeSummaryText(timetableRows, currentRoute)));
+        switch (step) {
+            case ROUTE -> contentSlot.add(routeStep.createContent());
+            case TABLE -> {
+                LocalDate from =
+                        order.getValidFrom() != null ? order.getValidFrom() : LocalDate.now();
+                LocalDate to = order.getValidTo() != null ? order.getValidTo() : from.plusMonths(3);
+                contentSlot.add(
+                        tableStep.createContent(
+                                from,
+                                to,
+                                validityCalendar,
+                                routeSummaryText(timetableRows, currentRoute)));
+            }
+            case INTERVAL -> contentSlot.add(createIntervalStep());
         }
         updateStepControls();
         refreshStatusBar();
+    }
+
+    /** Creates the interval step layout: centered card with the IntervalTimetablePanel. */
+    private Component createIntervalStep() {
+        intervalPanel.setRouteAvailable(!timetableRows.isEmpty());
+        if (routeStep.getDepartureAnchor() != null) {
+            intervalPanel.setDefaultDeparture(routeStep.getDepartureAnchor());
+        }
+
+        Div wrapper = new Div();
+        wrapper.setWidthFull();
+        wrapper.getStyle()
+                .set("display", "flex")
+                .set("flex-direction", "column")
+                .set("align-items", "center")
+                .set("padding", "var(--lumo-space-l) 0")
+                .set("height", "100%")
+                .set("box-sizing", "border-box");
+
+        Div card = new Div();
+        card.getStyle()
+                .set("width", "100%")
+                .set("max-width", "720px")
+                .set("background", "var(--rom-bg-card)")
+                .set("border", "1px solid var(--rom-border)")
+                .set("border-radius", "6px")
+                .set("padding", "24px")
+                .set("box-sizing", "border-box");
+
+        Span header = new Span(t("timetable.interval.step.header"));
+        header.getStyle()
+                .set("display", "block")
+                .set("font-size", "15px")
+                .set("font-weight", "600")
+                .set("color", "var(--rom-text-primary)")
+                .set("margin-bottom", "6px");
+
+        Span help = new Span(t("timetable.interval.step.help"));
+        help.getStyle()
+                .set("display", "block")
+                .set("font-size", "12px")
+                .set("color", "var(--rom-text-muted)")
+                .set("margin-bottom", "16px");
+
+        // Make the interval panel always visible inside step 3
+        intervalPanel.setVisible(true);
+        intervalPanel.getStyle().set("margin-top", "0");
+
+        card.add(header, help, intervalPanel);
+        wrapper.add(card);
+        return wrapper;
     }
 
     private void loadExistingData() {
@@ -520,7 +576,8 @@ public class TimetableBuilderView extends VerticalLayout implements BeforeEnterO
     }
 
     private void savePosition() {
-        if (currentStep == Step.TABLE && !tableStep.syncCurrentEditor()) {
+        if ((currentStep == Step.TABLE || currentStep == Step.INTERVAL)
+                && !tableStep.syncCurrentEditor()) {
             return;
         }
         if (positionName.getValue().isBlank()) {
@@ -560,19 +617,32 @@ public class TimetableBuilderView extends VerticalLayout implements BeforeEnterO
     }
 
     private void updateStepControls() {
+        boolean hasRows = !timetableRows.isEmpty();
         styleStepBadge(stepOneBadge, t("timetable.step.route"), currentStep == Step.ROUTE, true);
+        styleStepBadge(stepTwoBadge, t("timetable.step.table"), currentStep == Step.TABLE, hasRows);
         styleStepBadge(
-                stepTwoBadge,
-                t("timetable.step.table"),
-                currentStep == Step.TABLE,
-                !timetableRows.isEmpty());
+                stepThreeBadge,
+                t("timetable.step.interval"),
+                currentStep == Step.INTERVAL,
+                hasRows);
         stepBackButton.setText(
                 currentStep == Step.ROUTE ? t("timetable.backToOrder") : t("common.back"));
-        stepNextButton.setText(
-                currentStep == Step.ROUTE ? t("common.next") : t("timetable.step.route"));
-        saveButton.setVisible(currentStep == Step.TABLE);
+
+        switch (currentStep) {
+            case ROUTE -> stepNextButton.setText(t("common.next"));
+            case TABLE -> stepNextButton.setText(t("timetable.step.interval"));
+            case INTERVAL -> stepNextButton.setText("");
+        }
+
+        saveButton.setVisible(currentStep == Step.TABLE || currentStep == Step.INTERVAL);
+        stepNextButton.setVisible(currentStep != Step.INTERVAL);
+
         boolean nextEnabled =
-                currentStep == Step.TABLE || (!timetableRows.isEmpty() && !routeDirty);
+                switch (currentStep) {
+                    case ROUTE -> hasRows && !routeDirty;
+                    case TABLE -> hasRows;
+                    case INTERVAL -> false;
+                };
         stepNextButton.setEnabled(nextEnabled);
     }
 
@@ -650,6 +720,7 @@ public class TimetableBuilderView extends VerticalLayout implements BeforeEnterO
 
     private enum Step {
         ROUTE,
-        TABLE
+        TABLE,
+        INTERVAL
     }
 }
