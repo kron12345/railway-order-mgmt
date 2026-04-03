@@ -9,6 +9,8 @@ import jakarta.annotation.security.RolesAllowed;
 import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.Span;
+import com.vaadin.flow.component.orderedlayout.FlexComponent;
+import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.splitlayout.SplitLayout;
 import com.vaadin.flow.component.treegrid.TreeGrid;
@@ -18,10 +20,12 @@ import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 
 import com.ordermgmt.railway.domain.pathmanager.model.PathProcessState;
+import com.ordermgmt.railway.domain.pathmanager.model.PathProcessType;
 import com.ordermgmt.railway.domain.pathmanager.model.PmJourneyLocation;
 import com.ordermgmt.railway.domain.pathmanager.model.PmReferenceTrain;
 import com.ordermgmt.railway.domain.pathmanager.model.PmTimetableYear;
 import com.ordermgmt.railway.domain.pathmanager.model.PmTrainVersion;
+import com.ordermgmt.railway.domain.pathmanager.model.TtrPhase;
 import com.ordermgmt.railway.domain.pathmanager.repository.PmJourneyLocationRepository;
 import com.ordermgmt.railway.domain.pathmanager.repository.PmProcessStepRepository;
 import com.ordermgmt.railway.domain.pathmanager.repository.PmReferenceTrainRepository;
@@ -29,6 +33,7 @@ import com.ordermgmt.railway.domain.pathmanager.repository.PmTimetableYearReposi
 import com.ordermgmt.railway.domain.pathmanager.repository.PmTrainVersionRepository;
 import com.ordermgmt.railway.domain.pathmanager.service.PathManagerService;
 import com.ordermgmt.railway.domain.pathmanager.service.PathProcessEngine;
+import com.ordermgmt.railway.domain.pathmanager.service.TtrPhaseResolver;
 import com.ordermgmt.railway.ui.component.StatusBadge;
 import com.ordermgmt.railway.ui.component.pathmanager.JourneyLocationPanel;
 import com.ordermgmt.railway.ui.component.pathmanager.ProcessSimulationPanel;
@@ -49,6 +54,7 @@ public class PathManagerView extends VerticalLayout {
     private final PathManagerService pathManagerService;
     private final PathProcessEngine processEngine;
     private final PmProcessStepRepository processStepRepository;
+    private final TtrPhaseResolver ttrPhaseResolver;
 
     private TreeGrid<TreeNode> treeGrid;
     private Div detailContainer;
@@ -60,7 +66,8 @@ public class PathManagerView extends VerticalLayout {
             PmJourneyLocationRepository journeyLocationRepository,
             PathManagerService pathManagerService,
             PathProcessEngine processEngine,
-            PmProcessStepRepository processStepRepository) {
+            PmProcessStepRepository processStepRepository,
+            TtrPhaseResolver ttrPhaseResolver) {
         this.timetableYearRepository = timetableYearRepository;
         this.referenceTrainRepository = referenceTrainRepository;
         this.trainVersionRepository = trainVersionRepository;
@@ -68,6 +75,7 @@ public class PathManagerView extends VerticalLayout {
         this.pathManagerService = pathManagerService;
         this.processEngine = processEngine;
         this.processStepRepository = processStepRepository;
+        this.ttrPhaseResolver = ttrPhaseResolver;
 
         setPadding(false);
         setSpacing(false);
@@ -182,6 +190,9 @@ public class PathManagerView extends VerticalLayout {
                 .set("margin-bottom", "var(--lumo-space-s)");
         card.add(title);
 
+        // TTR phase indicator
+        card.add(createTtrPhaseBadge(year));
+
         card.add(createInfoRow("Label", year.getLabel()));
         card.add(
                 createInfoRow(
@@ -191,7 +202,80 @@ public class PathManagerView extends VerticalLayout {
                 createInfoRow(
                         "End", year.getEndDate() != null ? year.getEndDate().toString() : "--"));
 
+        // Phase-specific process info
+        if (year.getStartDate() != null) {
+            TtrPhase phase = ttrPhaseResolver.resolvePhase(year, java.time.LocalDate.now());
+            PathProcessType processType =
+                    ttrPhaseResolver.resolveProcessType(year, java.time.LocalDate.now());
+            card.add(
+                    createInfoRow(
+                            getTranslation("ttr.phase.info", ""),
+                            getTranslation("ttr.phase." + phase.name())));
+            if (processType != null) {
+                card.add(
+                        createInfoRow(
+                                getTranslation("ttr.phase.processType", ""),
+                                processType.name() + " (" + processType.code() + ")"));
+            }
+            if (!ttrPhaseResolver.isDraftOfferAllowed(year, java.time.LocalDate.now())) {
+                card.add(createInfoRow("", getTranslation("ttr.phase.noDraft")));
+            }
+        }
+
         detailContainer.add(card);
+    }
+
+    private HorizontalLayout createTtrPhaseBadge(PmTimetableYear year) {
+        HorizontalLayout row = new HorizontalLayout();
+        row.setAlignItems(FlexComponent.Alignment.CENTER);
+        row.setSpacing(true);
+        row.getStyle().set("margin-bottom", "var(--lumo-space-s)");
+
+        if (year.getStartDate() == null) {
+            return row;
+        }
+
+        TtrPhase phase = ttrPhaseResolver.resolvePhase(year, java.time.LocalDate.now());
+        String badgeText =
+                "FPJ " + year.getYear() + " — " + getTranslation("ttr.phase." + phase.name());
+
+        Span badge = new Span(badgeText);
+        badge.getStyle()
+                .set("padding", "4px 12px")
+                .set("border-radius", "12px")
+                .set("font-size", "12px")
+                .set("font-weight", "600");
+
+        switch (phase) {
+            case ANNUAL_ORDERING ->
+                    badge.getStyle()
+                            .set("background", "rgba(34, 197, 94, 0.15)")
+                            .set("color", "rgb(34, 197, 94)")
+                            .set("border", "1px solid rgba(34, 197, 94, 0.3)");
+            case LATE_ORDERING ->
+                    badge.getStyle()
+                            .set("background", "rgba(234, 179, 8, 0.15)")
+                            .set("color", "rgb(202, 138, 4)")
+                            .set("border", "1px solid rgba(234, 179, 8, 0.3)");
+            case AD_HOC_ORDERING ->
+                    badge.getStyle()
+                            .set("background", "rgba(249, 115, 22, 0.15)")
+                            .set("color", "rgb(234, 88, 12)")
+                            .set("border", "1px solid rgba(249, 115, 22, 0.3)");
+            case PAST ->
+                    badge.getStyle()
+                            .set("background", "rgba(156, 163, 175, 0.15)")
+                            .set("color", "rgb(107, 114, 128)")
+                            .set("border", "1px solid rgba(156, 163, 175, 0.3)");
+            default ->
+                    badge.getStyle()
+                            .set("background", "rgba(99, 102, 241, 0.15)")
+                            .set("color", "rgb(79, 70, 229)")
+                            .set("border", "1px solid rgba(99, 102, 241, 0.3)");
+        }
+
+        row.add(badge);
+        return row;
     }
 
     private void showTrainDetail(TreeNode.TrainNode node) {
@@ -209,6 +293,7 @@ public class PathManagerView extends VerticalLayout {
                         train,
                         processEngine,
                         processStepRepository,
+                        ttrPhaseResolver,
                         (key, args) -> getTranslation(key),
                         updatedTrain -> refreshTree());
 

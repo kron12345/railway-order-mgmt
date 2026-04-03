@@ -1,5 +1,6 @@
 package com.ordermgmt.railway.domain.pathmanager.service;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.EnumSet;
@@ -14,11 +15,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.ordermgmt.railway.domain.pathmanager.model.PathAction;
 import com.ordermgmt.railway.domain.pathmanager.model.PathProcessState;
+import com.ordermgmt.railway.domain.pathmanager.model.PathProcessType;
 import com.ordermgmt.railway.domain.pathmanager.model.PmJourneyLocation;
 import com.ordermgmt.railway.domain.pathmanager.model.PmProcessStep;
 import com.ordermgmt.railway.domain.pathmanager.model.PmReferenceTrain;
+import com.ordermgmt.railway.domain.pathmanager.model.PmTimetableYear;
 import com.ordermgmt.railway.domain.pathmanager.model.PmTrainVersion;
 import com.ordermgmt.railway.domain.pathmanager.model.ProcessStepResult;
+import com.ordermgmt.railway.domain.pathmanager.model.TtrPhase;
 import com.ordermgmt.railway.domain.pathmanager.model.VersionType;
 import com.ordermgmt.railway.domain.pathmanager.repository.PmProcessStepRepository;
 import com.ordermgmt.railway.domain.pathmanager.repository.PmReferenceTrainRepository;
@@ -41,6 +45,7 @@ public class PathProcessEngine {
     private final PmReferenceTrainRepository referenceTrainRepository;
     private final PmTrainVersionRepository trainVersionRepository;
     private final PmProcessStepRepository processStepRepository;
+    private final TtrPhaseResolver ttrPhaseResolver;
 
     /** Static transition table: state -> allowed actions. */
     private static final Map<PathProcessState, Set<PathAction>> ALLOWED_TRANSITIONS;
@@ -121,7 +126,20 @@ public class PathProcessEngine {
     public Set<PathAction> getAvailableActions(UUID referenceTrainId) {
         PmReferenceTrain train = loadTrain(referenceTrainId);
         Set<PathAction> actions = ALLOWED_TRANSITIONS.get(train.getProcessState());
-        return actions != null ? EnumSet.copyOf(actions) : EnumSet.noneOf(PathAction.class);
+        if (actions == null) {
+            return EnumSet.noneOf(PathAction.class);
+        }
+        EnumSet<PathAction> filtered = EnumSet.copyOf(actions);
+
+        // In Bestellphase 3 (Late/Ad Hoc): remove IM_DRAFT_OFFER from RECEIPT_CONFIRMED
+        if (train.getProcessState() == PathProcessState.RECEIPT_CONFIRMED
+                && !isDraftOfferAllowed(train)) {
+            filtered.remove(PathAction.IM_DRAFT_OFFER);
+            // Ensure IM_FINAL_OFFER is available as direct path
+            filtered.add(PathAction.IM_FINAL_OFFER);
+        }
+
+        return filtered;
     }
 
     /**
@@ -137,7 +155,7 @@ public class PathProcessEngine {
 
         PmReferenceTrain train = loadTrain(referenceTrainId);
         PathProcessState currentState = train.getProcessState();
-        validateTransition(currentState, action);
+        validateTransition(currentState, action, train);
 
         PathProcessState newState = resolveTargetState(currentState, action);
 
@@ -162,6 +180,46 @@ public class PathProcessEngine {
         return new ProcessStepResult(step, newState, newVersion);
     }
 
+    /**
+     * Resolves the current TTR phase for the given reference train.
+     *
+     * @param referenceTrainId the reference train ID
+     * @return the current TTR phase, or {@code null} if the year has no dates
+     */
+    @Transactional(readOnly = true)
+    public TtrPhase resolvePhaseForTrain(UUID referenceTrainId) {
+        PmReferenceTrain train = loadTrain(referenceTrainId);
+        PmTimetableYear year = train.getTimetableYear();
+        if (year == null || year.getStartDate() == null) {
+            return null;
+        }
+        return ttrPhaseResolver.resolvePhase(year, LocalDate.now());
+    }
+
+    /**
+     * Resolves the TTT process type for the given reference train based on the current TTR phase.
+     *
+     * @param referenceTrainId the reference train ID
+     * @return the process type, or {@code null} if ordering is not yet possible
+     */
+    @Transactional(readOnly = true)
+    public PathProcessType resolveProcessTypeForTrain(UUID referenceTrainId) {
+        PmReferenceTrain train = loadTrain(referenceTrainId);
+        PmTimetableYear year = train.getTimetableYear();
+        if (year == null || year.getStartDate() == null) {
+            return null;
+        }
+        return ttrPhaseResolver.resolveProcessType(year, LocalDate.now());
+    }
+
+    private boolean isDraftOfferAllowed(PmReferenceTrain train) {
+        PmTimetableYear year = train.getTimetableYear();
+        if (year == null || year.getStartDate() == null) {
+            return true; // default: allow if no year data
+        }
+        return ttrPhaseResolver.isDraftOfferAllowed(year, LocalDate.now());
+    }
+
     private String getCurrentUsername() {
         var auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth != null && auth.isAuthenticated()) {
@@ -179,9 +237,20 @@ public class PathProcessEngine {
                                         "Reference train not found: " + referenceTrainId));
     }
 
-    private void validateTransition(PathProcessState currentState, PathAction action) {
+    private void validateTransition(
+            PathProcessState currentState, PathAction action, PmReferenceTrain train) {
         Set<PathAction> allowed = ALLOWED_TRANSITIONS.get(currentState);
-        if (allowed == null || !allowed.contains(action)) {
+        boolean isAllowed = allowed != null && allowed.contains(action);
+
+        // Dynamic rule: IM_FINAL_OFFER is allowed from RECEIPT_CONFIRMED in Bestellphase 3
+        if (!isAllowed
+                && currentState == PathProcessState.RECEIPT_CONFIRMED
+                && action == PathAction.IM_FINAL_OFFER
+                && !isDraftOfferAllowed(train)) {
+            isAllowed = true;
+        }
+
+        if (!isAllowed) {
             throw new IllegalStateException(
                     "Action "
                             + action

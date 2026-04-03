@@ -31,6 +31,7 @@ class PathProcessEngineTest {
     @Mock private PmReferenceTrainRepository referenceTrainRepository;
     @Mock private PmTrainVersionRepository trainVersionRepository;
     @Mock private PmProcessStepRepository processStepRepository;
+    @Mock private TtrPhaseResolver ttrPhaseResolver;
 
     private PathProcessEngine engine;
 
@@ -38,7 +39,10 @@ class PathProcessEngineTest {
     void setUp() {
         engine =
                 new PathProcessEngine(
-                        referenceTrainRepository, trainVersionRepository, processStepRepository);
+                        referenceTrainRepository,
+                        trainVersionRepository,
+                        processStepRepository,
+                        ttrPhaseResolver);
     }
 
     // ── getAvailableActions ───────────────────────────────────────────
