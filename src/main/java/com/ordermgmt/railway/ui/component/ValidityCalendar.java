@@ -37,6 +37,7 @@ public class ValidityCalendar extends Div {
     private final Set<LocalDate> selectedDates = new LinkedHashSet<>();
     private final Map<LocalDate, Div> cellMap = new LinkedHashMap<>();
     private final Span countLabel = new Span();
+    private boolean compact = false;
 
     public ValidityCalendar(LocalDate minDate, LocalDate maxDate) {
         this.minDate = minDate;
@@ -49,9 +50,26 @@ public class ValidityCalendar extends Div {
                 .set("padding", "12px")
                 .set("box-sizing", "border-box");
 
+        rebuildCalendar();
+    }
+
+    /** Enables or disables compact mode (single-row per month with tiny day squares). */
+    public void setCompact(boolean compact) {
+        if (this.compact == compact) {
+            return;
+        }
+        this.compact = compact;
+        rebuildCalendar();
+    }
+
+    private void rebuildCalendar() {
+        cellMap.clear();
+        removeAll();
         add(createToolbar());
-        add(createWeekdayHeader());
-        add(createCalendarGrid());
+        if (!compact) {
+            add(createWeekdayHeader());
+        }
+        add(compact ? createCompactCalendarGrid() : createCalendarGrid());
         add(createFooter());
     }
 
@@ -185,6 +203,81 @@ public class ValidityCalendar extends Div {
             current = current.plusMonths(1);
         }
         return grid;
+    }
+
+    // --- Compact calendar grid: one row per month, all days inline ---
+
+    private Div createCompactCalendarGrid() {
+        Div grid = new Div();
+        grid.getStyle().set("display", "flex").set("flex-direction", "column").set("gap", "4px");
+
+        YearMonth start = YearMonth.from(minDate);
+        YearMonth end = YearMonth.from(maxDate);
+        YearMonth current = start;
+
+        while (!current.isAfter(end)) {
+            grid.add(createCompactMonthRow(current));
+            current = current.plusMonths(1);
+        }
+        return grid;
+    }
+
+    private Div createCompactMonthRow(YearMonth ym) {
+        Div row = new Div();
+        row.getStyle()
+                .set("display", "flex")
+                .set("align-items", "center")
+                .set("gap", "2px")
+                .set("flex-wrap", "nowrap");
+
+        Div label = new Div();
+        label.setText(
+                ym.getMonth().getDisplayName(TextStyle.SHORT, Locale.GERMAN) + " " + ym.getYear());
+        label.getStyle()
+                .set("font-family", "'JetBrains Mono', monospace")
+                .set("font-size", "9px")
+                .set("font-weight", "600")
+                .set("color", "var(--rom-text-secondary)")
+                .set("min-width", "60px")
+                .set("flex-shrink", "0");
+        row.add(label);
+
+        int daysInMonth = ym.lengthOfMonth();
+        for (int d = 1; d <= daysInMonth; d++) {
+            LocalDate date = ym.atDay(d);
+            boolean inRange = !date.isBefore(minDate) && !date.isAfter(maxDate);
+            Div cell = compactDayCell(date, d, inRange);
+            if (inRange) {
+                cellMap.put(date, cell);
+            }
+            row.add(cell);
+        }
+        return row;
+    }
+
+    private Div compactDayCell(LocalDate date, int day, boolean selectable) {
+        Div cell = new Div();
+        cell.setText(String.valueOf(day));
+        cell.getStyle()
+                .set("width", "18px")
+                .set("height", "18px")
+                .set("line-height", "18px")
+                .set("text-align", "center")
+                .set("font-family", "'JetBrains Mono', monospace")
+                .set("font-size", "9px")
+                .set("font-weight", "600")
+                .set("border-radius", "3px")
+                .set("cursor", selectable ? "pointer" : "default")
+                .set("flex-shrink", "0")
+                .set("transition", "all 0.1s");
+
+        if (!selectable) {
+            cell.getStyle().set("color", "rgba(148,163,184,0.15)").set("background", "transparent");
+        } else {
+            applyUnselectedStyle(cell);
+            cell.addClickListener(e -> toggleDate(date));
+        }
+        return cell;
     }
 
     private Div createMonthRow(YearMonth ym) {

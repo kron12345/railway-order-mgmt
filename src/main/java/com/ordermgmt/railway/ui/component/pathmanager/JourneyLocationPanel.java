@@ -124,14 +124,20 @@ public class JourneyLocationPanel extends VerticalLayout {
         applyMonoStyle(departureTimeField);
 
         arrivalQualifierField = new ComboBox<>(t("timetable.editor.arrivalMode"));
-        arrivalQualifierField.setItems("ALA", "ALD", "PLA", "PLD");
+        arrivalQualifierField.setItems("ALA", "ELA", "LLA", "PLA");
         arrivalQualifierField.setValue(location.getArrivalQualifier());
         arrivalQualifierField.setWidthFull();
+        arrivalQualifierField.addValueChangeListener(
+                e -> updateTimeFieldLabel(arrivalTimeField, e.getValue(), true));
+        updateTimeFieldLabel(arrivalTimeField, location.getArrivalQualifier(), true);
 
         departureQualifierField = new ComboBox<>(t("timetable.editor.departureMode"));
-        departureQualifierField.setItems("ALA", "ALD", "PLA", "PLD");
+        departureQualifierField.setItems("ALD", "ELD", "LLD", "PLD");
         departureQualifierField.setValue(location.getDepartureQualifier());
         departureQualifierField.setWidthFull();
+        departureQualifierField.addValueChangeListener(
+                e -> updateTimeFieldLabel(departureTimeField, e.getValue(), false));
+        updateTimeFieldLabel(departureTimeField, location.getDepartureQualifier(), false);
 
         dwellField = new IntegerField(t("timetable.editor.dwell"));
         dwellField.setValue(location.getDwellTime());
@@ -193,6 +199,26 @@ public class JourneyLocationPanel extends VerticalLayout {
         field.getStyle()
                 .set("--vaadin-input-field-value-font-family", "'JetBrains Mono', monospace")
                 .set("--vaadin-input-field-value-font-size", "12px");
+    }
+
+    private void updateTimeFieldLabel(TextField timeField, String qualifier, boolean isArrival) {
+        if (qualifier == null || qualifier.isBlank()) {
+            timeField.setLabel(
+                    isArrival ? t("timetable.table.arrival") : t("timetable.table.departure"));
+            return;
+        }
+        String label =
+                switch (qualifier) {
+                    case "ELA" -> t("timetable.editor.earliestArrival");
+                    case "LLA" -> t("timetable.editor.latestArrival");
+                    case "ELD" -> t("timetable.editor.earliestDeparture");
+                    case "LLD" -> t("timetable.editor.latestDeparture");
+                    default ->
+                            isArrival
+                                    ? t("timetable.table.arrival") + " [" + qualifier + "]"
+                                    : t("timetable.table.departure") + " [" + qualifier + "]";
+                };
+        timeField.setLabel(label);
     }
 
     private String safeString(String value) {

@@ -311,7 +311,15 @@ public class TimetableBuilderView extends VerticalLayout implements BeforeEnterO
                 .set("margin", "0")
                 .set("font-size", "var(--lumo-font-size-xl)")
                 .set("color", "var(--rom-text-primary)");
-        Span sub = new Span(order.getOrderNumber() + " \u00b7 " + order.getName());
+        Span sub =
+                new Span(
+                        order.getOrderNumber()
+                                + " \u00b7 "
+                                + order.getName()
+                                + " \u00b7 "
+                                + formatValidityDate(order.getValidFrom())
+                                + " \u2192 "
+                                + formatValidityDate(order.getValidTo()));
         sub.getStyle()
                 .set("display", "block")
                 .set("font-size", "12px")
@@ -628,6 +636,12 @@ public class TimetableBuilderView extends VerticalLayout implements BeforeEnterO
 
     private void navigateToOrder() {
         UI.getCurrent().navigate("orders/" + order.getId());
+    }
+
+    private String formatValidityDate(LocalDate date) {
+        return date != null
+                ? date.format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy"))
+                : "\u2014";
     }
 
     private String t(String key, Object... params) {

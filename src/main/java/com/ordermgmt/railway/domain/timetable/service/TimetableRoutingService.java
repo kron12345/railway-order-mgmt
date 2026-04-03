@@ -214,10 +214,6 @@ public class TimetableRoutingService {
             TimetableRouteResult routeResult,
             LocalTime originDeparture,
             LocalTime destinationArrival) {
-        if (originDeparture == null && destinationArrival == null) {
-            throw new IllegalArgumentException(
-                    "Either origin departure or destination arrival is required.");
-        }
         if (originDeparture != null && destinationArrival != null) {
             throw new IllegalArgumentException(
                     "Use either departure-oriented or arrival-oriented planning.");
@@ -225,6 +221,11 @@ public class TimetableRoutingService {
 
         List<TimetableRowData> rows = baseRows(routeResult);
         if (rows.isEmpty()) {
+            return rows;
+        }
+
+        // No anchors: return rows with distances only, no time estimates
+        if (originDeparture == null && destinationArrival == null) {
             return rows;
         }
 

@@ -336,12 +336,12 @@ class TimetableRowEditorPanel extends Div {
 
     private void configureTimePickers() {
         configureNamedTimePicker(arrivalExactField, t("timetable.editor.exact"));
-        configureNamedTimePicker(arrivalEarliestField, t("timetable.editor.earliest"));
-        configureNamedTimePicker(arrivalLatestField, t("timetable.editor.latest"));
+        configureNamedTimePicker(arrivalEarliestField, t("timetable.editor.earliestArrival"));
+        configureNamedTimePicker(arrivalLatestField, t("timetable.editor.latestArrival"));
         configureNamedTimePicker(arrivalCommercialField, t("timetable.editor.commercial"));
         configureNamedTimePicker(departureExactField, t("timetable.editor.exact"));
-        configureNamedTimePicker(departureEarliestField, t("timetable.editor.earliest"));
-        configureNamedTimePicker(departureLatestField, t("timetable.editor.latest"));
+        configureNamedTimePicker(departureEarliestField, t("timetable.editor.earliestDeparture"));
+        configureNamedTimePicker(departureLatestField, t("timetable.editor.latestDeparture"));
         configureNamedTimePicker(departureCommercialField, t("timetable.editor.commercial"));
 
         String relativeHelp = t("timetable.time.relative.help");

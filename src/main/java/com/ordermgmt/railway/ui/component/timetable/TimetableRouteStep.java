@@ -71,6 +71,7 @@ public class TimetableRouteStep extends Div {
     private final TimetableMap routeMap = new TimetableMap();
 
     private final IntervalTimetablePanel intervalPanel = new IntervalTimetablePanel();
+    private final Div routePreview = new Div();
     private Button calcButton;
     private TimetableRouteResult currentRoute = new TimetableRouteResult(List.of(), 0D);
     private Consumer<RouteCalculationResult> onRouteCalculated;
@@ -138,6 +139,9 @@ public class TimetableRouteStep extends Div {
         departureAnchorField.addValueChangeListener(e -> resetCalcButtonAppearance());
         arrivalAnchorField.addValueChangeListener(e -> resetCalcButtonAppearance());
 
+        routePreview.setVisible(false);
+        routePreview.setWidthFull();
+
         VerticalLayout left = new VerticalLayout();
         left.setPadding(false);
         left.setSpacing(true);
@@ -150,6 +154,7 @@ public class TimetableRouteStep extends Div {
                         viaHeader,
                         viaList,
                         routeSummary,
+                        routePreview,
                         routeError,
                         calcButton));
         left.add(intervalPanel);
@@ -467,10 +472,6 @@ public class TimetableRouteStep extends Div {
             routeError.setText(t("timetable.route.samePoint"));
             return null;
         }
-        if (depAnchor == null && arrAnchor == null) {
-            routeError.setText(t("timetable.route.anchorRequired"));
-            return null;
-        }
         if (depAnchor != null && arrAnchor != null) {
             routeError.setText(t("timetable.route.anchorExclusive"));
             return null;
@@ -519,6 +520,7 @@ public class TimetableRouteStep extends Div {
             applyViaPreferences(rows);
             routeMap.setRoute(currentRoute.points());
             routeSummary.setText(routeSummaryText(rows, currentRoute));
+            buildRoutePreview(rows);
             routeError.setText("");
             markCalcButtonSuccess();
             intervalPanel.setRouteAvailable(true);
@@ -558,6 +560,61 @@ public class TimetableRouteStep extends Div {
                         firstNonBlank(row.getDepartureExact(), row.getEstimatedDeparture()));
             }
         }
+    }
+
+    // ── Route preview ──────────────────────────────────────────────────
+
+    private void buildRoutePreview(List<TimetableRowData> rows) {
+        routePreview.removeAll();
+        if (rows == null || rows.isEmpty()) {
+            routePreview.setVisible(false);
+            return;
+        }
+        routePreview.setVisible(true);
+        routePreview
+                .getStyle()
+                .set("display", "flex")
+                .set("flex-direction", "column")
+                .set("gap", "0")
+                .set("padding", "12px 0");
+        Span header = new Span(t("timetable.route.preview"));
+        header.getStyle()
+                .set("font-weight", "600")
+                .set("font-size", "11px")
+                .set("color", "var(--rom-text-primary)")
+                .set("margin-bottom", "6px");
+        routePreview.add(header);
+        for (TimetableRowData row : rows) {
+            Div line = new Div();
+            line.getStyle()
+                    .set("display", "flex")
+                    .set("align-items", "center")
+                    .set("gap", "8px")
+                    .set("padding", "2px 0")
+                    .set("font-size", "11px");
+            Span dot = new Span("\u25cf");
+            dot.getStyle().set("color", getDotColor(row)).set("font-size", "8px");
+            Span name = new Span(row.getName());
+            name.getStyle().set("color", "var(--rom-text-primary)");
+            Span km = new Span(distanceLabel(row.getDistanceFromStartMeters()));
+            km.getStyle()
+                    .set("color", "var(--rom-text-muted)")
+                    .set("font-family", "'JetBrains Mono', monospace")
+                    .set("font-size", "10px");
+            line.add(dot, name, km);
+            routePreview.add(line);
+        }
+    }
+
+    private String getDotColor(TimetableRowData row) {
+        if (row.getRoutePointRole() == null) {
+            return "var(--rom-text-muted)";
+        }
+        return switch (row.getRoutePointRole()) {
+            case ORIGIN, DESTINATION -> "var(--rom-accent)";
+            case VIA -> "var(--rom-status-info, #3b82f6)";
+            default -> "var(--rom-text-muted)";
+        };
     }
 
     // ── Formatting helpers ─────────────────────────────────────────────

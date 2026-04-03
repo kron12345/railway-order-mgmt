@@ -4,12 +4,10 @@ import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.
 import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.arrivalConstraintLabel;
 import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.createCard;
 import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.departureConstraintLabel;
-import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.distanceLabel;
 import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.helperSpan;
-import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.nvl;
 import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.parseTime;
-import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.roleLabel;
 import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.timeOrDash;
+import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.timingQualifierCode;
 
 import java.time.Duration;
 import java.time.LocalDate;
@@ -78,6 +76,7 @@ public class TimetableTableStep extends Div {
                 .set("height", "100%")
                 .set("min-height", "0");
 
+        validityCalendar.setCompact(true);
         int selectedCount = validityCalendar.getSelectedDates().size();
         String validitySummary =
                 t("position.validity")
@@ -184,54 +183,36 @@ public class TimetableTableStep extends Div {
 
         rowGrid.addColumn(TimetableRowData::getSequence)
                 .setHeader("#")
-                .setAutoWidth(true)
+                .setWidth("30px")
                 .setFlexGrow(0);
-        rowGrid.addColumn(row -> roleLabel(row.getRoutePointRole(), this))
-                .setHeader(t("timetable.table.role"))
-                .setAutoWidth(true);
         rowGrid.addColumn(TimetableRowData::getName)
                 .setHeader(t("timetable.table.point"))
-                .setAutoWidth(true)
                 .setFlexGrow(1);
-        rowGrid.addColumn(row -> nvl(row.getFromName()))
-                .setHeader(t("timetable.table.from"))
-                .setAutoWidth(true);
-        rowGrid.addColumn(row -> nvl(row.getToName()))
-                .setHeader(t("timetable.table.to"))
-                .setAutoWidth(true);
-        rowGrid.addColumn(row -> distanceLabel(row.getSegmentLengthMeters()))
-                .setHeader(t("timetable.table.segment"))
-                .setAutoWidth(true);
-        rowGrid.addColumn(row -> distanceLabel(row.getDistanceFromStartMeters()))
-                .setHeader(t("timetable.table.distance"))
-                .setAutoWidth(true);
-        rowGrid.addColumn(row -> timeOrDash(row.getEstimatedArrival()))
-                .setHeader(t("timetable.table.estimatedArrival"))
-                .setAutoWidth(true);
-        rowGrid.addColumn(row -> arrivalConstraintLabel(row))
+        rowGrid.addColumn(this::combinedArrivalLabel)
                 .setHeader(t("timetable.table.arrival"))
-                .setAutoWidth(true);
-        rowGrid.addColumn(row -> timeOrDash(row.getEstimatedDeparture()))
-                .setHeader(t("timetable.table.estimatedDeparture"))
-                .setAutoWidth(true);
-        rowGrid.addColumn(row -> departureConstraintLabel(row))
+                .setWidth("90px")
+                .setFlexGrow(0);
+        rowGrid.addColumn(this::dwellLabel)
+                .setHeader(t("timetable.editor.dwell"))
+                .setWidth("45px")
+                .setFlexGrow(0);
+        rowGrid.addColumn(this::combinedDepartureLabel)
                 .setHeader(t("timetable.table.departure"))
-                .setAutoWidth(true);
-        rowGrid.addColumn(
-                        row ->
-                                Boolean.TRUE.equals(row.getHalt())
-                                        ? t("common.yes")
-                                        : t("common.no"))
+                .setWidth("90px")
+                .setFlexGrow(0);
+        rowGrid.addColumn(row -> Boolean.TRUE.equals(row.getHalt()) ? "\u2713" : "\u2014")
                 .setHeader(t("timetable.table.halt"))
-                .setAutoWidth(true);
+                .setWidth("35px")
+                .setFlexGrow(0);
         rowGrid.addColumn(row -> activityLabel(row, activityOptions))
                 .setHeader(t("timetable.table.activity"))
-                .setAutoWidth(true);
+                .setWidth("80px")
+                .setFlexGrow(0);
 
         // Actions column: + (insert) and trash (soft-delete)
         rowGrid.addComponentColumn(this::createRowActions)
                 .setHeader("")
-                .setAutoWidth(true)
+                .setWidth("60px")
                 .setFlexGrow(0);
 
         rowGrid.asSingleSelect()
@@ -241,6 +222,32 @@ public class TimetableTableStep extends Div {
                             editorPanel.populate(
                                     selectedRow, isOrigin(selectedRow), isDestination(selectedRow));
                         });
+    }
+
+    /** Combined arrival: constraint if set, else estimate, with qualifier tag. */
+    private String combinedArrivalLabel(TimetableRowData row) {
+        String constraint = arrivalConstraintLabel(row);
+        if (!"\u2014".equals(constraint)) {
+            String qualifier = timingQualifierCode(row.getArrivalMode(), true);
+            return constraint + (qualifier != null ? " [" + qualifier + "]" : "");
+        }
+        return timeOrDash(row.getEstimatedArrival());
+    }
+
+    /** Combined departure: constraint if set, else estimate, with qualifier tag. */
+    private String combinedDepartureLabel(TimetableRowData row) {
+        String constraint = departureConstraintLabel(row);
+        if (!"\u2014".equals(constraint)) {
+            String qualifier = timingQualifierCode(row.getDepartureMode(), false);
+            return constraint + (qualifier != null ? " [" + qualifier + "]" : "");
+        }
+        return timeOrDash(row.getEstimatedDeparture());
+    }
+
+    /** Dwell minutes, only shown if > 0. */
+    private String dwellLabel(TimetableRowData row) {
+        Integer dwell = row.getDwellMinutes();
+        return dwell != null && dwell > 0 ? dwell + "'" : "";
     }
 
     private HorizontalLayout createRowActions(TimetableRowData row) {
