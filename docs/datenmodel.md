@@ -1220,6 +1220,294 @@ In der PathManagerView wird neben jedem Fahrplanjahr ein farbcodierter Badge ang
 
 Die V14-Migration verwendet `ON CONFLICT (year) DO NOTHING` um bei bereits vorhandenen Eintraegen keinen Fehler auszuloesen.
 
+## Ressourcenbedarfe und Bestellpositionen
+
+Dieses Kapitel beschreibt das erweiterte Datenmodell fuer Ressourcenbedarfe, den Ressourcenkatalog und Bestellpositionen mit TTT-Integration. Diese Strukturen bilden die Bruecke zwischen fachlicher Auftragsplanung und operativer Beschaffung (Infrastrukturkapazitaet, Fahrzeuge, Personal).
+
+### ER-Diagramm: Ressourcen und Bestellungen
+
+```mermaid
+erDiagram
+    OrderPosition ||--o{ ResourceNeed : "benoetigt"
+    ResourceNeed }o--o| ResourceCatalogItem : "referenziert"
+    ResourceNeed ||--o{ PurchasePosition : "gedeckt durch"
+    PurchasePosition }o--o| PmPathRequest : "TTT-Verknuepfung"
+
+    OrderPosition {
+        UUID id PK
+        UUID order_id FK
+        VARCHAR name
+        VARCHAR type
+        VARCHAR internal_status
+        UUID pm_reference_train_id
+    }
+
+    ResourceCatalogItem {
+        UUID id PK
+        VARCHAR category
+        VARCHAR code
+        VARCHAR name
+        TEXT description
+        BOOLEAN active
+        INT sort_order
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+        BIGINT version
+    }
+
+    ResourceNeed {
+        UUID id PK
+        UUID order_position_id FK
+        VARCHAR resource_type
+        VARCHAR coverage_type
+        VARCHAR status
+        UUID linked_fahrplan_id
+        VARCHAR description
+        INT quantity
+        UUID catalog_item_id FK
+        DATE valid_from
+        DATE valid_to
+        VARCHAR priority
+        VARCHAR origin
+    }
+
+    PurchasePosition {
+        UUID id PK
+        VARCHAR position_number UK
+        UUID order_position_id FK
+        UUID resource_need_id FK
+        JSONB validity
+        VARCHAR debicode
+        VARCHAR purchase_status
+        TIMESTAMPTZ ordered_at
+        TIMESTAMPTZ status_timestamp
+        VARCHAR description
+        UUID pm_path_request_id
+        UUID pm_path_id
+        VARCHAR pm_process_state
+        VARCHAR pm_ttr_phase
+        TIMESTAMPTZ pm_last_synced
+        JSONB ttt_order_attributes
+    }
+
+    PmPathRequest {
+        UUID id PK
+        UUID reference_train_id FK
+        VARCHAR current_state
+    }
+```
+
+### ResourceCatalogItem (Ressourcenkatalog)
+
+Stammdatenkatalog fuer Fahrzeugtypen und Personalqualifikationen. Wird per CSV-Import oder ueber die Settings-UI gepflegt. Seed-Daten werden in V16 angelegt.
+
+| Feld | Typ | Nullable | Beschreibung |
+| --- | --- | --- | --- |
+| `id` | UUID | nein | Primaerschluessel |
+| `category` | VARCHAR(20) | nein | Kategorie: `VEHICLE_TYPE` oder `PERSONNEL_QUAL` |
+| `code` | VARCHAR(20) | nein | Eindeutiger Code innerhalb der Kategorie (z.B. `RABE502`, `LF`) |
+| `name` | VARCHAR(255) | nein | Anzeigename (z.B. "RABe 502 FLIRT", "Lokfuehrer/in") |
+| `description` | TEXT | ja | Optionale ausfuehrliche Beschreibung |
+| `active` | BOOLEAN | nein | Steuert, ob der Eintrag im UI angeboten wird (Default: true) |
+| `sort_order` | INT | nein | Sortierung im Katalog (Default: 0) |
+| `created_at` | TIMESTAMPTZ | nein | Erstellungszeitpunkt |
+| `updated_at` | TIMESTAMPTZ | nein | Letzter Aenderungszeitpunkt |
+| `version` | BIGINT | nein | Optimistic Locking |
+
+UNIQUE-Constraint: `(category, code)` — pro Kategorie darf ein Code nur einmal vorkommen.
+
+**Seed-Daten (V16-Migration):**
+
+| Kategorie | Code | Name |
+| --- | --- | --- |
+| VEHICLE_TYPE | RABE502 | RABe 502 FLIRT |
+| VEHICLE_TYPE | RABE511 | RABe 511 |
+| VEHICLE_TYPE | RE460 | Re 460 |
+| VEHICLE_TYPE | RE420 | Re 420 |
+| VEHICLE_TYPE | IC2000 | IC 2000 Wagen |
+| VEHICLE_TYPE | EW4 | Einheitswagen IV |
+| PERSONNEL_QUAL | LF | Lokfuehrer/in |
+| PERSONNEL_QUAL | ZF | Zugfuehrer/in |
+| PERSONNEL_QUAL | RG | Rangierleiter/in |
+| PERSONNEL_QUAL | KUCO | Kundenbegleiter/in |
+
+### ResourceNeed (erweiterte Felder)
+
+Der Ressourcenbedarf wurde in V16 um Katalogverknuepfung, Mengen, Gueltigkeit, Prioritaet und Herkunft erweitert. Die bisherigen Basisfelder (`id`, `orderPositionId`, `resourceType`, `coverageType`, `status`, `linkedFahrplanId`) bleiben unveraendert.
+
+| Feld | Typ | Nullable | Beschreibung |
+| --- | --- | --- | --- |
+| `description` | VARCHAR(255) | ja | Freitextbeschreibung des Bedarfs |
+| `quantity` | INT | ja | Benoetigte Menge (Default: 1, Minimum: 1) |
+| `catalog_item_id` | UUID (FK) | ja | Verweis auf `resource_catalog_items` — konkretisiert den Bedarf |
+| `valid_from` | DATE | ja | Beginn des Bedarfszeitraums (abgeleitet aus Positions-Startdatum) |
+| `valid_to` | DATE | ja | Ende des Bedarfszeitraums (abgeleitet aus Positions-Enddatum) |
+| `priority` | VARCHAR(10) | ja | Prioritaet: `HIGH`, `MEDIUM`, `LOW` (Default: `MEDIUM`) |
+| `origin` | VARCHAR(20) | ja | Herkunft: `AUTO`, `MANUAL`, `PLANNING` (Default: `MANUAL`) |
+
+**Automatische Ressourcenanlage (`ResourceNeedService.createDefaultResources`):**
+
+Beim Speichern einer `FAHRPLAN`-Position werden automatisch drei Ressourcenbedarfe mit `origin = AUTO` angelegt:
+
+| ResourceType | CoverageType | Zweck |
+| --- | --- | --- |
+| `CAPACITY` | `EXTERNAL` | Infrastrukturkapazitaet (Trasse) — verlinkt via `linkedFahrplanId` auf TimetableArchive |
+| `VEHICLE` | `INTERNAL` | Fahrzeugbedarf (Rollmaterial) |
+| `PERSONNEL` | `INTERNAL` | Personalbedarf (Triebfahrzeugfuehrer, Zugbegleiter) |
+
+### PurchasePosition (erweiterte Felder)
+
+Die Bestellposition wurde in V16 um Path-Manager-Verknuepfung und in V17 um TTT-Bestellattribute erweitert. Die bisherigen Basisfelder (`id`, `positionNumber`, `orderPositionId`, `resourceNeedId`, `validity`, `debicode`, `purchaseStatus`, `orderedAt`, `statusTimestamp`) bleiben unveraendert.
+
+| Feld | Typ | Nullable | Beschreibung |
+| --- | --- | --- | --- |
+| `description` | VARCHAR(255) | ja | Freitextbeschreibung der Bestellung |
+| `pm_path_request_id` | UUID | ja | Verweis auf `pm_path_requests` — Verknuepfung zum TTT-Trassenantrag |
+| `pm_path_id` | UUID | ja | Verweis auf `pm_paths` — zugewiesene Trasse |
+| `pm_process_state` | VARCHAR(30) | ja | Letzter synchronisierter Prozessstatus aus dem Path Manager |
+| `pm_ttr_phase` | VARCHAR(30) | ja | TTR-Phase zum Zeitpunkt der letzten Synchronisation |
+| `pm_last_synced` | TIMESTAMPTZ | ja | Zeitpunkt der letzten Status-Synchronisation |
+| `ttt_order_attributes` | JSONB | ja | Erweiterte TTT-Bestellattribute aus dem TttOrderDialog (V17) |
+
+### ResourcePriority (Enum)
+
+| Wert | Beschreibung |
+| --- | --- |
+| `HIGH` | Hohe Prioritaet — kritischer Bedarf |
+| `MEDIUM` | Mittlere Prioritaet (Default) |
+| `LOW` | Niedrige Prioritaet — optional oder nachrangig |
+
+### ResourceOrigin (Enum)
+
+| Wert | Beschreibung |
+| --- | --- |
+| `AUTO` | Automatisch erzeugt (z.B. beim Speichern einer FAHRPLAN-Position) |
+| `MANUAL` | Manuell durch den Benutzer angelegt (Default) |
+| `PLANNING` | Aus der Planungsphase erzeugt |
+
+### PurchaseStatus — Statusfluss
+
+```mermaid
+stateDiagram-v2
+    [*] --> OFFEN : Bestellposition erstellt
+    OFFEN --> BESTELLT : triggerTttOrder() / TTT-Antrag gesendet
+    BESTELLT --> BESTAETIGT : PM-Status = BOOKED (Trasse gebucht)
+    BESTELLT --> ABGELEHNT : PM-Status = NO_ALTERNATIVE / CANCELED
+    BESTELLT --> STORNIERT : PM-Status = WITHDRAWN / SUPERSEDED
+    OFFEN --> STORNIERT : Manuell storniert
+    BESTAETIGT --> [*]
+    ABGELEHNT --> [*]
+    STORNIERT --> [*]
+```
+
+| Status | Beschreibung |
+| --- | --- |
+| `OFFEN` | Bestellposition erstellt, noch nicht bestellt |
+| `BESTELLT` | TTT-Antrag gesendet, wartet auf IM-Antwort. Umfasst auch Zwischenstatus: DRAFT_OFFERED, FINAL_OFFERED, RECEIPT_CONFIRMED |
+| `BESTAETIGT` | Trasse gebucht (PM-Status = BOOKED) |
+| `ABGELEHNT` | Keine Alternative verfuegbar oder Trasse abgesagt (PM-Status = NO_ALTERNATIVE / CANCELED) |
+| `STORNIERT` | Antrag zurueckgezogen oder durch neue Version ersetzt (PM-Status = WITHDRAWN / SUPERSEDED) |
+
+**Status-Mapping (`PurchaseOrderService.mapProcessStateToPurchaseStatus`):**
+
+| PathProcessState | PurchaseStatus |
+| --- | --- |
+| CREATED, MODIFIED, RECEIPT_CONFIRMED, DRAFT_OFFERED, FINAL_OFFERED | BESTELLT |
+| BOOKED | BESTAETIGT |
+| NO_ALTERNATIVE, CANCELED | ABGELEHNT |
+| WITHDRAWN, SUPERSEDED | STORNIERT |
+
+### TTT-Integration: PurchasePosition und Path Manager
+
+Die `PurchasePosition` bildet die Bruecke zwischen dem Auftragsmanagement und dem TTT-Prozess im Path Manager. Der Ablauf:
+
+1. Benutzer erstellt eine `PurchasePosition` fuer einen `CAPACITY`-Ressourcenbedarf
+2. Ueber den `TttOrderDialog` erfasst der Benutzer Pflicht- und optionale Bestellattribute
+3. `PurchaseOrderService.triggerTttOrder()` wird aufgerufen:
+   - Speichert die TTT-Attribute als JSONB auf der PurchasePosition
+   - Extrahiert den `debicode` aus den Attributen
+   - Erstellt oder findet den zugehoerigen `PmReferenceTrain`
+   - Fuehrt `PathProcessEngine.executeTransition(SEND_REQUEST)` aus
+   - Speichert die `pmPathRequestId` auf der PurchasePosition
+   - Setzt den Status auf `BESTELLT`
+4. `syncTttStatus()` kann jederzeit aufgerufen werden, um den aktuellen PM-Prozessstatus zu lesen und den PurchaseStatus entsprechend zu aktualisieren
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant RP as ResourcePanel
+    participant PD as PurchaseDialog
+    participant TTT as TttOrderDialog
+    participant POS as PurchaseOrderService
+    participant PPE as PathProcessEngine
+    participant DB as PostgreSQL
+
+    U->>RP: Klick "Bestellen" bei CAPACITY-Bedarf
+    RP->>PD: Oeffne PurchaseDialog
+    U->>PD: Gueltigkeit + Beschreibung eingeben
+    PD->>POS: createPurchasePosition()
+    POS->>DB: PurchasePosition speichern (OFFEN)
+    PD->>TTT: Oeffne TttOrderDialog (bei CAPACITY+TTT)
+    U->>TTT: Pflichtfelder + optionale Attribute ausfuellen
+    TTT->>POS: triggerTttOrder(id, tttAttributes)
+    POS->>DB: TTT-Attribute speichern
+    POS->>PPE: executeTransition(SEND_REQUEST)
+    PPE->>DB: PmPathRequest erstellen
+    POS->>DB: PurchasePosition -> BESTELLT + pmPathRequestId
+    POS-->>RP: Erfolg
+    RP->>RP: refreshCallback -> UI aktualisieren
+```
+
+### TttOrderAttributes (JSONB-Struktur)
+
+Die JSONB-Spalte `ttt_order_attributes` auf `purchase_positions` speichert die erweiterten Bestellattribute aus dem `TttOrderDialog`. Die Struktur ist flexibel und wird nicht durch ein Schema erzwungen.
+
+**Pflichtfelder:**
+
+| Schluessel | Typ | Beschreibung |
+| --- | --- | --- |
+| `debitCode` | string | Debicode fuer die Netzkapazitaet (wird auch auf `purchase_positions.debicode` extrahiert) |
+| `contactName` | string | Name des Ansprechpartners |
+| `contactEmail` | string | E-Mail-Adresse des Ansprechpartners |
+| `brakeType` | string | Bremsart (z.B. "P", "G", "R") |
+| `trainSequence` | string | Zugfolge / Zugbildung |
+
+**Optionale Sektionen (aufklappbar im Dialog):**
+
+| Sektion | Schluessel | Beschreibung |
+| --- | --- | --- |
+| Traktion | `tractionType`, `tractionCount`, `tractionClass` | Traktionsangaben (Elektro/Diesel, Anzahl, Klasse) |
+| Kalender | `calendarStart`, `calendarEnd`, `calendarBitmap` | Verkehrstagekalender (ueberschreibt Position) |
+| NSP | `networkSpecificParams` | Netzwerkspezifische Parameter (JSON-Objekt) |
+| Referenzen | `externalReference`, `relatedTrainId` | Externe Referenznummer, verkn. Zug-TRID |
+| Erweiterter Kontakt | `contactPhone`, `contactOrg`, `contactRole` | Zusaetzliche Kontaktdaten |
+| Sondertransport | `exceptionalGauge`, `dangerousGoods`, `specialConditions` | Aussergewoehnliche Transporte |
+
+**Beispiel-JSON:**
+
+```json
+{
+  "debitCode": "8500001",
+  "contactName": "Max Muster",
+  "contactEmail": "max.muster@sob.ch",
+  "brakeType": "P",
+  "trainSequence": "Re 460 + IC2000 x8 + BDt",
+  "tractionType": "ELECTRIC",
+  "tractionCount": 1,
+  "tractionClass": "Re 460",
+  "calendarStart": "2026-12-13",
+  "calendarEnd": "2027-06-30",
+  "networkSpecificParams": { "chProfile": "N2" }
+}
+```
+
+### Datenbank-Migrationen fuer Ressourcen/Bestellungen
+
+| Version | Datei | Inhalt |
+| --- | --- | --- |
+| V16 | `V16__resource_catalog_and_extensions.sql` | `resource_catalog_items` + Audit, ResourceNeed-Erweiterungen (description, quantity, catalog_item_id, valid_from, valid_to, priority, origin), PurchasePosition-Erweiterungen (description, pm_path_request_id, pm_path_id, pm_process_state, pm_ttr_phase, pm_last_synced), Seed-Daten (6 Fahrzeugtypen + 4 Personalqualifikationen) |
+| V17 | `V17__ttt_order_attributes.sql` | JSONB-Spalte `ttt_order_attributes` auf `purchase_positions` und `purchase_positions_aud` |
+
 ## Prozesskontext
 
 ```mermaid

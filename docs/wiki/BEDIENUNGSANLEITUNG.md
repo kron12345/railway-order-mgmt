@@ -15,6 +15,7 @@
 - [11. Haeufige Fragen (FAQ)](#11-haeufige-fragen-faq)
 - [12. Fehlerbehebung](#12-fehlerbehebung)
 - [13. Fahrzeugplanung (Vehicle Planning)](#13-fahrzeugplanung-vehicle-planning)
+- [14. Ressourcen und Bestellungen](#14-ressourcen-und-bestellungen)
 
 ---
 
@@ -872,6 +873,182 @@ Fuer Kupplungs-/Abkupplungsvorgaenge und Richtungswechsel stehen folgende TTT-Ak
 | Fahrzeugplanung ansehen | Ja | Ja | Ja |
 | Umlaufplan anlegen / bearbeiten | Ja | Ja | Nein |
 | Zuege per Drag & Drop zuweisen | Ja | Ja | Nein |
+
+---
+
+## 14. Ressourcen und Bestellungen
+
+Dieses Kapitel beschreibt die Ressourcenverwaltung und den Bestellprozess fuer Auftragspositionen. Jede Auftragsposition kann Ressourcenbedarfe haben (z.B. Kapazitaet, Fahrzeuge, Personal), die ueber Bestellpositionen extern beschafft werden.
+
+### 14.1 Ressourcen-Panel
+
+Unterhalb jeder Auftragsposition in der Auftragsdetailansicht befindet sich das **Ressourcen-Panel**. Es zeigt alle Ressourcenbedarfe der Position und deren Bestellungen.
+
+**Automatisch angelegte Ressourcen (FAHRPLAN-Positionen):**
+
+Beim Speichern einer FAHRPLAN-Position werden automatisch drei Ressourcenbedarfe angelegt:
+- **CAPACITY (EXTERNAL)**: Infrastrukturkapazitaet / Trasse — verknuepft mit dem Fahrplanarchiv
+- **VEHICLE (INTERNAL)**: Fahrzeugbedarf / Rollmaterial
+- **PERSONNEL (INTERNAL)**: Personalbedarf (Triebfahrzeugfuehrer, Zugbegleiter)
+
+Diese automatischen Bedarfe haben die Herkunft `AUTO` und koennen nicht geloescht werden.
+
+**Anzeige im Panel:**
+
+Fuer jeden Ressourcenbedarf werden angezeigt:
+- Ressourcentyp (CAPACITY, VEHICLE, PERSONNEL) mit Farbkodierung
+- Deckungsart (INTERNAL / EXTERNAL)
+- Katalog-Eintrag (falls verknuepft, z.B. "RABe 502 FLIRT")
+- Menge und Prioritaet
+- Gueltigkeit (Von / Bis)
+- Zugehoerige Bestellpositionen mit Status
+
+**Aktionsbuttons pro Ressourcenbedarf:**
+- **Bestellen**: Erstellt eine neue Bestellposition fuer diesen Bedarf (oeffnet PurchaseDialog)
+- **TTT**: Bei CAPACITY-Bedarfen: oeffnet den TTT-Bestelldialog (TttOrderDialog) fuer eine bestehende Bestellung
+- **Sync**: Synchronisiert den Status einer bestehenden Bestellung mit dem Path Manager
+
+### 14.2 Ressourcen hinzufuegen (ResourceDialog)
+
+Ueber den **"+ Ressource"**-Button im Ressourcen-Panel koennen manuell weitere Bedarfe hinzugefuegt werden.
+
+**Dialog-Felder:**
+
+| Feld | Pflicht | Beschreibung |
+|---|---|---|
+| **Ressourcentyp** | Ja | VEHICLE, PERSONNEL oder CAPACITY |
+| **Deckungsart** | Ja | INTERNAL (eigene Beschaffung) oder EXTERNAL (externe Bestellung) |
+| **Katalog-Eintrag** | Nein | Auswahl aus dem Ressourcenkatalog (Fahrzeugtypen / Personalqualifikationen) |
+| **Menge** | Ja | Benoetigte Anzahl (mindestens 1) |
+| **Beschreibung** | Nein | Freitext zur Erlaeuterung des Bedarfs |
+
+Der Dialog validiert:
+- Ressourcentyp und Deckungsart muessen gesetzt sein
+- Menge muss >= 1 sein
+
+Die Gueltigkeit und Prioritaet werden automatisch von der Position abgeleitet (MEDIUM als Default-Prioritaet).
+
+### 14.3 Bestellungen erstellen (PurchaseDialog)
+
+Ueber den **"Bestellen"**-Button bei einem Ressourcenbedarf wird eine neue Bestellposition erstellt.
+
+**Dialog-Felder:**
+
+| Feld | Pflicht | Beschreibung |
+|---|---|---|
+| **Gueltigkeit** | Nein | JSON-basierte Gueltigkeitsangabe |
+| **Beschreibung** | Nein | Freitext zur Bestellung |
+
+Die Bestellposition wird mit Status `OFFEN` erstellt.
+
+**Sonderfall CAPACITY + TTT:**
+
+Wenn die Bestellung einen CAPACITY-Bedarf mit externer Deckung betrifft und die Position an den Fahrplanmanager gesendet wurde, wird nach Erstellung der Bestellposition automatisch der **TttOrderDialog** geoeffnet, anstatt die Bestellung direkt auszuloesen.
+
+### 14.4 TTT-Bestellformular (TttOrderDialog)
+
+Der TTT-Bestelldialog ermoeglicht die detaillierte Erfassung aller fuer einen TTT-Trassenantrag benoetigten Attribute. Er wird automatisch geoeffnet, wenn eine CAPACITY-Bestellung mit TTT-Verknuepfung erstellt wird, oder manuell ueber den "TTT"-Button im Ressourcen-Panel.
+
+**Kopfbereich:**
+
+Im Kopf des Dialogs werden die Zugdaten der verknuepften Position angezeigt:
+- Route (Von - Nach)
+- Zeitfenster (Start - Ende)
+- Zugnummer (OTN, falls vorhanden)
+
+**Pflichtfelder:**
+
+| Feld | Beschreibung |
+|---|---|
+| **Debitcode** | Abrechnungscode fuer die Netzkapazitaet (z.B. "8500001") |
+| **Kontaktperson** | Name des fachlichen Ansprechpartners |
+| **E-Mail** | E-Mail-Adresse des Ansprechpartners |
+| **Bremsart** | Bremsart des Zuges (z.B. "P" fuer Personenzug) |
+| **Zugfolge** | Zugbildung / Wagenreihung (z.B. "Re 460 + IC2000 x8 + BDt") |
+
+**Erweiterte Felder (6 aufklappbare Sektionen):**
+
+| Sektion | Felder | Beschreibung |
+|---|---|---|
+| **Traktion** | Traktionsart, Anzahl, Klasse | Elektro-/Diesel-Traktion, Anzahl Triebfahrzeuge, Fahrzeugklasse |
+| **Kalender** | Start, Ende, Bitmap | Verkehrstagekalender (ueberschreibt den Positionskalender fuer die Bestellung) |
+| **NSP** | Netzwerkspezifische Parameter | Netzspezifische Zusatzinformationen (JSON) — z.B. Schweizer Netzprofil |
+| **Referenzen** | Externe Referenz, Verknuepfter Zug | Externe Referenznummer und TRID eines verknuepften Zuges |
+| **Erweiterter Kontakt** | Telefon, Organisation, Rolle | Zusaetzliche Kontaktinformationen |
+| **Sondertransport** | Lademassprofil, Gefahrgut, Sonderbedingungen | Fuer aussergewoehnliche Sendungen |
+
+**Bestellen:**
+
+Beim Klick auf "Bestellen" passiert Folgendes:
+1. Die Pflichtfelder werden validiert
+2. Alle Attribute werden als JSON auf der Bestellposition gespeichert
+3. Der Debitcode wird automatisch extrahiert und auf der Bestellposition gesetzt
+4. Ein TTT-Trassenantrag wird im Path Manager erstellt (oder ein bestehender Referenzzug wiederverwendet)
+5. Die Bestellung wechselt in den Status `BESTELLT`
+6. Das Ressourcen-Panel wird aktualisiert
+
+### 14.5 Status-Tracking und Synchronisation
+
+**Automatisches Status-Mapping:**
+
+Der `PurchaseOrderService` bildet den Prozessstatus des Path Managers auf den Bestellstatus ab:
+
+| Path Manager Status | Bestellstatus |
+|---|---|
+| CREATED, MODIFIED, RECEIPT_CONFIRMED, DRAFT_OFFERED, FINAL_OFFERED | BESTELLT |
+| BOOKED | BESTAETIGT |
+| NO_ALTERNATIVE, CANCELED | ABGELEHNT |
+| WITHDRAWN, SUPERSEDED | STORNIERT |
+
+**Manuelle Synchronisation:**
+
+Ueber den **"Sync"**-Button im Ressourcen-Panel kann der aktuelle Status jederzeit vom Path Manager abgerufen werden. Dabei werden aktualisiert:
+- Prozessstatus (`pmProcessState`)
+- TTR-Phase (`pmTtrPhase`)
+- Bestellstatus (`purchaseStatus`)
+- Synchronisationszeitpunkt (`pmLastSynced`)
+
+**Bulk-Synchronisation:**
+
+Ueber den **"Alle synchronisieren"**-Button werden alle CAPACITY-Bestellungen einer Position auf einmal synchronisiert.
+
+### 14.6 Ressourcen-Katalog (Einstellungen)
+
+Im Einstellungsbereich (Route: `/settings`) steht ein neuer Tab **"Katalog"** zur Verfuegung (nur ADMIN).
+
+**Funktionen:**
+
+- **Anzeige**: Alle Katalogeintraege in einer Tabelle mit Kategorie, Code, Name und Status
+- **CSV-Import**: Upload einer CSV-Datei mit Katalogeintraegen
+
+**CSV-Format:**
+
+```
+code,name,category,active,sortOrder
+RABE502,RABe 502 FLIRT,VEHICLE_TYPE,true,1
+LF,Lokführer/in,PERSONNEL_QUAL,true,1
+```
+
+**Kategorien:**
+
+| Kategorie | Beschreibung |
+|---|---|
+| **VEHICLE_TYPE** | Fahrzeugtypen (z.B. Triebzuege, Lokomotiven, Wagen) |
+| **PERSONNEL_QUAL** | Personalqualifikationen (z.B. Lokfuehrer, Zugfuehrer) |
+
+Der Import ist transaktional — bei einem Fehler wird die gesamte Aktion zurueckgerollt. Die Berechtigung erfordert die Rolle ADMIN oder DISPATCHER.
+
+### 14.7 Berechtigungen
+
+| Funktion | ADMIN | DISPATCHER | VIEWER |
+|---|---|---|---|
+| Ressourcen ansehen | Ja | Ja | Ja |
+| Ressource hinzufuegen | Ja | Ja | Nein |
+| Ressource entfernen | Ja | Ja | Nein |
+| Bestellung erstellen | Ja | Ja | Nein |
+| TTT-Bestellung senden | Ja | Ja | Nein |
+| Status synchronisieren | Ja | Ja | Nein |
+| Katalog importieren | Ja | Ja | Nein |
 
 ---
 

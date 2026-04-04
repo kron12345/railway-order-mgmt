@@ -18,7 +18,7 @@ graph TB
     subgraph UI["UI Layer"]
         Layout["MainLayout"]
         Views["Views<br/>(Dashboard, Orders, Settings, Timetable Builder,<br/>Path Manager, Vehicle Planning)"]
-        Components["Reusable Components<br/>(StatusBadge, PositionTile, TimetableMap, ValidityCalendar,<br/>GanttChart, TrainPalette, ConflictPanel)"]
+        Components["Reusable Components<br/>(StatusBadge, PositionTile, TimetableMap, ValidityCalendar,<br/>GanttChart, TrainPalette, ConflictPanel,<br/>ResourcePanel, ResourceDialog, PurchaseDialog,<br/>TttOrderDialog, CatalogTab)"]
     end
 
     subgraph Domain["Domain Layer (DDD)"]
@@ -224,9 +224,9 @@ sequenceDiagram
 ```mermaid
 graph LR
     subgraph Order["Order Context"]
-        O_M["Order<br/>OrderPosition<br/>ResourceNeed<br/>PurchasePosition"]
+        O_M["Order<br/>OrderPosition<br/>ResourceNeed<br/>PurchasePosition<br/>ResourceCatalogItem"]
         O_R["Repositories"]
-        O_S["OrderService"]
+        O_S["OrderService<br/>ResourceNeedService<br/>PurchaseOrderService<br/>ResourceCatalogImportService"]
     end
 
     subgraph Timetable["Timetable Context"]
@@ -277,13 +277,18 @@ graph LR
 - Vaadin Flow server-side UI
 - `layout/`: `MainLayout`, navigation, breadcrumbs, profile/theme context
 - `view/`: route-annotated views such as `OrderListView`, `OrderDetailView`, `SettingsView`, `TimetableBuilderView`
+- `view/settings/`: `CatalogTab` for resource catalog import and display
+- `component/order/`: `ResourcePanel` (resource needs under each position), `ResourceDialog` (add/edit resource needs), `PurchaseDialog` (create purchase positions), `TttOrderDialog` (TTT order form with mandatory + expert fields), `TttOrderDetailSections` (collapsible detail sections for the TTT dialog)
 - `component/`: reusable UI building blocks such as `PositionTile`, `OrderPositionRow`, `PurchaseCalendarPanel`, `TimetableMap`
 - Styling: custom theme in `frontend/themes/order-mgmt/` plus Vaadin Lumo primitives
 
 ### Domain Layer (`domain/`)
 
 - Organized by bounded context
-- `order/`: orders, positions, resource needs, purchase positions, status model
+- `order/`: orders, positions, resource needs, purchase positions, resource catalog, status model
+  - `ResourceNeedService`: manages lifecycle of resource needs (auto-create defaults for FAHRPLAN, add/remove manual needs, catalog item linking)
+  - `PurchaseOrderService`: manages purchase positions and TTT ordering lifecycle (create, triggerTttOrder, syncTttStatus, status mapping)
+  - `ResourceCatalogImportService`: transactional CSV import for the resource catalog (@PreAuthorize ADMIN/DISPATCHER)
 - `timetable/`: route search, timetable archive, TTT-like row model
 - `pathmanager/`: TTT reference trains, versions, journey locations, routes, paths, process steps, state machine, TTR phase resolver
 - `vehicleplanning/`: rotation sets, vehicles, rotation entries, vehicle operations, conflict detection
@@ -444,7 +449,7 @@ The resolver has no persistence of its own -- it computes phases from `PmTimetab
 
 ## Database
 
-- PostgreSQL 16 with Flyway migrations `V1` to `V14`
+- PostgreSQL 16 with Flyway migrations `V1` to `V17`
 - Shared order-position table with typed behavior via `PositionType`
 - `timetable_archives` stores the detailed timetable rows as `jsonb`
 - `resource_needs.linked_fahrplan_id` provides the technical link from a `CAPACITY` need to an archived timetable
