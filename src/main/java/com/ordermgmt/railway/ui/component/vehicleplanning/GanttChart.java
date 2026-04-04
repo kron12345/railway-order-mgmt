@@ -1,180 +1,340 @@
 package com.ordermgmt.railway.ui.component.vehicleplanning;
 
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
-import java.util.UUID;
 
-import com.vaadin.flow.component.Component;
-import com.vaadin.flow.component.dnd.DragSource;
-import com.vaadin.flow.component.dnd.DropTarget;
+import org.vaadin.tltv.gantt.Gantt;
+import org.vaadin.tltv.gantt.model.Resolution;
+import org.vaadin.tltv.gantt.model.Step;
+import org.vaadin.tltv.gantt.model.SubStep;
+
 import com.vaadin.flow.component.html.Div;
-import com.vaadin.flow.component.html.Span;
 
+import com.ordermgmt.railway.domain.pathmanager.model.PmReferenceTrain;
 import com.ordermgmt.railway.domain.vehicleplanning.model.VpRotationEntry;
 import com.ordermgmt.railway.domain.vehicleplanning.model.VpVehicle;
 
 /**
- * Gantt-style chart showing vehicles as rows and time blocks for their assigned trains. Supports
- * drag-and-drop for moving train entries between vehicles/days.
+ * Gantt chart component for vehicle rotation planning using the tltv Gantt Flow add-on. Each row
+ * (Step) represents either a shelf (unassigned trains) or a duty (vehicle). Each block (SubStep)
+ * represents a train placed in that row. Supports drag-and-drop between rows.
  */
 public class GanttChart extends Div {
 
-    private static final int HOURS = 24;
-    private static final int PIXELS_PER_HOUR = 60;
-    private static final int ROW_HEIGHT = 48;
-    private static final int RULER_HEIGHT = 32;
+    /** UID prefix for shelf rows to distinguish them from duty rows. */
+    public static final String SHELF_PREFIX = "shelf-";
 
-    /**
-     * Placeholder width per block in pixels. Will be replaced with proper time-based positioning
-     * once departure/arrival times are available from the timetable data.
-     */
-    private static final int BLOCK_WIDTH_PX = 100;
+    /** UID prefix for duty rows (uses the VpVehicle UUID). */
+    public static final String DUTY_PREFIX = "duty-";
 
-    /**
-     * Placeholder horizontal offset between consecutive blocks in pixels. Will be replaced with
-     * proper time-based positioning once departure/arrival times are available.
-     */
-    private static final int BLOCK_OFFSET_PX = 120;
+    /** UID prefix for train sub-steps (uses the PmReferenceTrain UUID). */
+    public static final String TRAIN_PREFIX = "train-";
 
-    /** Prefix for drag data originating from existing rotation entries in the Gantt chart. */
-    public static final String DRAG_PREFIX_ENTRY = "ENTRY:";
+    /** UID prefix for entry sub-steps (uses the VpRotationEntry UUID). */
+    public static final String ENTRY_PREFIX = "entry-";
 
-    private final Div rulerRow;
-    private final Div vehicleRows;
+    private static final String COLOR_SHELF_TRAIN = "#FFB800";
+    private static final String COLOR_DUTY_TRAIN = "#009688";
+    private static final String COLOR_SHELF_ROW = "#FFFDE7";
+    private static final String COLOR_DUTY_ROW = "#E0F2F1";
 
-    private DropHandler dropHandler;
+    private final Gantt gantt;
+    private MoveHandler moveHandler;
 
-    /** Callback for when a draggable item is dropped onto a vehicle row. */
+    /** Callback for when a substep is moved to a new row. */
     @FunctionalInterface
-    public interface DropHandler {
-        void onDrop(String dragPayload, UUID targetVehicleId, int dayOfWeek);
+    public interface MoveHandler {
+        /**
+         * Called when a train block is moved.
+         *
+         * @param subStepUid the moved sub-step UID (train- or entry- prefix)
+         * @param newOwnerUid the target row UID (shelf- or duty- prefix)
+         */
+        void onMove(String subStepUid, String newOwnerUid);
     }
 
     public GanttChart() {
-        getStyle()
-                .set("position", "relative")
-                .set("overflow-x", "auto")
-                .set("overflow-y", "auto")
-                .set("background", "var(--lumo-base-color)")
-                .set("border", "1px solid var(--lumo-contrast-10pct)")
-                .set("border-radius", "var(--lumo-border-radius-m)");
+        gantt = new Gantt();
+        gantt.setResolution(Resolution.Hour);
+        gantt.setWidthFull();
+        gantt.setHeight("600px");
+        gantt.setMovableSteps(false);
+        gantt.setResizableSteps(false);
+        gantt.setMovableStepsBetweenRows(true);
+        gantt.setYearRowVisible(false);
+        gantt.setMonthRowVisible(false);
 
-        rulerRow = new Div();
-        rulerRow.getStyle()
-                .set("display", "flex")
-                .set("position", "sticky")
-                .set("top", "0")
-                .set("z-index", "10")
-                .set("background", "var(--lumo-contrast-5pct)")
-                .set("border-bottom", "1px solid var(--lumo-contrast-10pct)")
-                .set("height", RULER_HEIGHT + "px")
-                .set("min-width", (HOURS * PIXELS_PER_HOUR) + "px");
-        buildRuler();
-
-        vehicleRows = new Div();
-        vehicleRows.getStyle().set("min-width", (HOURS * PIXELS_PER_HOUR) + "px");
-
-        add(rulerRow, vehicleRows);
-    }
-
-    public void setDropHandler(DropHandler handler) {
-        this.dropHandler = handler;
-    }
-
-    /** Rebuilds the chart for the given vehicles and selected day of week. */
-    public void refresh(List<VpVehicle> vehicles, int dayOfWeek) {
-        vehicleRows.removeAll();
-        for (VpVehicle vehicle : vehicles) {
-            vehicleRows.add(buildVehicleRow(vehicle, dayOfWeek));
-        }
-    }
-
-    private void buildRuler() {
-        for (int h = 0; h < HOURS; h++) {
-            Span tick = new Span(String.format("%02d:00", h));
-            tick.getStyle()
-                    .set("width", PIXELS_PER_HOUR + "px")
-                    .set("flex-shrink", "0")
-                    .set("text-align", "center")
-                    .set("font-size", "var(--lumo-font-size-xs)")
-                    .set("color", "var(--lumo-secondary-text-color)")
-                    .set("line-height", RULER_HEIGHT + "px")
-                    .set("border-right", "1px solid var(--lumo-contrast-10pct)");
-            rulerRow.add(tick);
-        }
-    }
-
-    private Component buildVehicleRow(VpVehicle vehicle, int dayOfWeek) {
-        Div row = new Div();
-        row.getStyle()
-                .set("position", "relative")
-                .set("height", ROW_HEIGHT + "px")
-                .set("border-bottom", "1px solid var(--lumo-contrast-10pct)")
-                .set("min-width", (HOURS * PIXELS_PER_HOUR) + "px");
-
-        // Make the row a drop target
-        DropTarget<Div> dropTarget = DropTarget.create(row);
-        dropTarget.setDropEffect(com.vaadin.flow.component.dnd.DropEffect.MOVE);
-        dropTarget.addDropListener(
+        gantt.addStepMoveListener(
                 event -> {
-                    if (dropHandler == null) {
+                    if (moveHandler == null) {
                         return;
                     }
-                    event.getDragData()
-                            .ifPresent(
-                                    data -> {
-                                        if (data instanceof String payload) {
-                                            dropHandler.onDrop(payload, vehicle.getId(), dayOfWeek);
-                                        }
-                                    });
+                    var movedStep = event.getAnyStep();
+                    String newOwnerUid = event.getNewUid();
+                    if (movedStep != null && newOwnerUid != null) {
+                        moveHandler.onMove(movedStep.getUid(), newOwnerUid);
+                    }
                 });
 
-        // Render train blocks for this day
+        add(gantt);
+        setSizeFull();
+    }
+
+    public void setMoveHandler(MoveHandler handler) {
+        this.moveHandler = handler;
+    }
+
+    /**
+     * Sets the visible time range for the Gantt chart.
+     *
+     * @param start start of the range
+     * @param end end of the range
+     */
+    public void setTimeRange(LocalDateTime start, LocalDateTime end) {
+        gantt.setStartDateTime(start);
+        gantt.setEndDateTime(end);
+    }
+
+    /**
+     * Loads and renders all data: shelf rows for unassigned trains and duty rows for vehicles.
+     *
+     * @param unassignedTrains trains not yet assigned to any vehicle
+     * @param vehicles the vehicles (duties) with their rotation entries
+     * @param baseDate the reference date for time calculations (determines the day shown)
+     */
+    public void loadData(
+            List<PmReferenceTrain> unassignedTrains,
+            List<VpVehicle> vehicles,
+            LocalDateTime baseDate) {
+        clearAll();
+
+        // Set time range to cover a full day
+        setTimeRange(baseDate.with(LocalTime.MIN), baseDate.with(LocalTime.MAX));
+
+        // Build shelf rows from unassigned trains
+        List<List<PmReferenceTrain>> shelves = calculateShelves(unassignedTrains, baseDate);
+        for (int i = 0; i < shelves.size(); i++) {
+            addShelfRow(i, shelves.get(i), baseDate);
+        }
+
+        // Build duty rows from vehicles
+        for (VpVehicle vehicle : vehicles) {
+            addDutyRow(vehicle, baseDate);
+        }
+    }
+
+    /** Removes all steps from the Gantt chart. */
+    public void clearAll() {
+        List<Step> steps = new ArrayList<>(gantt.getStepsList());
+        gantt.removeSteps(steps);
+    }
+
+    /** Returns the underlying Gantt component (for embedding in layouts). */
+    public Gantt getGantt() {
+        return gantt;
+    }
+
+    private void addShelfRow(int index, List<PmReferenceTrain> trains, LocalDateTime baseDate) {
+        Step shelfRow = new Step();
+        shelfRow.setUid(SHELF_PREFIX + index);
+        shelfRow.setCaption("Shelf " + (index + 1));
+        shelfRow.setBackgroundColor(COLOR_SHELF_ROW);
+        shelfRow.setStartDate(baseDate.with(LocalTime.MIN));
+        shelfRow.setEndDate(baseDate.with(LocalTime.MAX));
+        shelfRow.setMovable(false);
+        shelfRow.setResizable(false);
+        gantt.addStep(shelfRow);
+
+        for (PmReferenceTrain train : trains) {
+            SubStep sub = createTrainSubStep(train, shelfRow, baseDate, COLOR_SHELF_TRAIN);
+            gantt.addSubStep(sub);
+        }
+    }
+
+    private void addDutyRow(VpVehicle vehicle, LocalDateTime baseDate) {
+        Step dutyRow = new Step();
+        dutyRow.setUid(DUTY_PREFIX + vehicle.getId());
+        dutyRow.setCaption(vehicle.getLabel());
+        dutyRow.setBackgroundColor(COLOR_DUTY_ROW);
+        dutyRow.setStartDate(baseDate.with(LocalTime.MIN));
+        dutyRow.setEndDate(baseDate.with(LocalTime.MAX));
+        dutyRow.setMovable(false);
+        dutyRow.setResizable(false);
+        gantt.addStep(dutyRow);
+
         List<VpRotationEntry> entries =
                 vehicle.getEntries().stream()
-                        .filter(e -> e.getDayOfWeek() == dayOfWeek)
-                        .sorted(
-                                java.util.Comparator.comparingInt(
-                                        VpRotationEntry::getSequenceInDay))
+                        .sorted(Comparator.comparingInt(VpRotationEntry::getSequenceInDay))
                         .toList();
 
         for (VpRotationEntry entry : entries) {
-            row.add(buildTrainBlock(entry));
+            SubStep sub = createEntrySubStep(entry, dutyRow, baseDate);
+            gantt.addSubStep(sub);
+        }
+    }
+
+    private SubStep createTrainSubStep(
+            PmReferenceTrain train, Step owner, LocalDateTime baseDate, String color) {
+        SubStep sub = new SubStep(owner);
+        sub.setUid(TRAIN_PREFIX + train.getId());
+        sub.setCaption(buildTrainLabel(train));
+        sub.setBackgroundColor(color);
+        sub.setMovable(true);
+        sub.setResizable(false);
+
+        TrainTimeWindow tw = resolveTrainTimes(train, baseDate);
+        sub.setStartDate(tw.start());
+        sub.setEndDate(tw.end());
+
+        return sub;
+    }
+
+    private SubStep createEntrySubStep(VpRotationEntry entry, Step owner, LocalDateTime baseDate) {
+        PmReferenceTrain train = entry.getReferenceTrain();
+        SubStep sub = new SubStep(owner);
+        sub.setUid(ENTRY_PREFIX + entry.getId());
+        sub.setCaption(buildTrainLabel(train));
+        sub.setBackgroundColor(COLOR_DUTY_TRAIN);
+        sub.setMovable(true);
+        sub.setResizable(false);
+
+        TrainTimeWindow tw = resolveTrainTimes(train, baseDate);
+        sub.setStartDate(tw.start());
+        sub.setEndDate(tw.end());
+
+        return sub;
+    }
+
+    private String buildTrainLabel(PmReferenceTrain train) {
+        String otn = train.getOperationalTrainNumber();
+        return otn != null ? otn : train.getTridCore();
+    }
+
+    /**
+     * Resolves departure/arrival times for a train into a time window on the given base date. Falls
+     * back to a 1-hour placeholder if no journey data is available.
+     */
+    private TrainTimeWindow resolveTrainTimes(PmReferenceTrain train, LocalDateTime baseDate) {
+        // Try to get times from the latest train version's journey locations
+        var versions = train.getTrainVersions();
+        if (versions != null && !versions.isEmpty()) {
+            var latest =
+                    versions.stream()
+                            .max(
+                                    Comparator.comparingInt(
+                                            com.ordermgmt.railway.domain.pathmanager.model
+                                                            .PmTrainVersion
+                                                    ::getVersionNumber))
+                            .orElse(null);
+            if (latest != null) {
+                // Journey locations are loaded lazily; use calendar hints if available
+                String depTime = null;
+                String arrTime = null;
+                // Check via in-memory data if already fetched
+                // (for lazy-loaded collections this won't trigger DB calls in read context)
+                try {
+                    var jlocs = latest.getJourneyLocations();
+                    if (jlocs != null && !jlocs.isEmpty()) {
+                        var sorted =
+                                jlocs.stream()
+                                        .sorted(
+                                                Comparator.comparingInt(
+                                                        com.ordermgmt.railway.domain.pathmanager
+                                                                        .model.PmJourneyLocation
+                                                                ::getSequence))
+                                        .toList();
+                        depTime = sorted.getFirst().getDepartureTime();
+                        arrTime = sorted.getLast().getArrivalTime();
+                    }
+                } catch (org.hibernate.LazyInitializationException ignored) {
+                    // Journey locations not in session; fall through to fallback
+                }
+
+                if (depTime != null && arrTime != null) {
+                    LocalDateTime start = parseTimeOnDate(depTime, baseDate);
+                    LocalDateTime end = parseTimeOnDate(arrTime, baseDate);
+                    if (end.isAfter(start)) {
+                        return new TrainTimeWindow(start, end);
+                    }
+                }
+            }
         }
 
-        return row;
+        // Fallback: 1-hour placeholder block at 06:00
+        LocalDateTime fallbackStart = baseDate.with(LocalTime.of(6, 0));
+        return new TrainTimeWindow(fallbackStart, fallbackStart.plusHours(1));
     }
 
-    private Component buildTrainBlock(VpRotationEntry entry) {
-        String otn = entry.getReferenceTrain().getOperationalTrainNumber();
-        String label = otn != null ? otn : entry.getReferenceTrain().getTridCore();
-
-        Div block = new Div();
-        block.setText(label);
-        block.getStyle()
-                .set("position", "absolute")
-                .set("top", "4px")
-                .set("height", (ROW_HEIGHT - 8) + "px")
-                .set("background", "var(--lumo-primary-color)")
-                .set("color", "var(--lumo-primary-contrast-color)")
-                .set("border-radius", "var(--lumo-border-radius-s)")
-                .set("padding", "0 var(--lumo-space-xs)")
-                .set("font-size", "var(--lumo-font-size-xs)")
-                .set("line-height", (ROW_HEIGHT - 8) + "px")
-                .set("white-space", "nowrap")
-                .set("overflow", "hidden")
-                .set("text-overflow", "ellipsis")
-                .set("cursor", "grab")
-                .set("min-width", "40px");
-
-        // Position based on sequence (placeholder until proper time-based positioning)
-        int left = entry.getSequenceInDay() * BLOCK_OFFSET_PX;
-        block.getStyle().set("left", left + "px").set("width", BLOCK_WIDTH_PX + "px");
-
-        // Make draggable with typed prefix to distinguish from train palette drops
-        DragSource<Div> dragSource = DragSource.create(block);
-        dragSource.setDragData(DRAG_PREFIX_ENTRY + entry.getId());
-        dragSource.setEffectAllowed(com.vaadin.flow.component.dnd.EffectAllowed.MOVE);
-
-        return block;
+    /** Parses a time string (HH:mm or HH:mm:ss) and places it on the given base date. */
+    private LocalDateTime parseTimeOnDate(String time, LocalDateTime baseDate) {
+        try {
+            String[] parts = time.split(":");
+            int hour = Integer.parseInt(parts[0]);
+            int minute = parts.length > 1 ? Integer.parseInt(parts[1]) : 0;
+            // Handle times > 24h (next day) by clamping
+            if (hour >= 24) {
+                hour = 23;
+                minute = 59;
+            }
+            return baseDate.with(LocalTime.of(hour, minute));
+        } catch (Exception e) {
+            return baseDate.with(LocalTime.of(6, 0));
+        }
     }
+
+    /**
+     * Distributes trains into shelf rows so that no two trains in the same shelf overlap in time.
+     * Uses a greedy first-fit algorithm.
+     */
+    private List<List<PmReferenceTrain>> calculateShelves(
+            List<PmReferenceTrain> trains, LocalDateTime baseDate) {
+        List<List<PmReferenceTrain>> shelves = new ArrayList<>();
+        List<List<TrainTimeWindow>> shelfWindows = new ArrayList<>();
+
+        List<PmReferenceTrain> sorted =
+                trains.stream()
+                        .sorted(Comparator.comparing(t -> resolveTrainTimes(t, baseDate).start()))
+                        .toList();
+
+        for (PmReferenceTrain train : sorted) {
+            TrainTimeWindow tw = resolveTrainTimes(train, baseDate);
+            boolean placed = false;
+            for (int i = 0; i < shelves.size(); i++) {
+                if (!overlapsAny(tw, shelfWindows.get(i))) {
+                    shelves.get(i).add(train);
+                    shelfWindows.get(i).add(tw);
+                    placed = true;
+                    break;
+                }
+            }
+            if (!placed) {
+                List<PmReferenceTrain> newShelf = new ArrayList<>();
+                newShelf.add(train);
+                shelves.add(newShelf);
+                List<TrainTimeWindow> newWindows = new ArrayList<>();
+                newWindows.add(tw);
+                shelfWindows.add(newWindows);
+            }
+        }
+
+        // Always have at least one shelf row even if empty
+        if (shelves.isEmpty()) {
+            shelves.add(new ArrayList<>());
+        }
+        return shelves;
+    }
+
+    private boolean overlapsAny(TrainTimeWindow candidate, List<TrainTimeWindow> existing) {
+        for (TrainTimeWindow tw : existing) {
+            if (candidate.start().isBefore(tw.end()) && candidate.end().isAfter(tw.start())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private record TrainTimeWindow(LocalDateTime start, LocalDateTime end) {}
 }

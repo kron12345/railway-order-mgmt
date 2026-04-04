@@ -1,7 +1,9 @@
 package com.ordermgmt.railway.domain.vehicleplanning.service;
 
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
@@ -16,6 +18,7 @@ import com.ordermgmt.railway.domain.pathmanager.repository.PmReferenceTrainRepos
 import com.ordermgmt.railway.domain.pathmanager.repository.PmTimetableYearRepository;
 import com.ordermgmt.railway.domain.pathmanager.repository.PmTrainVersionRepository;
 import com.ordermgmt.railway.domain.vehicleplanning.model.CouplingPosition;
+import com.ordermgmt.railway.domain.vehicleplanning.model.VehicleType;
 import com.ordermgmt.railway.domain.vehicleplanning.model.VpRotationEntry;
 import com.ordermgmt.railway.domain.vehicleplanning.model.VpRotationSet;
 import com.ordermgmt.railway.domain.vehicleplanning.model.VpVehicle;
@@ -133,12 +136,61 @@ public class VehiclePlanningService {
         vehicleRepo.deleteById(vehicleId);
     }
 
+    // --- Vehicle creation ---
+
+    /**
+     * Creates a new vehicle (duty) in the given rotation set.
+     *
+     * @param rotationSetId the rotation set to add the vehicle to
+     * @param label display label for the vehicle
+     * @param vehicleType type of the vehicle
+     * @return the persisted vehicle
+     */
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
+    public VpVehicle addVehicle(UUID rotationSetId, String label, VehicleType vehicleType) {
+        VpRotationSet rs =
+                rotationSetRepo
+                        .findById(rotationSetId)
+                        .orElseThrow(
+                                () ->
+                                        new IllegalArgumentException(
+                                                "Rotation set not found: " + rotationSetId));
+        List<VpVehicle> existing = vehicleRepo.findByRotationSetIdOrderBySequenceAsc(rotationSetId);
+        int nextSeq = existing.isEmpty() ? 0 : existing.getLast().getSequence() + 1;
+
+        VpVehicle vehicle = new VpVehicle();
+        vehicle.setLabel(label);
+        vehicle.setVehicleType(vehicleType);
+        vehicle.setSequence(nextSeq);
+        vehicle.setRotationSet(rs);
+        return vehicleRepo.save(vehicle);
+    }
+
     // --- Available trains ---
 
     /** Returns all reference trains for the given timetable year, ordered by OTN. */
     @Transactional(readOnly = true)
     public List<PmReferenceTrain> getAvailableTrains(int year) {
         return trainRepo.findByTimetableYearYearOrderByOperationalTrainNumberAsc(year);
+    }
+
+    /**
+     * Returns trains not yet assigned to the given rotation set in the specified year. Useful for
+     * populating the "shelf" rows in the Gantt chart.
+     *
+     * @param rotationSetId the rotation set to check assignments against
+     * @param year the timetable year
+     * @return unassigned reference trains ordered by OTN
+     */
+    @Transactional(readOnly = true)
+    public List<PmReferenceTrain> getUnassignedTrains(UUID rotationSetId, int year) {
+        List<PmReferenceTrain> allTrains =
+                trainRepo.findByTimetableYearYearOrderByOperationalTrainNumberAsc(year);
+        Set<UUID> assignedTrainIds =
+                entryRepo.findByVehicleRotationSetId(rotationSetId).stream()
+                        .map(e -> e.getReferenceTrain().getId())
+                        .collect(Collectors.toSet());
+        return allTrains.stream().filter(t -> !assignedTrainIds.contains(t.getId())).toList();
     }
 
     // --- Entry management ---

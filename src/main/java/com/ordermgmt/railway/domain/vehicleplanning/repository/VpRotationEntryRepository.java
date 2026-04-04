@@ -16,4 +16,6 @@ public interface VpRotationEntryRepository extends JpaRepository<VpRotationEntry
 
     List<VpRotationEntry> findByVehicleIdAndDayOfWeekOrderBySequenceInDayAsc(
             UUID vehicleId, int dayOfWeek);
+
+    List<VpRotationEntry> findByVehicleRotationSetId(UUID rotationSetId);
 }

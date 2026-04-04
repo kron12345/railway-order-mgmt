@@ -150,6 +150,13 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- ==================== Vehicle Planning Gantt Chart ==================== -->
+        <dependency>
+            <groupId>org.vaadin.addons.tltv.gantt</groupId>
+            <artifactId>gantt-flow-addon</artifactId>
+            <version>24.0.2</version>
+        </dependency>
+
         <!-- ==================== Architecture Tests ==================== -->
         <dependency>
             <groupId>com.tngtech.archunit</groupId>
