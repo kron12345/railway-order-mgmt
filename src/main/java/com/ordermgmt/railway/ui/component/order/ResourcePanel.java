@@ -23,8 +23,10 @@ import com.ordermgmt.railway.domain.order.model.ResourceNeed;
 import com.ordermgmt.railway.domain.order.model.ResourceType;
 import com.ordermgmt.railway.domain.order.repository.PurchasePositionRepository;
 import com.ordermgmt.railway.domain.order.repository.ResourceCatalogItemRepository;
+import com.ordermgmt.railway.domain.order.service.AuditService;
 import com.ordermgmt.railway.domain.order.service.PurchaseOrderService;
 import com.ordermgmt.railway.domain.order.service.ResourceNeedService;
+import com.ordermgmt.railway.ui.component.AuditHistoryDialog;
 
 /**
  * Collapsible panel showing all resources and their purchases for one OrderPosition. Displays
@@ -40,6 +42,7 @@ public class ResourcePanel extends Div {
     private final PurchaseOrderService purchaseOrderService;
     private final ResourceCatalogItemRepository catalogItemRepository;
     private final PurchasePositionRepository purchasePositionRepository;
+    private final AuditService auditService;
     private final BiFunction<String, Object[], String> translator;
     private final Runnable refreshCallback;
     private final Div contentSlot = new Div();
@@ -50,6 +53,7 @@ public class ResourcePanel extends Div {
             PurchaseOrderService purchaseOrderService,
             ResourceCatalogItemRepository catalogItemRepository,
             PurchasePositionRepository purchasePositionRepository,
+            AuditService auditService,
             BiFunction<String, Object[], String> translator,
             Runnable refreshCallback) {
         this.position = position;
@@ -57,6 +61,7 @@ public class ResourcePanel extends Div {
         this.purchaseOrderService = purchaseOrderService;
         this.catalogItemRepository = catalogItemRepository;
         this.purchasePositionRepository = purchasePositionRepository;
+        this.auditService = auditService;
         this.translator = translator;
         this.refreshCallback = refreshCallback;
 
@@ -141,6 +146,17 @@ public class ResourcePanel extends Div {
         if (rn.getQuantity() != null && rn.getQuantity() > 1) {
             info.add(createSmallBadge("x" + rn.getQuantity(), "var(--rom-text-secondary)"));
         }
+
+        // Audit history button
+        Button histBtn = new Button(VaadinIcon.CLOCK.create());
+        histBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
+        histBtn.getStyle()
+                .set("color", "var(--rom-text-muted)")
+                .set("min-width", "24px")
+                .set("padding", "0");
+        histBtn.setTooltipText(tr("audit.button"));
+        histBtn.addClickListener(e -> openResourceHistory(rn));
+        info.add(histBtn);
 
         row.add(info);
 
@@ -348,6 +364,17 @@ public class ResourcePanel extends Div {
 
     private List<PurchasePosition> findPurchasesForNeed(ResourceNeed rn) {
         return purchasePositionRepository.findByResourceNeedId(rn.getId());
+    }
+
+    private void openResourceHistory(ResourceNeed rn) {
+        if (auditService == null) {
+            return;
+        }
+        var entries = auditService.getResourceNeedHistory(rn.getId());
+        String title =
+                tr("audit.title") + " — " + tr("resource.type." + rn.getResourceType().name());
+        var dialog = new AuditHistoryDialog(title, entries, translator);
+        dialog.open();
     }
 
     // --- Badge helpers ---

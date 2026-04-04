@@ -11,7 +11,9 @@ import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.envers.Audited;
 import org.hibernate.type.SqlTypes;
+import org.springframework.data.annotation.CreatedBy;
 import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedBy;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
@@ -106,6 +108,14 @@ public class OrderPosition {
     @LastModifiedDate
     @Column(nullable = false)
     private Instant updatedAt;
+
+    @CreatedBy
+    @Column(length = 100)
+    private String createdBy;
+
+    @LastModifiedBy
+    @Column(length = 100)
+    private String updatedBy;
 
     @Version private Long version;
 }

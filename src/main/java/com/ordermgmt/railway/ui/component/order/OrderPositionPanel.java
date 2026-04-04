@@ -24,6 +24,7 @@ import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.order.model.PositionType;
 import com.ordermgmt.railway.domain.order.repository.PurchasePositionRepository;
 import com.ordermgmt.railway.domain.order.repository.ResourceCatalogItemRepository;
+import com.ordermgmt.railway.domain.order.service.AuditService;
 import com.ordermgmt.railway.domain.order.service.OrderService;
 import com.ordermgmt.railway.domain.order.service.PurchaseOrderService;
 import com.ordermgmt.railway.domain.order.service.ResourceNeedService;
@@ -46,6 +47,7 @@ public class OrderPositionPanel extends Div {
     private final PurchaseOrderService purchaseOrderService;
     private final ResourceCatalogItemRepository catalogItemRepository;
     private final PurchasePositionRepository purchasePositionRepository;
+    private final AuditService auditService;
     private final BiFunction<String, Object[], String> translator;
     private final VerticalLayout rowContainer = new VerticalLayout();
 
@@ -60,6 +62,7 @@ public class OrderPositionPanel extends Div {
             PurchaseOrderService purchaseOrderService,
             ResourceCatalogItemRepository catalogItemRepository,
             PurchasePositionRepository purchasePositionRepository,
+            AuditService auditService,
             BiFunction<String, Object[], String> translator) {
         this.order = order;
         this.orderService = orderService;
@@ -71,6 +74,7 @@ public class OrderPositionPanel extends Div {
         this.purchaseOrderService = purchaseOrderService;
         this.catalogItemRepository = catalogItemRepository;
         this.purchasePositionRepository = purchasePositionRepository;
+        this.auditService = auditService;
         this.translator = translator;
 
         setWidthFull();
@@ -147,7 +151,8 @@ public class OrderPositionPanel extends Div {
                             translator,
                             this::openPositionForEdit,
                             this::confirmDeletePosition,
-                            this::sendToPathManager));
+                            this::sendToPathManager,
+                            auditService));
 
             // Resource panel (collapsible, shown below each position row)
             long resCount = pos.getResourceNeeds() != null ? pos.getResourceNeeds().size() : 0;
@@ -159,6 +164,7 @@ public class OrderPositionPanel extends Div {
                                 purchaseOrderService,
                                 catalogItemRepository,
                                 purchasePositionRepository,
+                                auditService,
                                 translator,
                                 this::refreshPositions);
                 resourcePanel.getStyle().set("margin", "0 12px 8px 12px");

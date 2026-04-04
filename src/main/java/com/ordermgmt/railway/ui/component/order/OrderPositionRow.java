@@ -19,6 +19,8 @@ import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.order.model.PositionType;
 import com.ordermgmt.railway.domain.order.model.PurchasePosition;
+import com.ordermgmt.railway.domain.order.service.AuditService;
+import com.ordermgmt.railway.ui.component.AuditHistoryDialog;
 import com.ordermgmt.railway.ui.component.PurchaseCalendarPanel;
 import com.ordermgmt.railway.ui.component.StatusBadge;
 import com.ordermgmt.railway.ui.util.StringUtils;
@@ -30,6 +32,7 @@ public class OrderPositionRow extends Div {
     private static final int MAX_TAGS = 3;
     private final OrderPosition position;
     private final BiFunction<String, Object[], String> translator;
+    private final AuditService auditService;
     private final Div calendarSlot = new Div();
     private boolean calendarOpen = false;
 
@@ -38,9 +41,11 @@ public class OrderPositionRow extends Div {
             BiFunction<String, Object[], String> translator,
             Consumer<OrderPosition> onEdit,
             Consumer<OrderPosition> onDelete,
-            Consumer<OrderPosition> onSendToPm) {
+            Consumer<OrderPosition> onSendToPm,
+            AuditService auditService) {
         this.position = position;
         this.translator = translator;
+        this.auditService = auditService;
 
         setWidthFull();
         getStyle()
@@ -112,12 +117,19 @@ public class OrderPositionRow extends Div {
         editBtn.getStyle().set("color", "var(--rom-text-muted)");
         editBtn.addClickListener(e -> onEdit.accept(position));
 
+        Button histBtn = new Button(VaadinIcon.CLOCK.create());
+        histBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
+        histBtn.getStyle().set("color", "var(--rom-text-muted)");
+        histBtn.setTooltipText(translator.apply("audit.button", new Object[0]));
+        histBtn.addClickListener(e -> openPositionHistory());
+
         Button delBtn = new Button(VaadinIcon.TRASH.create());
         delBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
         delBtn.getStyle().set("color", "var(--rom-status-danger)");
         delBtn.addClickListener(e -> onDelete.accept(position));
 
-        HorizontalLayout actions = new HorizontalLayout(calBtn, viewBtn, pmBtn, editBtn, delBtn);
+        HorizontalLayout actions =
+                new HorizontalLayout(calBtn, viewBtn, pmBtn, histBtn, editBtn, delBtn);
         actions.setSpacing(true);
         actions.setAlignItems(FlexComponent.Alignment.START);
 
@@ -332,6 +344,19 @@ public class OrderPositionRow extends Div {
         }
 
         return btn;
+    }
+
+    private void openPositionHistory() {
+        if (auditService == null) {
+            return;
+        }
+        var entries = auditService.getPositionHistory(position.getId());
+        var dialog =
+                new AuditHistoryDialog(
+                        translator.apply("audit.title", new Object[0]) + " — " + position.getName(),
+                        entries,
+                        translator);
+        dialog.open();
     }
 
     private void navigateToArchiveView() {

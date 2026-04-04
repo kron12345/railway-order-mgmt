@@ -29,11 +29,13 @@ import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.domain.order.model.ProcessStatus;
 import com.ordermgmt.railway.domain.order.repository.PurchasePositionRepository;
 import com.ordermgmt.railway.domain.order.repository.ResourceCatalogItemRepository;
+import com.ordermgmt.railway.domain.order.service.AuditService;
 import com.ordermgmt.railway.domain.order.service.OrderService;
 import com.ordermgmt.railway.domain.order.service.PurchaseOrderService;
 import com.ordermgmt.railway.domain.order.service.ResourceNeedService;
 import com.ordermgmt.railway.domain.pathmanager.service.PathManagerService;
 import com.ordermgmt.railway.domain.timetable.service.TimetableArchiveService;
+import com.ordermgmt.railway.ui.component.AuditHistoryDialog;
 import com.ordermgmt.railway.ui.component.StatusBadge;
 import com.ordermgmt.railway.ui.component.order.OrderFormPanel;
 import com.ordermgmt.railway.ui.component.order.OrderPositionPanel;
@@ -56,6 +58,7 @@ public class OrderDetailView extends VerticalLayout implements BeforeEnterObserv
     private final PurchaseOrderService purchaseOrderService;
     private final ResourceCatalogItemRepository catalogItemRepository;
     private final PurchasePositionRepository purchasePositionRepository;
+    private final AuditService auditService;
     private Order order;
     private boolean isNew;
 
@@ -72,7 +75,8 @@ public class OrderDetailView extends VerticalLayout implements BeforeEnterObserv
             ResourceNeedService resourceNeedService,
             PurchaseOrderService purchaseOrderService,
             ResourceCatalogItemRepository catalogItemRepository,
-            PurchasePositionRepository purchasePositionRepository) {
+            PurchasePositionRepository purchasePositionRepository,
+            AuditService auditService) {
         this.orderService = orderService;
         this.customerRepository = customerRepository;
         this.predefinedTagRepository = predefinedTagRepository;
@@ -83,6 +87,7 @@ public class OrderDetailView extends VerticalLayout implements BeforeEnterObserv
         this.purchaseOrderService = purchaseOrderService;
         this.catalogItemRepository = catalogItemRepository;
         this.purchasePositionRepository = purchasePositionRepository;
+        this.auditService = auditService;
         setPadding(false);
         setSpacing(false);
         setWidthFull();
@@ -164,6 +169,7 @@ public class OrderDetailView extends VerticalLayout implements BeforeEnterObserv
                         purchaseOrderService,
                         catalogItemRepository,
                         purchasePositionRepository,
+                        auditService,
                         this::getTranslation);
         add(positionPanel);
     }
@@ -200,6 +206,7 @@ public class OrderDetailView extends VerticalLayout implements BeforeEnterObserv
                 createProcessBadge(order.getProcessStatus()),
                 createDatesLabel(),
                 spacer,
+                createHistoryButton(),
                 createEditButton(),
                 createDeleteButton());
         return header;
@@ -265,6 +272,28 @@ public class OrderDetailView extends VerticalLayout implements BeforeEnterObserv
                 .set("font-size", "11px")
                 .set("color", "var(--rom-text-muted)");
         return dates;
+    }
+
+    private Button createHistoryButton() {
+        Button historyBtn = new Button(getTranslation("audit.button"), VaadinIcon.CLOCK.create());
+        historyBtn.addThemeVariants(ButtonVariant.LUMO_SMALL);
+        historyBtn
+                .getStyle()
+                .set("color", "var(--rom-text-secondary)")
+                .set("border", "1px solid var(--rom-border)")
+                .set("background", "rgba(148,163,184,0.06)");
+        historyBtn.addClickListener(e -> openAuditHistory());
+        return historyBtn;
+    }
+
+    private void openAuditHistory() {
+        var entries = auditService.getOrderHistory(order.getId());
+        var dialog =
+                new AuditHistoryDialog(
+                        getTranslation("audit.title") + " — " + order.getOrderNumber(),
+                        entries,
+                        this::getTranslation);
+        dialog.open();
     }
 
     private Button createEditButton() {

@@ -8,6 +8,9 @@ import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.envers.Audited;
 import org.hibernate.type.SqlTypes;
+import org.springframework.data.annotation.CreatedBy;
+import org.springframework.data.annotation.LastModifiedBy;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -17,6 +20,7 @@ import lombok.Setter;
 @Entity
 @Table(name = "purchase_positions")
 @Audited
+@EntityListeners(AuditingEntityListener.class)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -70,4 +74,12 @@ public class PurchasePosition {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "ttt_order_attributes", columnDefinition = "jsonb")
     private String tttOrderAttributes;
+
+    @CreatedBy
+    @Column(length = 100)
+    private String createdBy;
+
+    @LastModifiedBy
+    @Column(length = 100)
+    private String updatedBy;
 }
