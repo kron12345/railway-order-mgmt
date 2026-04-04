@@ -6,15 +6,17 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.PriorityQueue;
-import java.util.Set;
 
+import org.jgrapht.Graph;
+import org.jgrapht.alg.shortestpath.DijkstraShortestPath;
+import org.jgrapht.graph.DefaultWeightedEdge;
+import org.jgrapht.graph.SimpleWeightedGraph;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -41,15 +43,8 @@ public class TimetableRoutingService {
     private static final double ASSUMED_SPEED_METERS_PER_SECOND = 70_000D / 3_600D;
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
 
-    /** TTL for the cached routing graph (5 minutes). */
-    private static final long GRAPH_CACHE_TTL_MS = 300_000L;
-
     private final OperationalPointRepository operationalPointRepository;
     private final SectionOfLineRepository sectionOfLineRepository;
-
-    private Map<String, OperationalPoint> cachedPointsByUopid;
-    private Map<String, List<Edge>> cachedGraph;
-    private long cacheTimestamp;
 
     public List<OperationalPoint> searchOperationalPoints(String filter, int offset, int limit) {
         int pageSize = Math.max(1, Math.min(limit, MAX_SEARCH_RESULTS));
@@ -114,17 +109,19 @@ public class TimetableRoutingService {
             throw new IllegalArgumentException("At least origin and destination are required.");
         }
 
-        ensureGraphCache();
-        Map<String, OperationalPoint> pointsByUopid = cachedPointsByUopid;
-        Map<String, List<Edge>> graph = cachedGraph;
+        Map<String, OperationalPoint> pointsByUopid = loadOperationalPointsByUopid();
+        Graph<String, DefaultWeightedEdge> graph = buildGraph();
 
         List<String> fullPath = new ArrayList<>();
         List<Double> segmentLengths = new ArrayList<>();
 
+        DijkstraShortestPath<String, DefaultWeightedEdge> dijkstra =
+                new DijkstraShortestPath<>(graph);
+
         for (int i = 0; i < orderedWaypoints.size() - 1; i++) {
             OperationalPoint start = orderedWaypoints.get(i);
             OperationalPoint end = orderedWaypoints.get(i + 1);
-            PathSegment segment = shortestPath(start.getUopid(), end.getUopid(), graph);
+            PathSegment segment = shortestPath(start.getUopid(), end.getUopid(), graph, dijkstra);
 
             if (fullPath.isEmpty()) {
                 fullPath.addAll(segment.nodeUopids());
@@ -177,8 +174,7 @@ public class TimetableRoutingService {
             return new TimetableRouteResult(List.of(), 0D);
         }
 
-        ensureGraphCache();
-        Map<String, OperationalPoint> pointsByUopid = cachedPointsByUopid;
+        Map<String, OperationalPoint> pointsByUopid = loadOperationalPointsByUopid();
         List<TimetableRoutePoint> points = new ArrayList<>();
         double totalDistance = 0D;
         for (TimetableRowData row : rows) {
@@ -257,17 +253,38 @@ public class TimetableRoutingService {
         return rows;
     }
 
-    /** Rebuilds the routing graph if it has not been loaded yet or if the TTL has expired. */
-    private void ensureGraphCache() {
-        long now = System.currentTimeMillis();
-        if (cachedGraph == null || now - cacheTimestamp > GRAPH_CACHE_TTL_MS) {
-            cachedPointsByUopid = loadOperationalPointsByUopid();
-            cachedGraph = buildGraph(cachedPointsByUopid);
-            cacheTimestamp = now;
+    /** Builds the JGraphT routing graph from all sections of line (cached via Spring Cache). */
+    @Cacheable(value = "routingGraph", key = "'graph'")
+    public Graph<String, DefaultWeightedEdge> buildGraph() {
+        Map<String, OperationalPoint> pointsByUopid = loadOperationalPointsByUopid();
+        SimpleWeightedGraph<String, DefaultWeightedEdge> graph =
+                new SimpleWeightedGraph<>(DefaultWeightedEdge.class);
+
+        for (String uopid : pointsByUopid.keySet()) {
+            graph.addVertex(uopid);
         }
+
+        for (SectionOfLine section : sectionOfLineRepository.findAll()) {
+            if (!pointsByUopid.containsKey(section.getStartOpUopid())
+                    || !pointsByUopid.containsKey(section.getEndOpUopid())) {
+                continue;
+            }
+            // Skip self-loops — SimpleWeightedGraph does not allow them
+            if (section.getStartOpUopid().equals(section.getEndOpUopid())) {
+                continue;
+            }
+            double length = section.getLengthMeters() != null ? section.getLengthMeters() : 0D;
+            DefaultWeightedEdge edge =
+                    graph.addEdge(section.getStartOpUopid(), section.getEndOpUopid());
+            if (edge != null) {
+                graph.setEdgeWeight(edge, length);
+            }
+        }
+        return graph;
     }
 
-    private Map<String, OperationalPoint> loadOperationalPointsByUopid() {
+    @Cacheable(value = "operationalPointsByUopid", key = "'all'")
+    public Map<String, OperationalPoint> loadOperationalPointsByUopid() {
         Map<String, OperationalPoint> pointsByUopid = new LinkedHashMap<>();
         for (OperationalPoint point : operationalPointRepository.findAll()) {
             pointsByUopid.put(point.getUopid(), point);
@@ -275,77 +292,30 @@ public class TimetableRoutingService {
         return pointsByUopid;
     }
 
-    private Map<String, List<Edge>> buildGraph(Map<String, OperationalPoint> pointsByUopid) {
-        Map<String, List<Edge>> graph = new HashMap<>();
-        for (SectionOfLine section : sectionOfLineRepository.findAll()) {
-            if (!pointsByUopid.containsKey(section.getStartOpUopid())
-                    || !pointsByUopid.containsKey(section.getEndOpUopid())) {
-                continue;
-            }
-            double length = section.getLengthMeters() != null ? section.getLengthMeters() : 0D;
-            graph.computeIfAbsent(section.getStartOpUopid(), ignored -> new ArrayList<>())
-                    .add(new Edge(section.getEndOpUopid(), length));
-            graph.computeIfAbsent(section.getEndOpUopid(), ignored -> new ArrayList<>())
-                    .add(new Edge(section.getStartOpUopid(), length));
-        }
-        return graph;
-    }
-
     private PathSegment shortestPath(
-            String startUopid, String endUopid, Map<String, List<Edge>> graph) {
+            String startUopid,
+            String endUopid,
+            Graph<String, DefaultWeightedEdge> graph,
+            DijkstraShortestPath<String, DefaultWeightedEdge> dijkstra) {
         if (startUopid.equals(endUopid)) {
             return new PathSegment(List.of(startUopid), List.of(0D));
         }
 
-        PriorityQueue<NodeDistance> queue =
-                new PriorityQueue<>(Comparator.comparingDouble(NodeDistance::distance));
-        Map<String, Double> distances = new HashMap<>();
-        Map<String, String> previousNode = new HashMap<>();
-        Map<String, Double> incomingLength = new HashMap<>();
-        Set<String> visited = new HashSet<>();
-
-        distances.put(startUopid, 0D);
-        queue.add(new NodeDistance(startUopid, 0D));
-
-        while (!queue.isEmpty()) {
-            NodeDistance current = queue.poll();
-            if (!visited.add(current.uopid())) {
-                continue;
-            }
-            if (current.uopid().equals(endUopid)) {
-                break;
-            }
-
-            for (Edge edge : graph.getOrDefault(current.uopid(), List.of())) {
-                double candidate = current.distance() + edge.lengthMeters();
-                double known = distances.getOrDefault(edge.targetUopid(), Double.MAX_VALUE);
-                if (candidate < known) {
-                    distances.put(edge.targetUopid(), candidate);
-                    previousNode.put(edge.targetUopid(), current.uopid());
-                    incomingLength.put(edge.targetUopid(), edge.lengthMeters());
-                    queue.add(new NodeDistance(edge.targetUopid(), candidate));
-                }
-            }
-        }
-
-        if (!distances.containsKey(endUopid)) {
+        if (!graph.containsVertex(startUopid) || !graph.containsVertex(endUopid)) {
             throw new IllegalStateException("No route found between selected operational points.");
         }
 
-        List<String> reversedNodes = new ArrayList<>();
-        List<Double> reversedLengths = new ArrayList<>();
-        String current = endUopid;
-        while (current != null) {
-            reversedNodes.add(current);
-            reversedLengths.add(incomingLength.getOrDefault(current, 0D));
-            current = previousNode.get(current);
+        var path = dijkstra.getPath(startUopid, endUopid);
+        if (path == null) {
+            throw new IllegalStateException("No route found between selected operational points.");
         }
 
-        List<String> nodes = new ArrayList<>();
+        List<String> nodes = path.getVertexList();
         List<Double> lengths = new ArrayList<>();
-        for (int index = reversedNodes.size() - 1; index >= 0; index--) {
-            nodes.add(reversedNodes.get(index));
-            lengths.add(index == reversedNodes.size() - 1 ? 0D : reversedLengths.get(index));
+        lengths.add(0D); // first node has 0 segment length
+        List<DefaultWeightedEdge> edges = path.getEdgeList();
+        for (DefaultWeightedEdge edge : edges) {
+            lengths.add(graph.getEdgeWeight(edge));
         }
         return new PathSegment(nodes, lengths);
     }
@@ -428,10 +398,6 @@ public class TimetableRoutingService {
     private String formatTime(LocalTime time) {
         return time.truncatedTo(ChronoUnit.MINUTES).format(TIME_FORMAT);
     }
-
-    private record Edge(String targetUopid, double lengthMeters) {}
-
-    private record NodeDistance(String uopid, double distance) {}
 
     private record PathSegment(List<String> nodeUopids, List<Double> segmentLengths) {}
 }

@@ -4,8 +4,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Shared string utility methods used across UI components. Centralizes common tag splitting,
- * null-coalescing, and blank-to-null conversion to avoid duplication.
+ * Shared string utility methods used across UI components. Delegates to Apache Commons Lang where
+ * possible and provides domain-specific helpers for tag handling.
  */
 public final class StringUtils {
 
@@ -19,7 +19,7 @@ public final class StringUtils {
      */
     public static List<String> splitTags(String storedTags) {
         List<String> values = new ArrayList<>();
-        if (storedTags == null || storedTags.isBlank()) {
+        if (org.apache.commons.lang3.StringUtils.isBlank(storedTags)) {
             return values;
         }
         for (String token : storedTags.split(",")) {
@@ -32,22 +32,24 @@ public final class StringUtils {
     }
 
     /**
-     * Returns the trimmed string if non-blank, otherwise {@code null}.
+     * Returns the trimmed string if non-blank, otherwise {@code null}. Delegates to Apache Commons
+     * Lang {@code trimToNull}.
      *
      * @param value the input string (may be null)
      * @return the trimmed value or null
      */
     public static String blankToNull(String value) {
-        return value != null && !value.isBlank() ? value.trim() : null;
+        return org.apache.commons.lang3.StringUtils.trimToNull(value);
     }
 
     /**
-     * Null-safe coalesce: returns the string if non-null, otherwise an empty string.
+     * Null-safe coalesce: returns the string if non-null, otherwise an empty string. Delegates to
+     * Apache Commons Lang {@code defaultString}.
      *
      * @param value the input string (may be null)
      * @return the value or ""
      */
     public static String nvl(String value) {
-        return value != null ? value : "";
+        return org.apache.commons.lang3.StringUtils.defaultString(value);
     }
 }

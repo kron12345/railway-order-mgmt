@@ -5,6 +5,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import jakarta.validation.Valid;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
@@ -83,8 +85,7 @@ public class PathManagerController {
     @Transactional
     @Operation(summary = "Submit a new train from order management")
     @ApiResponse(responseCode = "201", description = "Train created successfully")
-    public TrainDetailDto submitTrain(@RequestBody TrainSubmitRequest request) {
-        validateSubmitRequest(request);
+    public TrainDetailDto submitTrain(@Valid @RequestBody TrainSubmitRequest request) {
         PmReferenceTrain train = createTrainFromRequest(request);
         return loadTrainDetail(train.getId());
     }
@@ -204,16 +205,6 @@ public class PathManagerController {
     }
 
     // ── Private helpers ────────────────────────────────────────────────
-
-    private void validateSubmitRequest(TrainSubmitRequest request) {
-        if (request.operationalTrainNumber() == null
-                || request.operationalTrainNumber().isBlank()) {
-            throw new IllegalArgumentException("Operational train number is required");
-        }
-        if (request.operationalTrainNumber().length() > 20) {
-            throw new IllegalArgumentException("Operational train number too long (max 20)");
-        }
-    }
 
     private PmReferenceTrain createTrainFromRequest(TrainSubmitRequest request) {
         PmReferenceTrain train = new PmReferenceTrain();

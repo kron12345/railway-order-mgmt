@@ -1,6 +1,5 @@
 package com.ordermgmt.railway.domain.infrastructure.service;
 
-import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -14,6 +13,9 @@ import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVParser;
+import org.apache.commons.csv.CSVRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -37,6 +39,15 @@ public class RinfImportService {
     private static final Pattern WKT_POINT =
             Pattern.compile("POINT\\(([\\d.\\-]+)\\s+([\\d.\\-]+)\\)");
     private static final int BATCH_SIZE = 500;
+
+    private static final CSVFormat CSV_FORMAT =
+            CSVFormat.DEFAULT
+                    .builder()
+                    .setHeader()
+                    .setSkipHeaderRecord(true)
+                    .setIgnoreEmptyLines(true)
+                    .setTrim(true)
+                    .build();
 
     // ── CSV column indices for Operational Points ─────────────────────
     private static final int OP_COL_UOPID = 0;
@@ -74,8 +85,8 @@ public class RinfImportService {
      */
     public ImportLog importOperationalPoints(InputStream csvStream, String country) {
         try {
-            List<String[]> rows = parseCsv(csvStream);
-            List<OperationalPoint> items = toOperationalPoints(rows, country);
+            List<CSVRecord> records = parseCsv(csvStream);
+            List<OperationalPoint> items = toOperationalPoints(records, country);
             int count = replaceOperationalPoints(items, country);
             return saveLog(
                     "RINF_OP",
@@ -92,8 +103,8 @@ public class RinfImportService {
     /** Import SoLs: parse first, then delete+insert atomically. */
     public ImportLog importSectionsOfLine(InputStream csvStream, String country) {
         try {
-            List<String[]> rows = parseCsv(csvStream);
-            List<SectionOfLine> items = toSectionsOfLine(rows, country);
+            List<CSVRecord> records = parseCsv(csvStream);
+            List<SectionOfLine> items = toSectionsOfLine(records, country);
             int count = replaceSectionsOfLine(items, country);
             return saveLog(
                     "RINF_SOL",
@@ -155,12 +166,12 @@ public class RinfImportService {
 
     // --- CSV parsing and mapping (no DB access, no transaction needed) ---
 
-    private List<OperationalPoint> toOperationalPoints(List<String[]> rows, String country) {
+    private List<OperationalPoint> toOperationalPoints(List<CSVRecord> records, String country) {
         Map<String, OperationalPoint> itemsByUopid = new LinkedHashMap<>();
         int duplicateCount = 0;
-        for (String[] row : rows) {
-            if (row.length < 2) continue;
-            OperationalPoint item = toOperationalPoint(row, country);
+        for (CSVRecord record : records) {
+            if (record.size() < 2) continue;
+            OperationalPoint item = toOperationalPoint(record, country);
             OperationalPoint existing = itemsByUopid.putIfAbsent(item.getUopid(), item);
             if (existing != null) {
                 duplicateCount++;
@@ -172,26 +183,26 @@ public class RinfImportService {
         return new ArrayList<>(itemsByUopid.values());
     }
 
-    private OperationalPoint toOperationalPoint(String[] row, String country) {
+    private OperationalPoint toOperationalPoint(CSVRecord record, String country) {
         OperationalPoint operationalPoint = new OperationalPoint();
-        operationalPoint.setUopid(valueAt(row, OP_COL_UOPID));
-        operationalPoint.setName(valueAt(row, OP_COL_NAME));
+        operationalPoint.setUopid(valueAt(record, OP_COL_UOPID));
+        operationalPoint.setName(valueAt(record, OP_COL_NAME));
         operationalPoint.setCountry(country);
-        String wktGeometry = valueAt(row, OP_COL_WKT);
+        String wktGeometry = valueAt(record, OP_COL_WKT);
         if (!wktGeometry.isBlank()) parseWkt(wktGeometry, operationalPoint);
-        Integer opType = parseInteger(row, OP_COL_TYPE);
+        Integer opType = parseInteger(record, OP_COL_TYPE);
         if (opType != null) operationalPoint.setOpType(opType);
-        String tafTapCode = valueAt(row, OP_COL_TAF_TAP);
+        String tafTapCode = valueAt(record, OP_COL_TAF_TAP);
         if (!tafTapCode.isBlank()) operationalPoint.setTafTapCode(tafTapCode);
         return operationalPoint;
     }
 
-    private List<SectionOfLine> toSectionsOfLine(List<String[]> rows, String country) {
+    private List<SectionOfLine> toSectionsOfLine(List<CSVRecord> records, String country) {
         Map<String, SectionOfLine> itemsBySolId = new LinkedHashMap<>();
         int duplicateCount = 0;
-        for (String[] row : rows) {
-            if (row.length < 3) continue;
-            SectionOfLine item = toSectionOfLine(row, country);
+        for (CSVRecord record : records) {
+            if (record.size() < 3) continue;
+            SectionOfLine item = toSectionOfLine(record, country);
             SectionOfLine existing = itemsBySolId.putIfAbsent(item.getSolId(), item);
             if (existing != null) {
                 duplicateCount++;
@@ -203,13 +214,13 @@ public class RinfImportService {
         return new ArrayList<>(itemsBySolId.values());
     }
 
-    private SectionOfLine toSectionOfLine(String[] row, String country) {
+    private SectionOfLine toSectionOfLine(CSVRecord record, String country) {
         SectionOfLine sectionOfLine = new SectionOfLine();
-        sectionOfLine.setSolId(valueAt(row, SOL_COL_ID));
-        sectionOfLine.setStartOpUopid(valueAt(row, SOL_COL_START_UOPID));
-        sectionOfLine.setEndOpUopid(valueAt(row, SOL_COL_END_UOPID));
+        sectionOfLine.setSolId(valueAt(record, SOL_COL_ID));
+        sectionOfLine.setStartOpUopid(valueAt(record, SOL_COL_START_UOPID));
+        sectionOfLine.setEndOpUopid(valueAt(record, SOL_COL_END_UOPID));
         sectionOfLine.setCountry(country);
-        Double lengthMeters = parseDouble(row, SOL_COL_LENGTH);
+        Double lengthMeters = parseDouble(record, SOL_COL_LENGTH);
         if (lengthMeters != null) sectionOfLine.setLengthMeters(lengthMeters);
         return sectionOfLine;
     }
@@ -222,40 +233,19 @@ public class RinfImportService {
         }
     }
 
-    private List<String[]> parseCsv(InputStream is) throws IOException {
-        List<String[]> rows = new ArrayList<>();
-        try (BufferedReader reader =
-                new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
-            reader.readLine(); // skip header
-            String line;
-            while ((line = reader.readLine()) != null) {
-                if (!line.isBlank()) rows.add(splitCsvLine(line));
-            }
+    private List<CSVRecord> parseCsv(InputStream is) throws IOException {
+        try (CSVParser parser =
+                CSV_FORMAT.parse(new InputStreamReader(is, StandardCharsets.UTF_8))) {
+            return parser.getRecords();
         }
-        return rows;
     }
 
-    private String[] splitCsvLine(String line) {
-        List<String> fields = new ArrayList<>();
-        boolean inQuotes = false;
-        StringBuilder sb = new StringBuilder();
-        for (char c : line.toCharArray()) {
-            if (c == '"') inQuotes = !inQuotes;
-            else if (c == ',' && !inQuotes) {
-                fields.add(sb.toString());
-                sb.setLength(0);
-            } else sb.append(c);
-        }
-        fields.add(sb.toString());
-        return fields.toArray(new String[0]);
+    private String valueAt(CSVRecord record, int index) {
+        return record.size() > index ? record.get(index).trim() : "";
     }
 
-    private String valueAt(String[] row, int index) {
-        return row.length > index ? row[index].trim().replace("\"", "") : "";
-    }
-
-    private Integer parseInteger(String[] row, int index) {
-        String value = valueAt(row, index);
+    private Integer parseInteger(CSVRecord record, int index) {
+        String value = valueAt(record, index);
         if (value.isBlank()) return null;
         try {
             return Integer.parseInt(value);
@@ -264,8 +254,8 @@ public class RinfImportService {
         }
     }
 
-    private Double parseDouble(String[] row, int index) {
-        String value = valueAt(row, index);
+    private Double parseDouble(CSVRecord record, int index) {
+        String value = valueAt(record, index);
         if (value.isBlank()) return null;
         try {
             return Double.parseDouble(value);

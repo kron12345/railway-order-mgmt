@@ -38,6 +38,11 @@ spring:
           keycloak:
             issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/railway}
 
+  cache:
+    type: caffeine
+    caffeine:
+      spec: maximumSize=10,expireAfterWrite=5m
+
   servlet:
     multipart:
       max-file-size: 50MB

@@ -12,6 +12,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.function.BiFunction;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vaadin.flow.component.ComponentEvent;
 import com.vaadin.flow.component.ComponentEventListener;
 import com.vaadin.flow.component.button.Button;
@@ -46,6 +48,8 @@ import com.ordermgmt.railway.ui.util.StringUtils;
  * separate editor.
  */
 public class ServicePositionDialog extends Dialog {
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final OrderService orderService;
     private final BiFunction<String, Object[], String> translator;
@@ -327,7 +331,7 @@ public class ServicePositionDialog extends Dialog {
         }
 
         orderService.savePosition(position);
-        Notification.show(t("common.save") + " ✓", 2000, Notification.Position.BOTTOM_END)
+        Notification.show(t("common.save") + " \u2713", 2000, Notification.Position.BOTTOM_END)
                 .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
         fireEvent(new SaveEvent(this));
         close();
@@ -404,42 +408,40 @@ public class ServicePositionDialog extends Dialog {
 
     private String toValidityJson(List<LocalDate> dates) {
         // Group consecutive dates into segments
-        StringBuilder sb = new StringBuilder("[");
+        List<Map<String, String>> segments = new ArrayList<>();
         LocalDate rangeStart = null;
         LocalDate prev = null;
-        boolean first = true;
         for (LocalDate d : dates) {
             if (rangeStart == null) {
                 rangeStart = d;
             } else if (!d.equals(prev.plusDays(1))) {
-                if (!first) sb.append(",");
-                sb.append("{\"startDate\":\"")
-                        .append(rangeStart)
-                        .append("\",\"endDate\":\"")
-                        .append(prev)
-                        .append("\"}");
-                first = false;
+                Map<String, String> segment = new LinkedHashMap<>();
+                segment.put("startDate", rangeStart.toString());
+                segment.put("endDate", prev.toString());
+                segments.add(segment);
                 rangeStart = d;
             }
             prev = d;
         }
         if (rangeStart != null) {
-            if (!first) sb.append(",");
-            sb.append("{\"startDate\":\"")
-                    .append(rangeStart)
-                    .append("\",\"endDate\":\"")
-                    .append(prev)
-                    .append("\"}");
+            Map<String, String> segment = new LinkedHashMap<>();
+            segment.put("startDate", rangeStart.toString());
+            segment.put("endDate", prev.toString());
+            segments.add(segment);
         }
-        sb.append("]");
-        return sb.toString();
+
+        try {
+            return OBJECT_MAPPER.writeValueAsString(segments);
+        } catch (JsonProcessingException e) {
+            return "[]";
+        }
     }
 
     private List<LocalDate> parseValidityDates(String json) {
         List<LocalDate> dates = new ArrayList<>();
         if (json == null || json.isBlank()) return dates;
         try {
-            var array = new com.fasterxml.jackson.databind.ObjectMapper().readTree(json);
+            var array = OBJECT_MAPPER.readTree(json);
             if (array.isArray()) {
                 for (var seg : array) {
                     var sn = seg.get("startDate");

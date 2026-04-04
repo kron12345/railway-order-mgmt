@@ -6,13 +6,16 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.ordermgmt.railway.domain.order.model.CoverageType;
@@ -101,21 +104,26 @@ public class TimetableArchiveService {
             return null;
         }
 
-        List<String> segments = new ArrayList<>();
         List<LocalDate> sortedDates = uniqueDates.stream().sorted().toList();
+        List<Map<String, String>> segments = new ArrayList<>();
         LocalDate segmentStart = sortedDates.getFirst();
         LocalDate previous = segmentStart;
 
         for (int index = 1; index < sortedDates.size(); index++) {
             LocalDate current = sortedDates.get(index);
             if (!current.equals(previous.plusDays(1))) {
-                segments.add(segmentJson(segmentStart, previous));
+                segments.add(segmentMap(segmentStart, previous));
                 segmentStart = current;
             }
             previous = current;
         }
-        segments.add(segmentJson(segmentStart, previous));
-        return "[" + String.join(",", segments) + "]";
+        segments.add(segmentMap(segmentStart, previous));
+
+        try {
+            return OBJECT_MAPPER.writeValueAsString(segments);
+        } catch (JsonProcessingException e) {
+            return "[]";
+        }
     }
 
     public List<TimetableActivityOption> activityOptions() {
@@ -300,7 +308,7 @@ public class TimetableArchiveService {
     }
 
     private String routeSummary(List<TimetableRowData> rows) {
-        return rows.getFirst().getName() + " → " + rows.getLast().getName();
+        return rows.getFirst().getName() + " \u2192 " + rows.getLast().getName();
     }
 
     private LocalDateTime resolvePositionStart(
@@ -353,8 +361,11 @@ public class TimetableArchiveService {
                 || Boolean.TRUE.equals(row.getHalt());
     }
 
-    private String segmentJson(LocalDate startDate, LocalDate endDate) {
-        return "{\"startDate\":\"" + startDate + "\",\"endDate\":\"" + endDate + "\"}";
+    private Map<String, String> segmentMap(LocalDate startDate, LocalDate endDate) {
+        Map<String, String> segment = new LinkedHashMap<>();
+        segment.put("startDate", startDate.toString());
+        segment.put("endDate", endDate.toString());
+        return segment;
     }
 
     private LocalTime parseTime(String value) {

@@ -5,6 +5,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+import jakarta.validation.Valid;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -51,7 +53,8 @@ public class PathProcessController {
     @ApiResponse(responseCode = "400", description = "Invalid action for current state")
     @ApiResponse(responseCode = "404", description = "Reference train not found")
     public ProcessStepDto executeTransition(
-            @PathVariable UUID referenceTrainId, @RequestBody ProcessTransitionRequest request) {
+            @PathVariable UUID referenceTrainId,
+            @Valid @RequestBody ProcessTransitionRequest request) {
         PathAction action = PathAction.valueOf(request.action());
         ProcessStepResult result =
                 pathProcessEngine.executeTransition(referenceTrainId, action, request.comment());
