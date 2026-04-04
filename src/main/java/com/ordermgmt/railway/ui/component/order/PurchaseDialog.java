@@ -89,13 +89,27 @@ public class PurchaseDialog extends Dialog {
                                         resourceNeed.getOrderPosition().getValidity());
 
                         if (isCapacity && viaTtt.getValue()) {
-                            purchaseOrderService.triggerTttOrder(pp.getId());
+                            close();
+                            TttOrderDialog tttDialog = new TttOrderDialog(pp, translator);
+                            tttDialog.addSubmitListener(
+                                    evt -> {
+                                        purchaseOrderService.triggerTttOrder(
+                                                evt.getPurchasePositionId(),
+                                                evt.getTttAttributesJson());
+                                        Notification.show(
+                                                        "OK",
+                                                        2000,
+                                                        Notification.Position.BOTTOM_END)
+                                                .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+                                        fireEvent(new SaveEvent(this));
+                                    });
+                            tttDialog.open();
+                        } else {
+                            Notification.show("OK", 2000, Notification.Position.BOTTOM_END)
+                                    .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+                            close();
+                            fireEvent(new SaveEvent(this));
                         }
-
-                        Notification.show("OK", 2000, Notification.Position.BOTTOM_END)
-                                .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
-                        close();
-                        fireEvent(new SaveEvent(this));
                     } catch (Exception ex) {
                         Notification.show(ex.getMessage(), 4000, Notification.Position.BOTTOM_END)
                                 .addThemeVariants(NotificationVariant.LUMO_ERROR);

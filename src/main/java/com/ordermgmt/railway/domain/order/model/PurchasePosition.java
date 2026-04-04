@@ -66,4 +66,8 @@ public class PurchasePosition {
     private String pmTtrPhase;
 
     private Instant pmLastSynced;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "ttt_order_attributes", columnDefinition = "jsonb")
+    private String tttOrderAttributes;
 }

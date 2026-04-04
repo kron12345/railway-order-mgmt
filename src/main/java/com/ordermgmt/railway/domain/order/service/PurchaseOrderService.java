@@ -86,6 +86,19 @@ public class PurchaseOrderService {
      */
     @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
     public void triggerTttOrder(UUID purchasePositionId) {
+        triggerTttOrder(purchasePositionId, null);
+    }
+
+    /**
+     * Triggers a TTT path request order for a purchase position with optional TTT attributes.
+     * Stores the attributes JSON, creates or finds the reference train, stores the path request ID,
+     * and updates purchase status to BESTELLT.
+     *
+     * @param purchasePositionId the purchase position to order
+     * @param tttAttributes optional JSON string with TTT order attributes from the dialog
+     */
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
+    public void triggerTttOrder(UUID purchasePositionId, String tttAttributes) {
         PurchasePosition pp =
                 purchasePositionRepository
                         .findById(purchasePositionId)
@@ -94,6 +107,10 @@ public class PurchaseOrderService {
                                         new IllegalArgumentException(
                                                 "Purchase position not found: "
                                                         + purchasePositionId));
+
+        if (tttAttributes != null && !tttAttributes.isBlank()) {
+            pp.setTttOrderAttributes(tttAttributes);
+        }
 
         ResourceNeed need = pp.getResourceNeed();
         OrderPosition position = pp.getOrderPosition();

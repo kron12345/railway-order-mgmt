@@ -222,16 +222,28 @@ public class ResourcePanel extends Div {
                     .set("padding", "1px 6px");
             tttBtn.addClickListener(
                     e -> {
-                        try {
-                            purchaseOrderService.triggerTttOrder(pp.getId());
-                            loadResources();
-                            Notification.show("TTT", 2000, Notification.Position.BOTTOM_END)
-                                    .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
-                        } catch (Exception ex) {
-                            Notification.show(
-                                            ex.getMessage(), 4000, Notification.Position.BOTTOM_END)
-                                    .addThemeVariants(NotificationVariant.LUMO_ERROR);
-                        }
+                        TttOrderDialog tttDialog = new TttOrderDialog(pp, translator);
+                        tttDialog.addSubmitListener(
+                                evt -> {
+                                    try {
+                                        purchaseOrderService.triggerTttOrder(
+                                                evt.getPurchasePositionId(),
+                                                evt.getTttAttributesJson());
+                                        loadResources();
+                                        Notification.show(
+                                                        "TTT",
+                                                        2000,
+                                                        Notification.Position.BOTTOM_END)
+                                                .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+                                    } catch (Exception ex) {
+                                        Notification.show(
+                                                        ex.getMessage(),
+                                                        4000,
+                                                        Notification.Position.BOTTOM_END)
+                                                .addThemeVariants(NotificationVariant.LUMO_ERROR);
+                                    }
+                                });
+                        tttDialog.open();
                     });
             row.add(tttBtn);
         }
