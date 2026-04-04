@@ -32,6 +32,31 @@ public class TttOrderDialog extends Dialog {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
+    private static final List<String> TRAIN_TYPES =
+            List.of(
+                    "01 - Personenzug",
+                    "02 - Güterzug",
+                    "03 - Lokfahrt",
+                    "04 - Dienstzug",
+                    "05 - Lösch-/Rettungszug",
+                    "06 - Güter-/Personenzug");
+
+    private static final List<String> TRAFFIC_TYPES =
+            List.of(
+                    "S - S-Bahn",
+                    "RE - RegioExpress",
+                    "IR - InterRegio",
+                    "IC - InterCity",
+                    "EC - EuroCity",
+                    "EN - EuroNight",
+                    "FG - Fernverkehr Güter",
+                    "GZ - Güterzug",
+                    "AT - Autoverlad",
+                    "ARZ - AutoReisezug",
+                    "CNL - CityNightLine",
+                    "LRZ - Lösch-/Rettungszug",
+                    "DZ - Dienstzug");
+
     private static final List<String> BRAKE_SEQUENCES =
             List.of(
                     "N180", "N150", "R150", "R135", "R125", "R115", "R105", "A115", "A105", "A95",
@@ -43,6 +68,8 @@ public class TttOrderDialog extends Dialog {
 
     /* Required fields */
     private final TextField debitCode = new TextField();
+    private final ComboBox<String> trainType = new ComboBox<>();
+    private final ComboBox<String> trafficTypeCode = new ComboBox<>();
     private final TextField contactName = new TextField();
     private final EmailField contactEmail = new EmailField();
     private final ComboBox<String> trainAndBrakeSequence = new ComboBox<>();
@@ -142,6 +169,18 @@ public class TttOrderDialog extends Dialog {
         debitCode.setRequired(true);
         form.add(debitCode);
 
+        trainType.setLabel(tr("ttt.order.trainType"));
+        trainType.setItems(TRAIN_TYPES);
+        trainType.setRequired(true);
+        trainType.setHelperText(tr("ttt.order.trainType.help"));
+        form.add(trainType);
+
+        trafficTypeCode.setLabel(tr("ttt.order.trafficType"));
+        trafficTypeCode.setItems(TRAFFIC_TYPES);
+        trafficTypeCode.setRequired(true);
+        trafficTypeCode.setHelperText(tr("ttt.order.trafficType.help"));
+        form.add(trafficTypeCode);
+
         contactName.setLabel(tr("ttt.order.contactName"));
         contactName.setRequired(true);
         form.add(contactName);
@@ -180,6 +219,14 @@ public class TttOrderDialog extends Dialog {
             debitCode.setInvalid(true);
             valid = false;
         }
+        if (trainType.isEmpty()) {
+            trainType.setInvalid(true);
+            valid = false;
+        }
+        if (trafficTypeCode.isEmpty()) {
+            trafficTypeCode.setInvalid(true);
+            valid = false;
+        }
         if (contactName.isEmpty()) {
             contactName.setInvalid(true);
             valid = false;
@@ -200,6 +247,8 @@ public class TttOrderDialog extends Dialog {
 
         // Required
         root.put("debitCode", debitCode.getValue());
+        root.put("trainType", trainType.getValue());
+        root.put("trafficTypeCode", trafficTypeCode.getValue());
         root.put("contactName", contactName.getValue());
         root.put("contactEmail", contactEmail.getValue());
         root.put("trainAndBrakeSequence", trainAndBrakeSequence.getValue());
