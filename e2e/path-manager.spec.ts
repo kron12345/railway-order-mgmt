@@ -4,8 +4,6 @@ import { expect, Page, test } from "@playwright/test";
 const KC_USER = "sebastian";
 const KC_PASS = "sebastian";
 
-const BASE_API = "http://localhost:8085";
-
 // ── Helpers ─────────────────────────────────────────────────────────
 
 async function login(page: Page) {
@@ -76,9 +74,11 @@ async function apiFetch(
 const TS = Date.now();
 const OTN = `99${String(TS).slice(-3)}`; // short unique train number
 
-// ── Path Manager E2E Test ──────────────────────────────────────────
+// ── Path Manager REST API Tests ─────────────────────────────────────
+// UI navigation and tree verification are covered by sbahn-integration.spec.ts.
+// These tests focus on the REST API endpoints (unique coverage).
 
-test.describe("Path Manager: Basic Navigation and REST API", () => {
+test.describe("Path Manager: REST API", () => {
   test.describe.configure({ mode: "serial" });
 
   let page: Page;
@@ -93,41 +93,9 @@ test.describe("Path Manager: Basic Navigation and REST API", () => {
     await page.close();
   });
 
-  // ── 01: Navigate to Path Manager via sidebar ────────────────────
+  // ── 01: Submit a train via REST API ─────────────────────────────
 
-  test("01. navigate to Path Manager via sidebar", async () => {
-    // Click the Path Manager link in the sidebar navigation
-    const pmLink = page.locator("vaadin-side-nav-item").filter({
-      hasText: /Path Manager|Fahrplanmanager/i,
-    });
-    await pmLink.click();
-
-    await page.waitForURL(/\/pathmanager/, { timeout: 15_000 });
-    expect(page.url()).toContain("/pathmanager");
-
-    // Verify page loaded — TreeGrid or a heading should be visible
-    const treeGrid = page.locator("vaadin-grid-tree-toggle, vaadin-grid");
-    await expect(treeGrid.first()).toBeVisible({ timeout: 15_000 });
-
-    await screenshot(page, "01-main-view");
-  });
-
-  // ── 02: Verify timetable year 2026 exists ───────────────────────
-
-  test("02. verify timetable year 2026 exists", async () => {
-    await page.goto("/pathmanager");
-    await page.waitForTimeout(2_000);
-
-    // The TreeGrid should show "Fahrplanjahr 2026" or "Timetable Year 2026"
-    const yearNode = page.getByText(/Fahrplanjahr 2026|Timetable Year 2026/i);
-    await expect(yearNode.first()).toBeVisible({ timeout: 15_000 });
-
-    await screenshot(page, "02-year-2026");
-  });
-
-  // ── 03: Submit a train via REST API ─────────────────────────────
-
-  test("03. submit a train via REST API", async () => {
+  test("01. submit a train via REST API", async () => {
     const result = await apiFetch(page, "POST", "/api/v1/pathmanager/trains", {
       sourcePositionId: null,
       operationalTrainNumber: OTN,
@@ -161,29 +129,9 @@ test.describe("Path Manager: Basic Navigation and REST API", () => {
     trainId = body.id as string;
   });
 
-  // ── 04: Verify train appears in TreeGrid ────────────────────────
+  // ── 02: Verify available actions via REST ───────────────────────
 
-  test("04. verify train appears in TreeGrid", async () => {
-    await page.goto("/pathmanager");
-    await page.waitForTimeout(2_000);
-
-    // Expand the 2026 year node by clicking the tree toggle
-    const yearToggle = page
-      .locator("vaadin-grid-tree-toggle")
-      .filter({ hasText: /Fahrplanjahr 2026|Timetable Year 2026/i });
-    await yearToggle.first().click();
-    await page.waitForTimeout(1_000);
-
-    // The OTN or IC should appear somewhere in the grid
-    const trainEntry = page.getByText(new RegExp(OTN));
-    await expect(trainEntry.first()).toBeVisible({ timeout: 10_000 });
-
-    await screenshot(page, "04-train-in-tree");
-  });
-
-  // ── 05: Verify available actions via REST ───────────────────────
-
-  test("05. verify available actions via REST", async () => {
+  test("02. verify available actions via REST", async () => {
     const result = await apiFetch(
       page,
       "GET",
@@ -196,9 +144,9 @@ test.describe("Path Manager: Basic Navigation and REST API", () => {
     expect(body.actions).toContain("SEND_REQUEST");
   });
 
-  // ── 06: Execute SEND_REQUEST transition via REST ────────────────
+  // ── 03: Execute SEND_REQUEST transition via REST ────────────────
 
-  test("06. execute SEND_REQUEST transition via REST", async () => {
+  test("03. execute SEND_REQUEST transition via REST", async () => {
     const result = await apiFetch(
       page,
       "POST",
@@ -209,7 +157,6 @@ test.describe("Path Manager: Basic Navigation and REST API", () => {
       },
     );
 
-    // PathProcessController uses @ResponseStatus(HttpStatus.CREATED)
     expect(result.status).toBe(201);
     const body = result.body as Record<string, unknown>;
     expect(body.toState).toBe("CREATED");
@@ -217,9 +164,9 @@ test.describe("Path Manager: Basic Navigation and REST API", () => {
     expect(body.stepType).toBe("SEND_REQUEST");
   });
 
-  // ── 07: Verify Swagger UI accessible ────────────────────────────
+  // ── 04: Verify REST list and detail endpoints ──────────────────
 
-  test("07. verify REST API list and detail endpoints", async () => {
+  test("04. verify REST API list and detail endpoints", async () => {
     // Verify the trains list endpoint works
     const listResult = await apiFetch(page, "GET", "/api/v1/pathmanager/trains");
     expect(listResult.status).toBe(200);
@@ -233,23 +180,15 @@ test.describe("Path Manager: Basic Navigation and REST API", () => {
     expect(ourTrain).toBeTruthy();
     expect(ourTrain!.processState).toBe("CREATED");
 
-    // Navigate back to PM view and take screenshot
-    await page.goto("/pathmanager");
-    await page.waitForTimeout(1_000);
-    await screenshot(page, "07-api-verified");
-  });
-
-  // ── 08: Cleanup verification ────────────────────────────────────
-
-  test("08. cleanup — verify test data is isolated", async () => {
-    const result = await apiFetch(
+    // Verify detail endpoint
+    const detailResult = await apiFetch(
       page,
       "GET",
       `/api/v1/pathmanager/trains/${trainId}`,
     );
-    expect(result.status).toBe(200);
-    const body = result.body as Record<string, unknown>;
-    expect(body.processState).toBe("CREATED");
+    expect(detailResult.status).toBe(200);
+    const detail = detailResult.body as Record<string, unknown>;
+    expect(detail.processState).toBe("CREATED");
 
     // Verify process history exists
     const historyResult = await apiFetch(
@@ -261,5 +200,7 @@ test.describe("Path Manager: Basic Navigation and REST API", () => {
     const history = historyResult.body as Array<Record<string, unknown>>;
     expect(history.length).toBeGreaterThanOrEqual(1);
     expect(history[0].stepType).toBe("SEND_REQUEST");
+
+    await screenshot(page, "04-api-verified");
   });
 });
