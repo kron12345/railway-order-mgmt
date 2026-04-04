@@ -118,10 +118,14 @@ public class VehiclePlanningService {
 
     // --- Vehicle CRUD ---
 
-    /** Returns all vehicles for the given rotation set, ordered by sequence. */
+    /**
+     * Returns all vehicles for the given rotation set with entries and reference trains eagerly
+     * loaded. This ensures the data is available outside the transaction boundary (Vaadin UI
+     * thread).
+     */
     @Transactional(readOnly = true)
     public List<VpVehicle> getVehicles(UUID rotationSetId) {
-        return vehicleRepo.findByRotationSetIdOrderBySequenceAsc(rotationSetId);
+        return vehicleRepo.findByRotationSetIdWithEntries(rotationSetId);
     }
 
     /** Persists changes to a vehicle. */
@@ -184,8 +188,10 @@ public class VehiclePlanningService {
      */
     @Transactional(readOnly = true)
     public List<PmReferenceTrain> getUnassignedTrains(UUID rotationSetId, int year) {
-        List<PmReferenceTrain> allTrains =
-                trainRepo.findByTimetableYearYearOrderByOperationalTrainNumberAsc(year);
+        // Use the eager-fetching query so that trainVersions are available
+        // outside the transaction (Vaadin UI thread has no open session).
+        // We only fetch trainVersions (not pathRequests) to avoid MultipleBagFetchException.
+        List<PmReferenceTrain> allTrains = trainRepo.findByYearWithVersions(year);
         Set<UUID> assignedTrainIds =
                 entryRepo.findByVehicleRotationSetId(rotationSetId).stream()
                         .map(e -> e.getReferenceTrain().getId())

@@ -218,24 +218,24 @@ public class GanttChart extends Div {
      * back to a 1-hour placeholder if no journey data is available.
      */
     private TrainTimeWindow resolveTrainTimes(PmReferenceTrain train, LocalDateTime baseDate) {
-        // Try to get times from the latest train version's journey locations
-        var versions = train.getTrainVersions();
-        if (versions != null && !versions.isEmpty()) {
-            var latest =
-                    versions.stream()
-                            .max(
-                                    Comparator.comparingInt(
-                                            com.ordermgmt.railway.domain.pathmanager.model
-                                                            .PmTrainVersion
-                                                    ::getVersionNumber))
-                            .orElse(null);
-            if (latest != null) {
-                // Journey locations are loaded lazily; use calendar hints if available
-                String depTime = null;
-                String arrTime = null;
-                // Check via in-memory data if already fetched
-                // (for lazy-loaded collections this won't trigger DB calls in read context)
-                try {
+        // Try to get times from the latest train version's journey locations.
+        // Both trainVersions and journeyLocations are lazy-loaded; if the Hibernate
+        // session is closed (typical in Vaadin UI threads), we fall through to the
+        // fallback placeholder.
+        try {
+            var versions = train.getTrainVersions();
+            if (versions != null && !versions.isEmpty()) {
+                var latest =
+                        versions.stream()
+                                .max(
+                                        Comparator.comparingInt(
+                                                com.ordermgmt.railway.domain.pathmanager.model
+                                                                .PmTrainVersion
+                                                        ::getVersionNumber))
+                                .orElse(null);
+                if (latest != null) {
+                    String depTime = null;
+                    String arrTime = null;
                     var jlocs = latest.getJourneyLocations();
                     if (jlocs != null && !jlocs.isEmpty()) {
                         var sorted =
@@ -249,18 +249,18 @@ public class GanttChart extends Div {
                         depTime = sorted.getFirst().getDepartureTime();
                         arrTime = sorted.getLast().getArrivalTime();
                     }
-                } catch (org.hibernate.LazyInitializationException ignored) {
-                    // Journey locations not in session; fall through to fallback
-                }
 
-                if (depTime != null && arrTime != null) {
-                    LocalDateTime start = parseTimeOnDate(depTime, baseDate);
-                    LocalDateTime end = parseTimeOnDate(arrTime, baseDate);
-                    if (end.isAfter(start)) {
-                        return new TrainTimeWindow(start, end);
+                    if (depTime != null && arrTime != null) {
+                        LocalDateTime start = parseTimeOnDate(depTime, baseDate);
+                        LocalDateTime end = parseTimeOnDate(arrTime, baseDate);
+                        if (end.isAfter(start)) {
+                            return new TrainTimeWindow(start, end);
+                        }
                     }
                 }
             }
+        } catch (org.hibernate.LazyInitializationException ignored) {
+            // Train versions or journey locations not in session; use fallback
         }
 
         // Fallback: 1-hour placeholder block at 06:00

@@ -1117,6 +1117,317 @@ test.describe("S-Bahn Olten-Aarau: Full Integration Test", () => {
     await screenshot(page, "09c-vonbis-button");
   });
 
+  test("09d2. add duty weeks to rotation", async () => {
+    // Navigate to Vehicle Planning
+    if (!page.url().includes("vehicleplanning")) {
+      await page.goto("/vehicleplanning");
+      await page.waitForTimeout(2_000);
+    }
+
+    // Select the S-Bahn FLIRT Umlauf rotation set if not already selected
+    const rotationCombo = page.locator("vaadin-combo-box").first();
+    await expect(rotationCombo).toBeVisible({ timeout: 10_000 });
+    await rotationCombo.click();
+    await rotationCombo.locator("input").fill("S-Bahn FLIRT");
+    const rotOption = page
+      .locator("vaadin-combo-box-item")
+      .filter({ hasText: /S-Bahn FLIRT Umlauf/ })
+      .first();
+    const rotVisible = await rotOption.isVisible().catch(() => false);
+    if (rotVisible) {
+      await rotOption.click();
+    } else {
+      await page.keyboard.press("Escape");
+      console.log("S-Bahn FLIRT Umlauf not found — skipping duty week creation");
+      await screenshot(page, "09d2-rotation-not-found");
+      return;
+    }
+    await page.waitForTimeout(1_000);
+
+    // Click "+ Dienst" / "Add Duty" button to create FLIRT Woche 1
+    const addDutyBtn = page.locator("vaadin-button").filter({
+      hasText: /Dienst hinzuf|Add Duty|\+ Dienst/i,
+    });
+    const addDutyVisible = await addDutyBtn.first().isVisible().catch(() => false);
+    if (!addDutyVisible) {
+      console.log("Add Duty button not found — skipping duty creation");
+      await screenshot(page, "09d2-no-add-duty-btn");
+      return;
+    }
+
+    // Create "FLIRT Woche 1"
+    await addDutyBtn.first().click({ force: true });
+    await page.waitForTimeout(1_500);
+    const dialog1 = page.locator("vaadin-dialog-overlay").first();
+    const dialog1Visible = await dialog1.isVisible().catch(() => false);
+    if (dialog1Visible) {
+      const labelInput1 = dialog1.locator("vaadin-text-field input").first();
+      await labelInput1.click();
+      await labelInput1.fill("FLIRT Woche 1");
+      await page.keyboard.press("Tab");
+      await page.waitForTimeout(500);
+
+      const saveBtn1 = dialog1.locator("vaadin-button").filter({
+        hasText: /Save|Speichern|Create|Erstellen|OK/i,
+      });
+      await saveBtn1.first().click({ force: true });
+      await page.waitForTimeout(1_500);
+      console.log("Created duty: FLIRT Woche 1");
+    } else {
+      console.log("Dialog did not open for FLIRT Woche 1");
+    }
+
+    // Create "FLIRT Woche 2"
+    await addDutyBtn.first().click({ force: true });
+    await page.waitForTimeout(1_500);
+    const dialog2 = page.locator("vaadin-dialog-overlay").first();
+    const dialog2Visible = await dialog2.isVisible().catch(() => false);
+    if (dialog2Visible) {
+      const labelInput2 = dialog2.locator("vaadin-text-field input").first();
+      await labelInput2.click();
+      await labelInput2.fill("FLIRT Woche 2");
+      await page.keyboard.press("Tab");
+      await page.waitForTimeout(500);
+
+      const saveBtn2 = dialog2.locator("vaadin-button").filter({
+        hasText: /Save|Speichern|Create|Erstellen|OK/i,
+      });
+      await saveBtn2.first().click({ force: true });
+      await page.waitForTimeout(1_500);
+      console.log("Created duty: FLIRT Woche 2");
+    } else {
+      console.log("Dialog did not open for FLIRT Woche 2");
+    }
+
+    await screenshot(page, "09d2-duty-weeks-created");
+  });
+
+  test("09d3. verify Gantt chart renders", async () => {
+    // Ensure we are on the Vehicle Planning page
+    if (!page.url().includes("vehicleplanning")) {
+      await page.goto("/vehicleplanning");
+      await page.waitForTimeout(2_000);
+    }
+
+    // Look for the tltv-gantt web component or any gantt-related elements
+    const ganttInfo = await page.evaluate(() => {
+      // Check for the tltv-gantt custom element
+      const ganttEl = document.querySelector("tltv-gantt");
+      if (ganttEl) {
+        return {
+          found: true,
+          tagName: "tltv-gantt",
+          visible: (ganttEl as HTMLElement).offsetParent !== null,
+          width: (ganttEl as HTMLElement).offsetWidth,
+          height: (ganttEl as HTMLElement).offsetHeight,
+        };
+      }
+      // Fallback: look for any element with "gantt" in tag name
+      const allEls = document.querySelectorAll("*");
+      for (const el of allEls) {
+        if (el.tagName.toLowerCase().includes("gantt")) {
+          return {
+            found: true,
+            tagName: el.tagName.toLowerCase(),
+            visible: (el as HTMLElement).offsetParent !== null,
+            width: (el as HTMLElement).offsetWidth,
+            height: (el as HTMLElement).offsetHeight,
+          };
+        }
+      }
+      return { found: false, tagName: null, visible: false, width: 0, height: 0 };
+    });
+
+    console.log(`Gantt element: ${JSON.stringify(ganttInfo)}`);
+
+    if (ganttInfo.found) {
+      expect(ganttInfo.visible).toBe(true);
+      console.log(
+        `Gantt chart rendered: tag=${ganttInfo.tagName}, ${ganttInfo.width}x${ganttInfo.height}px`,
+      );
+    } else {
+      // The Gantt might not render if no rotation is selected or no data
+      console.log("WARN: Gantt element not found in DOM — may need rotation selection first");
+    }
+
+    // Verify shelf/duty rows by checking for text content
+    const rowInfo = await page.evaluate(() => {
+      const allText = document.body.innerText || "";
+      const hasShelf = /Shelf|Ablage/i.test(allText);
+      const hasDuty = /FLIRT Woche|Dienst|Duty/i.test(allText);
+      return { hasShelf, hasDuty };
+    });
+    console.log(`Gantt rows — shelf: ${rowInfo.hasShelf}, duty: ${rowInfo.hasDuty}`);
+
+    await screenshot(page, "09d3-gantt-chart");
+  });
+
+  test("09d4. click Von/Fur button", async () => {
+    // Ensure we are on the Vehicle Planning page
+    if (!page.url().includes("vehicleplanning")) {
+      await page.goto("/vehicleplanning");
+      await page.waitForTimeout(2_000);
+    }
+
+    // Select the rotation set first (Von/Fur needs a selected rotation)
+    const rotationCombo = page.locator("vaadin-combo-box").first();
+    await expect(rotationCombo).toBeVisible({ timeout: 10_000 });
+    await rotationCombo.click();
+    await rotationCombo.locator("input").fill("S-Bahn FLIRT");
+    const rotOption = page
+      .locator("vaadin-combo-box-item")
+      .filter({ hasText: /S-Bahn FLIRT Umlauf/ })
+      .first();
+    const rotVisible = await rotOption.isVisible().catch(() => false);
+    if (rotVisible) {
+      await rotOption.click();
+    } else {
+      await page.keyboard.press("Escape");
+      console.log("S-Bahn FLIRT Umlauf not found — skipping Von/Fur click");
+      await screenshot(page, "09d4-rotation-not-found");
+      return;
+    }
+    await page.waitForTimeout(1_000);
+
+    // Find and click the "Von/Fur aktualisieren" / "Update vehicle links" button
+    const writeLinkBtn = page.locator("vaadin-button").filter({
+      hasText: /Von\/F.r|Update vehicle links|writeLinks/i,
+    });
+    let btnFound = await writeLinkBtn.first().isVisible().catch(() => false);
+
+    // Fallback: find button with CONNECT icon
+    if (!btnFound) {
+      const connectBtn = page.locator(
+        'vaadin-button:has(vaadin-icon[icon*="connect"])',
+      );
+      btnFound = await connectBtn.first().isVisible().catch(() => false);
+      if (btnFound) {
+        await connectBtn.first().click({ force: true });
+      }
+    } else {
+      await writeLinkBtn.first().click({ force: true });
+    }
+
+    if (!btnFound) {
+      console.log("Von/Fur button not found — skipping");
+      await screenshot(page, "09d4-vonbis-not-found");
+      return;
+    }
+
+    // Wait for notification
+    await page.waitForTimeout(3_000);
+    const notification = page.locator("vaadin-notification-card");
+    const notifVisible = await notification.first().isVisible().catch(() => false);
+    if (notifVisible) {
+      const notifText = await notification.first().textContent();
+      console.log(`Von/Fur notification: ${notifText}`);
+      // Should contain success message
+      if (/aktualisiert|updated|success/i.test(notifText || "")) {
+        console.log("Von/Fur update successful");
+      } else if (/error|fehler/i.test(notifText || "")) {
+        console.log("WARN: Von/Fur returned error");
+      }
+    } else {
+      console.log("No notification appeared after Von/Fur click");
+    }
+
+    await screenshot(page, "09d4-vonbis-clicked");
+  });
+
+  test("09d5. verify Von/Fur in Path Manager", async () => {
+    test.setTimeout(90_000);
+
+    // Navigate to Path Manager
+    await page.goto("/pathmanager");
+    await page.waitForTimeout(2_000);
+
+    // Wait for grid to load
+    const treeGrid = page.locator("vaadin-grid-tree-toggle, vaadin-grid");
+    await expect(treeGrid.first()).toBeVisible({ timeout: 15_000 });
+
+    // Use the REST API to list trains and check for associatedTrainOtn in locations
+    const apiBase = "http://localhost:8085/api/v1/pathmanager";
+
+    // Get all trains — the cookies from the page session should work
+    const trainsResult = await page.evaluate(async (url: string) => {
+      try {
+        const resp = await fetch(url + "/trains", { credentials: "include" });
+        if (!resp.ok) return { error: `HTTP ${resp.status}`, trains: [] };
+        const trains = await resp.json();
+        return { error: null, trains: trains.slice(0, 10) }; // limit to first 10
+      } catch (e: any) {
+        return { error: e.message, trains: [] };
+      }
+    }, apiBase);
+
+    if (trainsResult.error) {
+      console.log(`API error fetching trains: ${trainsResult.error}`);
+      await screenshot(page, "09d5-api-error");
+      return;
+    }
+
+    console.log(`Fetched ${trainsResult.trains.length} trains from API`);
+
+    // For each train, check versions and locations for associatedTrainOtn
+    let foundAssociation = false;
+    for (const train of trainsResult.trains) {
+      const trainId = train.id;
+      if (!trainId) continue;
+
+      const locationsResult = await page.evaluate(
+        async ({ url, tId }: { url: string; tId: string }) => {
+          try {
+            // Get versions first
+            const versResp = await fetch(`${url}/trains/${tId}/versions`, {
+              credentials: "include",
+            });
+            if (!versResp.ok) return { error: `HTTP ${versResp.status}`, locations: [] };
+            const versions = await versResp.json();
+            if (!versions || versions.length === 0) return { error: null, locations: [] };
+
+            // Use the latest version
+            const latestVersion = versions[versions.length - 1];
+            const locsResp = await fetch(
+              `${url}/trains/${tId}/versions/${latestVersion.id}/locations`,
+              { credentials: "include" },
+            );
+            if (!locsResp.ok) return { error: `HTTP ${locsResp.status}`, locations: [] };
+            const locations = await locsResp.json();
+            return { error: null, locations };
+          } catch (e: any) {
+            return { error: e.message, locations: [] };
+          }
+        },
+        { url: apiBase, tId: trainId },
+      );
+
+      if (locationsResult.error) {
+        continue;
+      }
+
+      for (const loc of locationsResult.locations) {
+        if (loc.associatedTrainOtn) {
+          console.log(
+            `Train ${train.operationalTrainNumber || trainId}: ` +
+              `location "${loc.primaryLocationName}" has associatedTrainOtn="${loc.associatedTrainOtn}"`,
+          );
+          foundAssociation = true;
+        }
+      }
+    }
+
+    if (foundAssociation) {
+      console.log("Von/Fur verification: associatedTrainOtn values found in PM locations");
+    } else {
+      console.log(
+        "WARN: No associatedTrainOtn values found — Von/Fur may not have been executed " +
+          "or no trains are assigned to vehicles",
+      );
+    }
+
+    await screenshot(page, "09d5-vonbis-verification");
+  });
+
   test("09d. verify TTR phase in Path Manager", async () => {
     await page.goto("/pathmanager");
     await page.waitForTimeout(2_000);

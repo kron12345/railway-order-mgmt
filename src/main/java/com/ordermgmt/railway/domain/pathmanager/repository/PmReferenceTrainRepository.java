@@ -28,4 +28,15 @@ public interface PmReferenceTrainRepository
     List<PmReferenceTrain> findByYearWithDetails(@Param("year") int year);
 
     List<PmReferenceTrain> findBySourcePositionId(UUID sourcePositionId);
+
+    /**
+     * Loads trains with only trainVersions eagerly fetched (avoids MultipleBagFetchException that
+     * occurs when fetching both trainVersions and pathRequests in a single query).
+     */
+    @Query(
+            "SELECT DISTINCT t FROM PmReferenceTrain t"
+                    + " LEFT JOIN FETCH t.trainVersions"
+                    + " WHERE t.timetableYear.year = :year"
+                    + " ORDER BY t.operationalTrainNumber ASC")
+    List<PmReferenceTrain> findByYearWithVersions(@Param("year") int year);
 }
