@@ -246,7 +246,13 @@ public class ResourcePanel extends Div {
                     .set("padding", "1px 6px");
             tttBtn.addClickListener(
                     e -> {
-                        TttOrderDialog tttDialog = new TttOrderDialog(pp, translator);
+                        TttOrderDialog tttDialog =
+                                new TttOrderDialog(
+                                        pp.getId(),
+                                        pp.getPositionNumber(),
+                                        position.getOperationalTrainNumber(),
+                                        buildRouteLabel(),
+                                        translator);
                         tttDialog.addSubmitListener(
                                 evt -> {
                                     try {
@@ -355,7 +361,16 @@ public class ResourcePanel extends Div {
         btn.addClickListener(
                 e -> {
                     PurchaseDialog dialog =
-                            new PurchaseDialog(rn, purchaseOrderService, translator);
+                            new PurchaseDialog(
+                                    rn.getId(),
+                                    tr("resource.type." + rn.getResourceType().name()),
+                                    tr("resource.coverage." + rn.getCoverageType().name()),
+                                    rn.getResourceType() == ResourceType.CAPACITY,
+                                    position.getValidity(),
+                                    position.getOperationalTrainNumber(),
+                                    buildRouteLabel(),
+                                    purchaseOrderService,
+                                    translator);
                     dialog.addSaveListener(ev -> loadResources());
                     dialog.open();
                 });
@@ -451,6 +466,13 @@ public class ResourcePanel extends Div {
             case ABGELEHNT -> "var(--rom-status-danger)";
             case STORNIERT -> "var(--rom-status-neutral)";
         };
+    }
+
+    private String buildRouteLabel() {
+        if (position.getFromLocation() != null && position.getToLocation() != null) {
+            return position.getFromLocation() + " \u2192 " + position.getToLocation();
+        }
+        return null;
     }
 
     private String tr(String key) {

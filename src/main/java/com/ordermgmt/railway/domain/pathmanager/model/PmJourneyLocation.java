@@ -64,7 +64,7 @@ public class PmJourneyLocation {
     @Column(length = 20)
     private String uopid;
 
-    @Column(length = 2)
+    @Column(length = 20)
     private String journeyLocationType;
 
     @Column(length = 8)

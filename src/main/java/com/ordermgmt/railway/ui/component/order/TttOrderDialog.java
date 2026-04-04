@@ -21,8 +21,6 @@ import com.vaadin.flow.component.textfield.EmailField;
 import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.shared.Registration;
 
-import com.ordermgmt.railway.domain.order.model.PurchasePosition;
-
 /**
  * Dialog for entering TTT-specific order attributes before triggering a CAPACITY purchase via TTT.
  * Collects mandatory fields (debit code, contact, brake sequence) and optional advanced attributes
@@ -77,13 +75,25 @@ public class TttOrderDialog extends Dialog {
     /* Advanced fields (created by TttOrderDetailSections) */
     private final TttOrderDetailSections detailSections;
 
+    /**
+     * Creates a new TttOrderDialog.
+     *
+     * @param purchasePositionId the purchase position UUID
+     * @param positionNumber the position number label
+     * @param otn the operational train number (nullable)
+     * @param routeLabel the route label, e.g. "Bern -> Zurich" (nullable)
+     * @param translator i18n translation function
+     */
     public TttOrderDialog(
-            PurchasePosition purchasePosition, BiFunction<String, Object[], String> translator) {
-        this.purchasePositionId = purchasePosition.getId();
+            UUID purchasePositionId,
+            String positionNumber,
+            String otn,
+            String routeLabel,
+            BiFunction<String, Object[], String> translator) {
+        this.purchasePositionId = purchasePositionId;
         this.translator = translator;
 
-        String positionName = purchasePosition.getPositionNumber();
-        setHeaderTitle(tr("ttt.order.title") + " \u2014 " + positionName);
+        setHeaderTitle(tr("ttt.order.title") + " \u2014 " + positionNumber);
         setWidth("700px");
 
         Div content = new Div();
@@ -92,7 +102,7 @@ public class TttOrderDialog extends Dialog {
                 .set("flex-direction", "column")
                 .set("gap", "var(--lumo-space-m)");
 
-        content.add(buildTrainInfoSection(purchasePosition));
+        content.add(buildTrainInfoSection(otn, routeLabel));
         content.add(buildRequiredFields());
 
         detailSections = new TttOrderDetailSections(translator);
@@ -113,7 +123,7 @@ public class TttOrderDialog extends Dialog {
         getFooter().add(cancel, submit);
     }
 
-    private Div buildTrainInfoSection(PurchasePosition pp) {
+    private Div buildTrainInfoSection(String otn, String routeLabel) {
         Div section = new Div();
         section.getStyle()
                 .set("background", "var(--rom-bg-secondary)")
@@ -130,15 +140,12 @@ public class TttOrderDialog extends Dialog {
                 .set("margin-bottom", "4px");
         section.add(title);
 
-        var position = pp.getOrderPosition();
         StringBuilder info = new StringBuilder();
-        if (position.getOperationalTrainNumber() != null) {
-            info.append("OTN: ").append(position.getOperationalTrainNumber()).append("  ");
+        if (otn != null && !otn.isBlank()) {
+            info.append("OTN: ").append(otn).append("  ");
         }
-        if (position.getFromLocation() != null && position.getToLocation() != null) {
-            info.append(position.getFromLocation())
-                    .append(" \u2192 ")
-                    .append(position.getToLocation());
+        if (routeLabel != null && !routeLabel.isBlank()) {
+            info.append(routeLabel);
         }
 
         Span infoSpan = new Span(info.toString().trim());

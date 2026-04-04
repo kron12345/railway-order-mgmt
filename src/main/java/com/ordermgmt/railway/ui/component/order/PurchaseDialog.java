@@ -1,5 +1,6 @@
 package com.ordermgmt.railway.ui.component.order;
 
+import java.util.UUID;
 import java.util.function.BiFunction;
 
 import com.vaadin.flow.component.ComponentEvent;
@@ -16,38 +17,59 @@ import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.shared.Registration;
 
 import com.ordermgmt.railway.domain.order.model.PurchasePosition;
-import com.ordermgmt.railway.domain.order.model.ResourceNeed;
-import com.ordermgmt.railway.domain.order.model.ResourceType;
 import com.ordermgmt.railway.domain.order.service.PurchaseOrderService;
 
 /** Dialog for creating a purchase position for a resource need. */
 public class PurchaseDialog extends Dialog {
 
-    private final ResourceNeed resourceNeed;
+    private final UUID resourceNeedId;
+    private final boolean isCapacity;
+    private final String positionValidity;
+    private final String positionOtn;
+    private final String positionRouteLabel;
     private final PurchaseOrderService purchaseOrderService;
     private final BiFunction<String, Object[], String> translator;
 
+    /**
+     * Creates a new PurchaseDialog.
+     *
+     * @param resourceNeedId the resource need UUID
+     * @param resourceTypeLabel the translated resource type label
+     * @param coverageTypeLabel the translated coverage type label
+     * @param isCapacity whether this is a CAPACITY resource type
+     * @param positionValidity the validity JSON from the order position (nullable)
+     * @param positionOtn the operational train number from the order position (nullable)
+     * @param positionRouteLabel the route label, e.g. "Bern -> Zurich" (nullable)
+     * @param purchaseOrderService the service for creating purchase positions
+     * @param translator i18n translation function
+     */
     public PurchaseDialog(
-            ResourceNeed resourceNeed,
+            UUID resourceNeedId,
+            String resourceTypeLabel,
+            String coverageTypeLabel,
+            boolean isCapacity,
+            String positionValidity,
+            String positionOtn,
+            String positionRouteLabel,
             PurchaseOrderService purchaseOrderService,
             BiFunction<String, Object[], String> translator) {
-        this.resourceNeed = resourceNeed;
+        this.resourceNeedId = resourceNeedId;
+        this.isCapacity = isCapacity;
+        this.positionValidity = positionValidity;
+        this.positionOtn = positionOtn;
+        this.positionRouteLabel = positionRouteLabel;
         this.purchaseOrderService = purchaseOrderService;
         this.translator = translator;
 
         setHeaderTitle(tr("purchase.add"));
         setWidth("500px");
 
-        buildForm();
+        buildForm(resourceTypeLabel, coverageTypeLabel);
     }
 
-    private void buildForm() {
+    private void buildForm(String resourceTypeLabel, String coverageTypeLabel) {
         // Resource info (read-only)
-        Span resourceInfo =
-                new Span(
-                        tr("resource.type." + resourceNeed.getResourceType().name())
-                                + " — "
-                                + tr("resource.coverage." + resourceNeed.getCoverageType().name()));
+        Span resourceInfo = new Span(resourceTypeLabel + " \u2014 " + coverageTypeLabel);
         resourceInfo
                 .getStyle()
                 .set("font-size", "12px")
@@ -59,7 +81,6 @@ public class PurchaseDialog extends Dialog {
         TextField description = new TextField(tr("purchase.description"));
         description.setWidthFull();
 
-        boolean isCapacity = resourceNeed.getResourceType() == ResourceType.CAPACITY;
         Checkbox viaTtt = new Checkbox(tr("purchase.triggerTtt"));
         viaTtt.setVisible(isCapacity);
         viaTtt.setValue(isCapacity);
@@ -84,13 +105,17 @@ public class PurchaseDialog extends Dialog {
                     try {
                         PurchasePosition pp =
                                 purchaseOrderService.createPurchasePosition(
-                                        resourceNeed.getId(),
-                                        description.getValue(),
-                                        resourceNeed.getOrderPosition().getValidity());
+                                        resourceNeedId, description.getValue(), positionValidity);
 
                         if (isCapacity && viaTtt.getValue()) {
                             close();
-                            TttOrderDialog tttDialog = new TttOrderDialog(pp, translator);
+                            TttOrderDialog tttDialog =
+                                    new TttOrderDialog(
+                                            pp.getId(),
+                                            pp.getPositionNumber(),
+                                            positionOtn,
+                                            positionRouteLabel,
+                                            translator);
                             tttDialog.addSubmitListener(
                                     evt -> {
                                         purchaseOrderService.triggerTttOrder(

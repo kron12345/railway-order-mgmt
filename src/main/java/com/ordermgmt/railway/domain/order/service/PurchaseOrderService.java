@@ -150,6 +150,12 @@ public class PurchaseOrderService {
                                                     "Train not found after transition"));
         }
 
+        // Link order position to the reference train
+        if (position.getPmReferenceTrainId() == null) {
+            position.setPmReferenceTrainId(train.getId());
+            orderPositionRepository.save(position);
+        }
+
         pp.setPmPathRequestId(resolvePathRequestId(train));
         pp.setPurchaseStatus(PurchaseStatus.BESTELLT);
         pp.setOrderedAt(Instant.now());

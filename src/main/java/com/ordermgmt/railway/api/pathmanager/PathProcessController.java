@@ -55,7 +55,12 @@ public class PathProcessController {
     public ProcessStepDto executeTransition(
             @PathVariable UUID referenceTrainId,
             @Valid @RequestBody ProcessTransitionRequest request) {
-        PathAction action = PathAction.valueOf(request.action());
+        PathAction action;
+        try {
+            action = PathAction.valueOf(request.action());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException("Unknown action: " + request.action());
+        }
         ProcessStepResult result =
                 pathProcessEngine.executeTransition(referenceTrainId, action, request.comment());
         return PathManagerDtoMapper.toStepDto(result.processStep());
