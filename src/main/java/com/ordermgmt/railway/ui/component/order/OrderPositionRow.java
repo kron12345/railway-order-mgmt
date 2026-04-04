@@ -183,6 +183,41 @@ public class OrderPositionRow extends Div {
             meta.add(createMetaBadge("+" + (tags.size() - MAX_TAGS), "var(--rom-text-muted)"));
         }
 
+        // Resource summary badge
+        long resourceCount =
+                position.getResourceNeeds() != null ? position.getResourceNeeds().size() : 0;
+        long purchaseCount =
+                position.getResourceNeeds() != null
+                        ? position.getResourceNeeds().stream()
+                                .mapToLong(
+                                        rn ->
+                                                rn.getOrderPosition() != null
+                                                                && position.getPurchasePositions()
+                                                                        != null
+                                                        ? position.getPurchasePositions().stream()
+                                                                .filter(
+                                                                        pp ->
+                                                                                pp.getResourceNeed()
+                                                                                                != null
+                                                                                        && pp.getResourceNeed()
+                                                                                                .getId()
+                                                                                                .equals(
+                                                                                                        rn
+                                                                                                                .getId()))
+                                                                .count()
+                                                        : 0)
+                                .sum()
+                        : 0;
+        if (resourceCount > 0) {
+            String resLabel =
+                    translator.apply(
+                            "resource.summary",
+                            new Object[] {
+                                String.valueOf(resourceCount), String.valueOf(purchaseCount)
+                            });
+            meta.add(createMetaBadge(resLabel, "var(--rom-text-secondary)"));
+        }
+
         if (meta.getComponentCount() > 0) {
             info.add(meta);
         }

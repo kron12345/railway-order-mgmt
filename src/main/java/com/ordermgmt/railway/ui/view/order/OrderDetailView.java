@@ -27,7 +27,10 @@ import com.ordermgmt.railway.domain.customer.repository.CustomerRepository;
 import com.ordermgmt.railway.domain.infrastructure.repository.PredefinedTagRepository;
 import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.domain.order.model.ProcessStatus;
+import com.ordermgmt.railway.domain.order.repository.ResourceCatalogItemRepository;
 import com.ordermgmt.railway.domain.order.service.OrderService;
+import com.ordermgmt.railway.domain.order.service.PurchaseOrderService;
+import com.ordermgmt.railway.domain.order.service.ResourceNeedService;
 import com.ordermgmt.railway.domain.pathmanager.service.PathManagerService;
 import com.ordermgmt.railway.domain.timetable.service.TimetableArchiveService;
 import com.ordermgmt.railway.ui.component.StatusBadge;
@@ -48,6 +51,9 @@ public class OrderDetailView extends VerticalLayout implements BeforeEnterObserv
             opRepo;
     private final PathManagerService pathManagerService;
     private final TimetableArchiveService timetableArchiveService;
+    private final ResourceNeedService resourceNeedService;
+    private final PurchaseOrderService purchaseOrderService;
+    private final ResourceCatalogItemRepository catalogItemRepository;
     private Order order;
     private boolean isNew;
 
@@ -60,13 +66,19 @@ public class OrderDetailView extends VerticalLayout implements BeforeEnterObserv
             com.ordermgmt.railway.domain.infrastructure.repository.OperationalPointRepository
                     opRepo,
             PathManagerService pathManagerService,
-            TimetableArchiveService timetableArchiveService) {
+            TimetableArchiveService timetableArchiveService,
+            ResourceNeedService resourceNeedService,
+            PurchaseOrderService purchaseOrderService,
+            ResourceCatalogItemRepository catalogItemRepository) {
         this.orderService = orderService;
         this.customerRepository = customerRepository;
         this.predefinedTagRepository = predefinedTagRepository;
         this.opRepo = opRepo;
         this.pathManagerService = pathManagerService;
         this.timetableArchiveService = timetableArchiveService;
+        this.resourceNeedService = resourceNeedService;
+        this.purchaseOrderService = purchaseOrderService;
+        this.catalogItemRepository = catalogItemRepository;
         setPadding(false);
         setSpacing(false);
         setWidthFull();
@@ -144,6 +156,9 @@ public class OrderDetailView extends VerticalLayout implements BeforeEnterObserv
                         predefinedTagRepository,
                         pathManagerService,
                         timetableArchiveService,
+                        resourceNeedService,
+                        purchaseOrderService,
+                        catalogItemRepository,
                         this::getTranslation);
         add(positionPanel);
     }

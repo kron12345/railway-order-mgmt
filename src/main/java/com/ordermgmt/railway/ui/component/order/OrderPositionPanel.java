@@ -22,7 +22,10 @@ import com.ordermgmt.railway.domain.infrastructure.repository.PredefinedTagRepos
 import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.order.model.PositionType;
+import com.ordermgmt.railway.domain.order.repository.ResourceCatalogItemRepository;
 import com.ordermgmt.railway.domain.order.service.OrderService;
+import com.ordermgmt.railway.domain.order.service.PurchaseOrderService;
+import com.ordermgmt.railway.domain.order.service.ResourceNeedService;
 import com.ordermgmt.railway.domain.pathmanager.model.PmReferenceTrain;
 import com.ordermgmt.railway.domain.pathmanager.service.PathManagerService;
 import com.ordermgmt.railway.domain.timetable.model.TimetableArchive;
@@ -38,6 +41,9 @@ public class OrderPositionPanel extends Div {
     private final PredefinedTagRepository tagRepo;
     private final PathManagerService pathManagerService;
     private final TimetableArchiveService timetableArchiveService;
+    private final ResourceNeedService resourceNeedService;
+    private final PurchaseOrderService purchaseOrderService;
+    private final ResourceCatalogItemRepository catalogItemRepository;
     private final BiFunction<String, Object[], String> translator;
     private final VerticalLayout rowContainer = new VerticalLayout();
 
@@ -48,6 +54,9 @@ public class OrderPositionPanel extends Div {
             PredefinedTagRepository tagRepo,
             PathManagerService pathManagerService,
             TimetableArchiveService timetableArchiveService,
+            ResourceNeedService resourceNeedService,
+            PurchaseOrderService purchaseOrderService,
+            ResourceCatalogItemRepository catalogItemRepository,
             BiFunction<String, Object[], String> translator) {
         this.order = order;
         this.orderService = orderService;
@@ -55,6 +64,9 @@ public class OrderPositionPanel extends Div {
         this.tagRepo = tagRepo;
         this.pathManagerService = pathManagerService;
         this.timetableArchiveService = timetableArchiveService;
+        this.resourceNeedService = resourceNeedService;
+        this.purchaseOrderService = purchaseOrderService;
+        this.catalogItemRepository = catalogItemRepository;
         this.translator = translator;
 
         setWidthFull();
@@ -132,6 +144,20 @@ public class OrderPositionPanel extends Div {
                             this::openPositionForEdit,
                             this::confirmDeletePosition,
                             this::sendToPathManager));
+
+            // Resource panel (collapsible, shown below each position row)
+            long resCount = pos.getResourceNeeds() != null ? pos.getResourceNeeds().size() : 0;
+            if (resCount > 0) {
+                ResourcePanel resourcePanel =
+                        new ResourcePanel(
+                                pos,
+                                resourceNeedService,
+                                purchaseOrderService,
+                                catalogItemRepository,
+                                translator);
+                resourcePanel.getStyle().set("margin", "0 12px 8px 12px");
+                rowContainer.add(resourcePanel);
+            }
         }
     }
 

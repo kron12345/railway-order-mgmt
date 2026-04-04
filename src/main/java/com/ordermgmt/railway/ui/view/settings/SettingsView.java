@@ -30,6 +30,7 @@ import com.ordermgmt.railway.domain.infrastructure.repository.OperationalPointRe
 import com.ordermgmt.railway.domain.infrastructure.repository.PredefinedTagRepository;
 import com.ordermgmt.railway.domain.infrastructure.service.PredefinedTagImportService;
 import com.ordermgmt.railway.domain.infrastructure.service.RinfImportService;
+import com.ordermgmt.railway.domain.order.repository.ResourceCatalogItemRepository;
 import com.ordermgmt.railway.ui.layout.MainLayout;
 
 /** Admin settings with tabs: Infrastructure, Topology, Tags. */
@@ -42,6 +43,7 @@ public class SettingsView extends VerticalLayout {
     private final OperationalPointRepository opRepo;
     private final PredefinedTagRepository tagRepo;
     private final PredefinedTagImportService tagImportService;
+    private final ResourceCatalogItemRepository catalogItemRepository;
 
     private final Div tabContent = new Div();
 
@@ -62,11 +64,13 @@ public class SettingsView extends VerticalLayout {
             RinfImportService importService,
             OperationalPointRepository opRepo,
             PredefinedTagRepository tagRepo,
-            PredefinedTagImportService tagImportService) {
+            PredefinedTagImportService tagImportService,
+            ResourceCatalogItemRepository catalogItemRepository) {
         this.importService = importService;
         this.opRepo = opRepo;
         this.tagRepo = tagRepo;
         this.tagImportService = tagImportService;
+        this.catalogItemRepository = catalogItemRepository;
 
         setPadding(false);
         setWidthFull();
@@ -93,14 +97,17 @@ public class SettingsView extends VerticalLayout {
                         VaadinIcon.MAP_MARKER.create(),
                         new Span(getTranslation("settings.topology")));
         Tab tagsTab = new Tab(VaadinIcon.TAGS.create(), new Span(getTranslation("settings.tags")));
+        Tab catalogTab =
+                new Tab(VaadinIcon.LIST.create(), new Span(getTranslation("catalog.title")));
 
-        Tabs tabs = new Tabs(infraTab, topoTab, tagsTab);
+        Tabs tabs = new Tabs(infraTab, topoTab, tagsTab, catalogTab);
         tabs.setWidthFull();
         tabs.addSelectedChangeListener(
                 e -> {
                     if (e.getSelectedTab() == infraTab) showInfraTab();
                     else if (e.getSelectedTab() == topoTab) showTopoTab();
                     else if (e.getSelectedTab() == tagsTab) showTagsTab();
+                    else if (e.getSelectedTab() == catalogTab) showCatalogTab();
                 });
         add(tabs);
 
@@ -268,6 +275,11 @@ public class SettingsView extends VerticalLayout {
     private void showTagsTab() {
         tabContent.removeAll();
         tabContent.add(new TagsTab(tagRepo, tagImportService, this::getTranslation));
+    }
+
+    private void showCatalogTab() {
+        tabContent.removeAll();
+        tabContent.add(new CatalogTab(catalogItemRepository, this::getTranslation));
     }
 
     private H3 sectionTitle(String text) {

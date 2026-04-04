@@ -51,4 +51,19 @@ public class PurchasePosition {
     private Instant orderedAt;
 
     private Instant statusTimestamp;
+
+    @Column(length = 255)
+    private String description;
+
+    private UUID pmPathRequestId;
+
+    private UUID pmPathId;
+
+    @Column(length = 30)
+    private String pmProcessState;
+
+    @Column(length = 30)
+    private String pmTtrPhase;
+
+    private Instant pmLastSynced;
 }
