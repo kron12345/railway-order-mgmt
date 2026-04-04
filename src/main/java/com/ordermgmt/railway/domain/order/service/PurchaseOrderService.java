@@ -5,9 +5,14 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.ordermgmt.railway.domain.order.model.CoverageType;
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
@@ -18,12 +23,14 @@ import com.ordermgmt.railway.domain.order.model.ResourceType;
 import com.ordermgmt.railway.domain.order.repository.OrderPositionRepository;
 import com.ordermgmt.railway.domain.order.repository.PurchasePositionRepository;
 import com.ordermgmt.railway.domain.order.repository.ResourceNeedRepository;
+import com.ordermgmt.railway.domain.pathmanager.model.PathAction;
 import com.ordermgmt.railway.domain.pathmanager.model.PathProcessState;
 import com.ordermgmt.railway.domain.pathmanager.model.PmReferenceTrain;
 import com.ordermgmt.railway.domain.pathmanager.model.TtrPhase;
 import com.ordermgmt.railway.domain.pathmanager.repository.PmReferenceTrainRepository;
 import com.ordermgmt.railway.domain.pathmanager.repository.PmTimetableYearRepository;
 import com.ordermgmt.railway.domain.pathmanager.service.PathManagerService;
+import com.ordermgmt.railway.domain.pathmanager.service.PathProcessEngine;
 import com.ordermgmt.railway.domain.pathmanager.service.TtrPhaseResolver;
 import com.ordermgmt.railway.domain.timetable.model.TimetableArchive;
 import com.ordermgmt.railway.domain.timetable.model.TimetableRowData;
@@ -37,7 +44,9 @@ import lombok.RequiredArgsConstructor;
 @Transactional
 public class PurchaseOrderService {
 
+    private static final Logger log = LoggerFactory.getLogger(PurchaseOrderService.class);
     private static final String POSITION_PREFIX = "BP-";
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final PurchasePositionRepository purchasePositionRepository;
     private final ResourceNeedRepository resourceNeedRepository;
@@ -45,6 +54,7 @@ public class PurchaseOrderService {
     private final PmReferenceTrainRepository referenceTrainRepository;
     private final PmTimetableYearRepository timetableYearRepository;
     private final PathManagerService pathManagerService;
+    private final PathProcessEngine pathProcessEngine;
     private final TtrPhaseResolver ttrPhaseResolver;
     private final TimetableArchiveService timetableArchiveService;
 
@@ -110,9 +120,9 @@ public class PurchaseOrderService {
 
         if (tttAttributes != null && !tttAttributes.isBlank()) {
             pp.setTttOrderAttributes(tttAttributes);
+            extractDebitCode(pp, tttAttributes);
         }
 
-        ResourceNeed need = pp.getResourceNeed();
         OrderPosition position = pp.getOrderPosition();
 
         TimetableArchive archive = timetableArchiveService.findArchive(position).orElse(null);
@@ -125,6 +135,20 @@ public class PurchaseOrderService {
                                 () ->
                                         pathManagerService.createTrainFromOrderPosition(
                                                 position, archive, rows));
+
+        // Execute SEND_REQUEST transition to create a proper path request
+        if (train.getProcessState() == PathProcessState.NEW) {
+            pathProcessEngine.executeTransition(
+                    train.getId(), PathAction.SEND_REQUEST, "TTT order triggered");
+            // Reload train to get updated pathRequests
+            train =
+                    referenceTrainRepository
+                            .findById(train.getId())
+                            .orElseThrow(
+                                    () ->
+                                            new IllegalStateException(
+                                                    "Train not found after transition"));
+        }
 
         pp.setPmPathRequestId(resolvePathRequestId(train));
         pp.setPurchaseStatus(PurchaseStatus.BESTELLT);
@@ -215,8 +239,22 @@ public class PurchaseOrderService {
     }
 
     private String generatePositionNumber() {
-        long count = purchasePositionRepository.countByPositionNumberStartingWith(POSITION_PREFIX);
-        return POSITION_PREFIX + String.format("%05d", count + 1);
+        return POSITION_PREFIX + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+    }
+
+    /**
+     * Extracts the debitCode from the TTT attributes JSON and stores it on the purchase position.
+     */
+    private void extractDebitCode(PurchasePosition pp, String tttAttributes) {
+        try {
+            JsonNode root = OBJECT_MAPPER.readTree(tttAttributes);
+            JsonNode debitNode = root.get("debitCode");
+            if (debitNode != null && !debitNode.isNull() && !debitNode.asText().isBlank()) {
+                pp.setDebicode(debitNode.asText());
+            }
+        } catch (Exception e) {
+            log.warn("Failed to extract debitCode from TTT attributes: {}", e.getMessage());
+        }
     }
 
     private PurchasePosition findOrCreatePurchasePosition(ResourceNeed need) {

@@ -88,6 +88,16 @@ public class ResourceNeedService {
             int quantity,
             CoverageType coverage,
             String description) {
+        if (type == null) {
+            throw new IllegalArgumentException("Resource type must not be null");
+        }
+        if (coverage == null) {
+            throw new IllegalArgumentException("Coverage type must not be null");
+        }
+        if (quantity < 1) {
+            throw new IllegalArgumentException("Quantity must be at least 1");
+        }
+
         OrderPosition position =
                 orderPositionRepository
                         .findById(positionId)
@@ -127,10 +137,10 @@ public class ResourceNeedService {
         resourceNeedRepository.deleteById(resourceNeedId);
     }
 
-    /** Returns all resource needs for a given order position. */
+    /** Returns all resource needs for a given order position with catalog items eagerly loaded. */
     @Transactional(readOnly = true)
     public List<ResourceNeed> getResourcesForPosition(UUID positionId) {
-        return resourceNeedRepository.findByOrderPositionId(positionId);
+        return resourceNeedRepository.findByOrderPositionIdWithCatalogItem(positionId);
     }
 
     private ResourceNeed buildNeed(

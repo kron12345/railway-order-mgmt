@@ -26,6 +26,7 @@ import com.vaadin.flow.component.upload.receivers.MemoryBuffer;
 
 import com.ordermgmt.railway.domain.order.model.ResourceCatalogItem;
 import com.ordermgmt.railway.domain.order.repository.ResourceCatalogItemRepository;
+import com.ordermgmt.railway.domain.order.service.ResourceCatalogImportService;
 
 /** Settings tab for managing the resource catalog (vehicle types, personnel qualifications). */
 public class CatalogTab extends Div {
@@ -34,14 +35,17 @@ public class CatalogTab extends Div {
     private static final String CAT_PERSONNEL_QUAL = "PERSONNEL_QUAL";
 
     private final ResourceCatalogItemRepository catalogRepo;
+    private final ResourceCatalogImportService importService;
     private final Grid<ResourceCatalogItem> grid = new Grid<>(ResourceCatalogItem.class, false);
     private final BiFunction<String, Object[], String> t;
     private String categoryFilter = null;
 
     public CatalogTab(
             ResourceCatalogItemRepository catalogRepo,
+            ResourceCatalogImportService importService,
             BiFunction<String, Object[], String> translator) {
         this.catalogRepo = catalogRepo;
+        this.importService = importService;
         this.t = translator;
         setWidthFull();
 
@@ -287,7 +291,8 @@ public class CatalogTab extends Div {
         upload.addSucceededListener(
                 event -> {
                     try (InputStream is = buffer.getInputStream()) {
-                        int count = importCsv(is);
+                        byte[] csvBytes = is.readAllBytes();
+                        int count = importService.importCsv(csvBytes);
                         Notification.show(
                                         tr("settings.import.success", String.valueOf(count)),
                                         4000,
@@ -310,30 +315,6 @@ public class CatalogTab extends Div {
         cancel.addClickListener(e -> dialog.close());
         dialog.getFooter().add(cancel);
         dialog.open();
-    }
-
-    private int importCsv(InputStream is) throws IOException {
-        String content = new String(is.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
-        String[] lines = content.split("\\r?\\n");
-        int count = 0;
-        for (int i = 1; i < lines.length; i++) {
-            String line = lines[i].trim();
-            if (line.isEmpty()) continue;
-            String[] parts = line.split(",", -1);
-            if (parts.length < 3) continue;
-            ResourceCatalogItem item = new ResourceCatalogItem();
-            item.setCode(parts[0].trim());
-            item.setName(parts[1].trim());
-            item.setCategory(parts[2].trim());
-            item.setActive(parts.length > 3 && "true".equalsIgnoreCase(parts[3].trim()));
-            item.setSortOrder(
-                    parts.length > 4 && !parts[4].trim().isEmpty()
-                            ? Integer.parseInt(parts[4].trim())
-                            : 0);
-            catalogRepo.save(item);
-            count++;
-        }
-        return count;
     }
 
     private void refresh() {

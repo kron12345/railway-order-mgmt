@@ -22,6 +22,7 @@ import com.ordermgmt.railway.domain.infrastructure.repository.PredefinedTagRepos
 import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.order.model.PositionType;
+import com.ordermgmt.railway.domain.order.repository.PurchasePositionRepository;
 import com.ordermgmt.railway.domain.order.repository.ResourceCatalogItemRepository;
 import com.ordermgmt.railway.domain.order.service.OrderService;
 import com.ordermgmt.railway.domain.order.service.PurchaseOrderService;
@@ -44,6 +45,7 @@ public class OrderPositionPanel extends Div {
     private final ResourceNeedService resourceNeedService;
     private final PurchaseOrderService purchaseOrderService;
     private final ResourceCatalogItemRepository catalogItemRepository;
+    private final PurchasePositionRepository purchasePositionRepository;
     private final BiFunction<String, Object[], String> translator;
     private final VerticalLayout rowContainer = new VerticalLayout();
 
@@ -57,6 +59,7 @@ public class OrderPositionPanel extends Div {
             ResourceNeedService resourceNeedService,
             PurchaseOrderService purchaseOrderService,
             ResourceCatalogItemRepository catalogItemRepository,
+            PurchasePositionRepository purchasePositionRepository,
             BiFunction<String, Object[], String> translator) {
         this.order = order;
         this.orderService = orderService;
@@ -67,6 +70,7 @@ public class OrderPositionPanel extends Div {
         this.resourceNeedService = resourceNeedService;
         this.purchaseOrderService = purchaseOrderService;
         this.catalogItemRepository = catalogItemRepository;
+        this.purchasePositionRepository = purchasePositionRepository;
         this.translator = translator;
 
         setWidthFull();
@@ -154,7 +158,9 @@ public class OrderPositionPanel extends Div {
                                 resourceNeedService,
                                 purchaseOrderService,
                                 catalogItemRepository,
-                                translator);
+                                purchasePositionRepository,
+                                translator,
+                                this::refreshPositions);
                 resourcePanel.getStyle().set("margin", "0 12px 8px 12px");
                 rowContainer.add(resourcePanel);
             }

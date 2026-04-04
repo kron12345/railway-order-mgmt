@@ -18,6 +18,7 @@ import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionOperations;
 
@@ -83,6 +84,7 @@ public class RinfImportService {
      * Import OPs: parse first, then delete+insert atomically. On any error the transaction rolls
      * back — no partial state.
      */
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
     public ImportLog importOperationalPoints(InputStream csvStream, String country) {
         try {
             List<CSVRecord> records = parseCsv(csvStream);
@@ -101,6 +103,7 @@ public class RinfImportService {
     }
 
     /** Import SoLs: parse first, then delete+insert atomically. */
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
     public ImportLog importSectionsOfLine(InputStream csvStream, String country) {
         try {
             List<CSVRecord> records = parseCsv(csvStream);

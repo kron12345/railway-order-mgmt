@@ -27,6 +27,7 @@ import com.ordermgmt.railway.domain.customer.repository.CustomerRepository;
 import com.ordermgmt.railway.domain.infrastructure.repository.PredefinedTagRepository;
 import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.domain.order.model.ProcessStatus;
+import com.ordermgmt.railway.domain.order.repository.PurchasePositionRepository;
 import com.ordermgmt.railway.domain.order.repository.ResourceCatalogItemRepository;
 import com.ordermgmt.railway.domain.order.service.OrderService;
 import com.ordermgmt.railway.domain.order.service.PurchaseOrderService;
@@ -54,6 +55,7 @@ public class OrderDetailView extends VerticalLayout implements BeforeEnterObserv
     private final ResourceNeedService resourceNeedService;
     private final PurchaseOrderService purchaseOrderService;
     private final ResourceCatalogItemRepository catalogItemRepository;
+    private final PurchasePositionRepository purchasePositionRepository;
     private Order order;
     private boolean isNew;
 
@@ -69,7 +71,8 @@ public class OrderDetailView extends VerticalLayout implements BeforeEnterObserv
             TimetableArchiveService timetableArchiveService,
             ResourceNeedService resourceNeedService,
             PurchaseOrderService purchaseOrderService,
-            ResourceCatalogItemRepository catalogItemRepository) {
+            ResourceCatalogItemRepository catalogItemRepository,
+            PurchasePositionRepository purchasePositionRepository) {
         this.orderService = orderService;
         this.customerRepository = customerRepository;
         this.predefinedTagRepository = predefinedTagRepository;
@@ -79,6 +82,7 @@ public class OrderDetailView extends VerticalLayout implements BeforeEnterObserv
         this.resourceNeedService = resourceNeedService;
         this.purchaseOrderService = purchaseOrderService;
         this.catalogItemRepository = catalogItemRepository;
+        this.purchasePositionRepository = purchasePositionRepository;
         setPadding(false);
         setSpacing(false);
         setWidthFull();
@@ -159,6 +163,7 @@ public class OrderDetailView extends VerticalLayout implements BeforeEnterObserv
                         resourceNeedService,
                         purchaseOrderService,
                         catalogItemRepository,
+                        purchasePositionRepository,
                         this::getTranslation);
         add(positionPanel);
     }

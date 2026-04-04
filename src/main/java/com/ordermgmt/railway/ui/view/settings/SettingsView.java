@@ -31,6 +31,7 @@ import com.ordermgmt.railway.domain.infrastructure.repository.PredefinedTagRepos
 import com.ordermgmt.railway.domain.infrastructure.service.PredefinedTagImportService;
 import com.ordermgmt.railway.domain.infrastructure.service.RinfImportService;
 import com.ordermgmt.railway.domain.order.repository.ResourceCatalogItemRepository;
+import com.ordermgmt.railway.domain.order.service.ResourceCatalogImportService;
 import com.ordermgmt.railway.ui.layout.MainLayout;
 
 /** Admin settings with tabs: Infrastructure, Topology, Tags. */
@@ -44,6 +45,7 @@ public class SettingsView extends VerticalLayout {
     private final PredefinedTagRepository tagRepo;
     private final PredefinedTagImportService tagImportService;
     private final ResourceCatalogItemRepository catalogItemRepository;
+    private final ResourceCatalogImportService catalogImportService;
 
     private final Div tabContent = new Div();
 
@@ -65,12 +67,14 @@ public class SettingsView extends VerticalLayout {
             OperationalPointRepository opRepo,
             PredefinedTagRepository tagRepo,
             PredefinedTagImportService tagImportService,
-            ResourceCatalogItemRepository catalogItemRepository) {
+            ResourceCatalogItemRepository catalogItemRepository,
+            ResourceCatalogImportService catalogImportService) {
         this.importService = importService;
         this.opRepo = opRepo;
         this.tagRepo = tagRepo;
         this.tagImportService = tagImportService;
         this.catalogItemRepository = catalogItemRepository;
+        this.catalogImportService = catalogImportService;
 
         setPadding(false);
         setWidthFull();
@@ -279,7 +283,8 @@ public class SettingsView extends VerticalLayout {
 
     private void showCatalogTab() {
         tabContent.removeAll();
-        tabContent.add(new CatalogTab(catalogItemRepository, this::getTranslation));
+        tabContent.add(
+                new CatalogTab(catalogItemRepository, catalogImportService, this::getTranslation));
     }
 
     private H3 sectionTitle(String text) {

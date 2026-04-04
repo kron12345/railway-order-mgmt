@@ -21,6 +21,7 @@ import com.ordermgmt.railway.domain.order.model.PurchasePosition;
 import com.ordermgmt.railway.domain.order.model.PurchaseStatus;
 import com.ordermgmt.railway.domain.order.model.ResourceNeed;
 import com.ordermgmt.railway.domain.order.model.ResourceType;
+import com.ordermgmt.railway.domain.order.repository.PurchasePositionRepository;
 import com.ordermgmt.railway.domain.order.repository.ResourceCatalogItemRepository;
 import com.ordermgmt.railway.domain.order.service.PurchaseOrderService;
 import com.ordermgmt.railway.domain.order.service.ResourceNeedService;
@@ -38,7 +39,9 @@ public class ResourcePanel extends Div {
     private final ResourceNeedService resourceNeedService;
     private final PurchaseOrderService purchaseOrderService;
     private final ResourceCatalogItemRepository catalogItemRepository;
+    private final PurchasePositionRepository purchasePositionRepository;
     private final BiFunction<String, Object[], String> translator;
+    private final Runnable refreshCallback;
     private final Div contentSlot = new Div();
 
     public ResourcePanel(
@@ -46,12 +49,16 @@ public class ResourcePanel extends Div {
             ResourceNeedService resourceNeedService,
             PurchaseOrderService purchaseOrderService,
             ResourceCatalogItemRepository catalogItemRepository,
-            BiFunction<String, Object[], String> translator) {
+            PurchasePositionRepository purchasePositionRepository,
+            BiFunction<String, Object[], String> translator,
+            Runnable refreshCallback) {
         this.position = position;
         this.resourceNeedService = resourceNeedService;
         this.purchaseOrderService = purchaseOrderService;
         this.catalogItemRepository = catalogItemRepository;
+        this.purchasePositionRepository = purchasePositionRepository;
         this.translator = translator;
+        this.refreshCallback = refreshCallback;
 
         setWidthFull();
         getStyle()
@@ -204,6 +211,7 @@ public class ResourcePanel extends Div {
                     e -> {
                         purchaseOrderService.syncTttStatus(pp.getId());
                         loadResources();
+                        if (refreshCallback != null) refreshCallback.run();
                     });
             row.add(syncBtn);
         }
@@ -230,6 +238,7 @@ public class ResourcePanel extends Div {
                                                 evt.getPurchasePositionId(),
                                                 evt.getTttAttributesJson());
                                         loadResources();
+                                        if (refreshCallback != null) refreshCallback.run();
                                         Notification.show(
                                                         "TTT",
                                                         2000,
@@ -306,6 +315,7 @@ public class ResourcePanel extends Div {
                     try {
                         purchaseOrderService.triggerAllCapacityOrders(position.getId());
                         loadResources();
+                        if (refreshCallback != null) refreshCallback.run();
                         Notification.show("TTT", 2000, Notification.Position.BOTTOM_END)
                                 .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
                     } catch (Exception ex) {
@@ -337,15 +347,7 @@ public class ResourcePanel extends Div {
     }
 
     private List<PurchasePosition> findPurchasesForNeed(ResourceNeed rn) {
-        if (position.getPurchasePositions() == null) {
-            return List.of();
-        }
-        return position.getPurchasePositions().stream()
-                .filter(
-                        pp ->
-                                pp.getResourceNeed() != null
-                                        && pp.getResourceNeed().getId().equals(rn.getId()))
-                .toList();
+        return purchasePositionRepository.findByResourceNeedId(rn.getId());
     }
 
     // --- Badge helpers ---

@@ -9,6 +9,7 @@ import java.util.Locale;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,6 +35,7 @@ public class PredefinedTagImportService {
     private final PredefinedTagRepository tagRepository;
 
     @Transactional
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
     public int importCsv(InputStream csvStream) throws IOException {
         int imported = 0;
 
