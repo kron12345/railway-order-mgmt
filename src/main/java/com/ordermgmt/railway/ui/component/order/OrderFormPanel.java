@@ -1,10 +1,8 @@
 package com.ordermgmt.railway.ui.component.order;
 
 import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.function.BiFunction;
 
 import com.vaadin.flow.component.checkbox.CheckboxGroup;
@@ -22,6 +20,7 @@ import com.ordermgmt.railway.domain.infrastructure.model.PredefinedTag;
 import com.ordermgmt.railway.domain.infrastructure.repository.PredefinedTagRepository;
 import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.ui.util.StringUtils;
+import com.ordermgmt.railway.ui.util.TagSelectionHelper;
 
 /**
  * Order form for creation and editing. Only shows fields relevant to the user. ProcessStatus
@@ -40,6 +39,7 @@ public class OrderFormPanel extends Div {
     private final BiFunction<String, Object[], String> translator;
     private final List<PredefinedTag> availableTags;
     private final LinkedHashSet<String> unmatchedTags = new LinkedHashSet<>();
+    private final TagSelectionHelper tagHelper;
 
     public OrderFormPanel(
             Order order,
@@ -48,6 +48,7 @@ public class OrderFormPanel extends Div {
             BiFunction<String, Object[], String> translator) {
         this.translator = translator;
         this.availableTags = loadAvailableTags(predefinedTagRepository);
+        this.tagHelper = new TagSelectionHelper(tags, availableTags, unmatchedTags, translator);
 
         setWidthFull();
         getStyle()
@@ -97,9 +98,9 @@ public class OrderFormPanel extends Div {
 
         tags.setLabel(t("order.tags"));
         tags.setItems(availableTags);
-        tags.setItemLabelGenerator(this::tagLabel);
+        tags.setItemLabelGenerator(tagHelper::tagLabel);
         tags.setWidthFull();
-        updateTagsHelperText();
+        tagHelper.updateHelperText("order.tags.help", "order.tags.legacy");
 
         comment.setLabel(t("order.comment"));
         comment.setMaxLength(2000);
@@ -130,7 +131,8 @@ public class OrderFormPanel extends Div {
         customerCombo.setValue(order.getCustomer());
         validFrom.setValue(order.getValidFrom());
         validTo.setValue(order.getValidTo());
-        readTags(order.getTags());
+        tagHelper.readTags(order.getTags());
+        tagHelper.updateHelperText("order.tags.help", "order.tags.legacy");
         comment.setValue(StringUtils.nvl(order.getComment()));
     }
 
@@ -140,7 +142,7 @@ public class OrderFormPanel extends Div {
         order.setCustomer(customerCombo.getValue());
         order.setValidFrom(validFrom.getValue());
         order.setValidTo(validTo.getValue());
-        order.setTags(joinSelectedTags());
+        order.setTags(tagHelper.joinSelectedTags());
         order.setComment(StringUtils.blankToNull(comment.getValue()));
     }
 
@@ -195,68 +197,11 @@ public class OrderFormPanel extends Div {
                 .toList();
     }
 
-    private void readTags(String storedTags) {
-        Map<String, PredefinedTag> tagsByName = new LinkedHashMap<>();
-        for (PredefinedTag tag : availableTags) {
-            tagsByName.put(normalizeTagName(tag.getName()), tag);
-        }
-
-        unmatchedTags.clear();
-        LinkedHashSet<PredefinedTag> selected = new LinkedHashSet<>();
-        for (String token : StringUtils.splitTags(storedTags)) {
-            PredefinedTag match = tagsByName.get(normalizeTagName(token));
-            if (match != null) {
-                selected.add(match);
-            } else {
-                unmatchedTags.add(token);
-            }
-        }
-
-        tags.setValue(selected);
-        updateTagsHelperText();
-    }
-
-    private String joinSelectedTags() {
-        LinkedHashSet<String> values = new LinkedHashSet<>();
-        LinkedHashSet<PredefinedTag> selectedTags = new LinkedHashSet<>(tags.getValue());
-        for (PredefinedTag tag : availableTags) {
-            if (selectedTags.contains(tag)) {
-                values.add(tag.getName());
-            }
-        }
-        values.addAll(unmatchedTags);
-        return StringUtils.blankToNull(String.join(", ", values));
-    }
-
-    private void updateTagsHelperText() {
-        String helper = t("order.tags.help");
-        if (!unmatchedTags.isEmpty()) {
-            helper = helper + " " + t("order.tags.legacy", String.join(", ", unmatchedTags));
-        }
-        tags.setHelperText(helper);
-    }
-
-    private String tagLabel(PredefinedTag tag) {
-        return "[" + categoryLabel(tag.getCategory()) + "] " + tag.getName();
-    }
-
-    private String categoryLabel(String category) {
-        return switch (category) {
-            case "ORDER" -> t("settings.tags.cat.order");
-            case "GENERAL" -> t("settings.tags.cat.general");
-            default -> category;
-        };
-    }
-
     private int categoryRank(PredefinedTag tag) {
         return switch (tag.getCategory()) {
             case "ORDER" -> 0;
             case "GENERAL" -> 1;
             default -> 99;
         };
-    }
-
-    private String normalizeTagName(String value) {
-        return value.trim().toLowerCase();
     }
 }

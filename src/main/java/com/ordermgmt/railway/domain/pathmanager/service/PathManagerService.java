@@ -19,6 +19,7 @@ import com.ordermgmt.railway.domain.pathmanager.model.PmReferenceTrain;
 import com.ordermgmt.railway.domain.pathmanager.model.PmRoute;
 import com.ordermgmt.railway.domain.pathmanager.model.PmTimetableYear;
 import com.ordermgmt.railway.domain.pathmanager.model.PmTrainVersion;
+import com.ordermgmt.railway.domain.pathmanager.model.TrainHeaderUpdate;
 import com.ordermgmt.railway.domain.pathmanager.model.VersionType;
 import com.ordermgmt.railway.domain.pathmanager.repository.PmJourneyLocationRepository;
 import com.ordermgmt.railway.domain.pathmanager.repository.PmReferenceTrainRepository;
@@ -101,36 +102,28 @@ public class PathManagerService {
                 year);
     }
 
-    public void updateTrainHeader(
-            UUID trainId,
-            String operationalTrainNumber,
-            String trainType,
-            String trafficTypeCode,
-            Integer trainWeight,
-            Integer trainLength,
-            Integer trainMaxSpeed,
-            String brakeType) {
-        PmReferenceTrain train = findById(trainId);
-        if (operationalTrainNumber != null) {
-            train.setOperationalTrainNumber(operationalTrainNumber);
+    public void updateTrainHeader(TrainHeaderUpdate update) {
+        PmReferenceTrain train = findById(update.trainId());
+        if (update.operationalTrainNumber() != null) {
+            train.setOperationalTrainNumber(update.operationalTrainNumber());
         }
-        if (trainType != null) {
-            train.setTrainType(trainType);
+        if (update.trainType() != null) {
+            train.setTrainType(update.trainType());
         }
-        if (trafficTypeCode != null) {
-            train.setTrafficTypeCode(trafficTypeCode);
+        if (update.trafficTypeCode() != null) {
+            train.setTrafficTypeCode(update.trafficTypeCode());
         }
-        if (trainWeight != null) {
-            train.setTrainWeight(trainWeight);
+        if (update.trainWeight() != null) {
+            train.setTrainWeight(update.trainWeight());
         }
-        if (trainLength != null) {
-            train.setTrainLength(trainLength);
+        if (update.trainLength() != null) {
+            train.setTrainLength(update.trainLength());
         }
-        if (trainMaxSpeed != null) {
-            train.setTrainMaxSpeed(trainMaxSpeed);
+        if (update.trainMaxSpeed() != null) {
+            train.setTrainMaxSpeed(update.trainMaxSpeed());
         }
-        if (brakeType != null) {
-            train.setBrakeType(brakeType);
+        if (update.brakeType() != null) {
+            train.setBrakeType(update.brakeType());
         }
         referenceTrainRepository.save(train);
     }

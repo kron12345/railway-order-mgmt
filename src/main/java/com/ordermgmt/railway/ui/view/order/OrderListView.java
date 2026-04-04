@@ -32,6 +32,7 @@ import com.ordermgmt.railway.domain.order.model.PositionStatus;
 import com.ordermgmt.railway.domain.order.model.ProcessStatus;
 import com.ordermgmt.railway.domain.order.service.OrderService;
 import com.ordermgmt.railway.ui.component.OrderAccordionRow;
+import com.ordermgmt.railway.ui.component.OrderRowCallbacks;
 import com.ordermgmt.railway.ui.layout.MainLayout;
 import com.ordermgmt.railway.ui.util.StringUtils;
 
@@ -39,7 +40,7 @@ import com.ordermgmt.railway.ui.util.StringUtils;
 @Route(value = "orders", layout = MainLayout.class)
 @PageTitle("Orders")
 @PermitAll
-public class OrderListView extends VerticalLayout {
+public class OrderListView extends VerticalLayout implements OrderRowCallbacks {
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("dd.MM.yyyy");
     private static final DateTimeFormatter TS_FMT = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
@@ -184,6 +185,7 @@ public class OrderListView extends VerticalLayout {
         return sorted;
     }
 
+    @Override
     public Div createSummaryMetric(String label, String value) {
         Div metric = new Div();
         metric.getStyle()
@@ -216,6 +218,7 @@ public class OrderListView extends VerticalLayout {
         return metric;
     }
 
+    @Override
     public Div createInfoPill(String label, String color) {
         Div pill = new Div();
         pill.setText(label);
@@ -231,6 +234,7 @@ public class OrderListView extends VerticalLayout {
         return pill;
     }
 
+    @Override
     public String formatValidity(Order order) {
         return formatDate(order.getValidFrom()) + " → " + formatDate(order.getValidTo());
     }
@@ -245,6 +249,7 @@ public class OrderListView extends VerticalLayout {
                 : "—";
     }
 
+    @Override
     public String previewTags(String rawTags) {
         List<String> tags = StringUtils.splitTags(rawTags);
         if (tags.isEmpty()) {
@@ -258,6 +263,7 @@ public class OrderListView extends VerticalLayout {
         return preview;
     }
 
+    @Override
     public String commentPreview(String value) {
         if (value == null || value.isBlank()) {
             return null;
@@ -266,6 +272,7 @@ public class OrderListView extends VerticalLayout {
         return normalized.length() > 180 ? normalized.substring(0, 177) + "..." : normalized;
     }
 
+    @Override
     public String formatUpdatedMeta(Order order) {
         String timestamp = formatTimestamp(order.getUpdatedAt());
         String actor = order.getUpdatedBy();
@@ -278,6 +285,7 @@ public class OrderListView extends VerticalLayout {
         return timestamp + " · " + actor;
     }
 
+    @Override
     public String statusColor(PositionStatus status) {
         if (status == null) {
             return "var(--rom-text-muted)";
@@ -290,6 +298,7 @@ public class OrderListView extends VerticalLayout {
         };
     }
 
+    @Override
     public List<OrderPosition> sortedPositions(List<OrderPosition> positions) {
         return positions.stream()
                 .sorted(
@@ -301,6 +310,7 @@ public class OrderListView extends VerticalLayout {
                 .toList();
     }
 
+    @Override
     public void preventSummaryToggle(Component component) {
         component
                 .getElement()

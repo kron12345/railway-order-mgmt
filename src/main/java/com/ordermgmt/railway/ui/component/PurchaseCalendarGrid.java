@@ -12,6 +12,7 @@ import com.vaadin.flow.component.html.Span;
 
 import com.ordermgmt.railway.domain.order.model.PurchasePosition;
 import com.ordermgmt.railway.domain.order.model.PurchaseStatus;
+import com.ordermgmt.railway.domain.order.model.ValidityJsonCodec;
 
 /**
  * Compact calendar grid: one row per month, columns = weekday positions (Mo-So × weeks). Each cell
@@ -270,36 +271,7 @@ public class PurchaseCalendarGrid extends Div {
     }
 
     private List<LocalDate> extractDates(PurchasePosition position) {
-        List<LocalDate> dates = new java.util.ArrayList<>();
-        String validity = position.getValidity();
-        if (validity != null && !validity.isBlank()) {
-            try {
-                var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-                mapper.configure(
-                        com.fasterxml.jackson.databind.DeserializationFeature
-                                .FAIL_ON_UNKNOWN_PROPERTIES,
-                        false);
-                var array = mapper.readTree(validity);
-                if (array.isArray()) {
-                    for (var segment : array) {
-                        var startNode = segment.get("startDate");
-                        var endNode = segment.get("endDate");
-                        if (startNode == null || endNode == null) continue;
-                        LocalDate start = LocalDate.parse(startNode.asText());
-                        LocalDate end = LocalDate.parse(endNode.asText());
-                        if (end.isBefore(start)
-                                || java.time.temporal.ChronoUnit.DAYS.between(start, end) > 366)
-                            continue;
-                        for (LocalDate d = start; !d.isAfter(end); d = d.plusDays(1)) {
-                            dates.add(d);
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                org.slf4j.LoggerFactory.getLogger(PurchaseCalendarGrid.class)
-                        .debug("Failed to parse validity JSON", e);
-            }
-        }
+        List<LocalDate> dates = ValidityJsonCodec.fromJson(position.getValidity());
         // Fallback: use orderedAt if no validity segments
         if (dates.isEmpty() && position.getOrderedAt() != null) {
             dates.add(

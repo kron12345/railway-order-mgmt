@@ -16,12 +16,11 @@ import com.vaadin.flow.component.icon.VaadinIcon;
 import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.order.model.PositionStatus;
-import com.ordermgmt.railway.ui.view.order.OrderListView;
 
 /** Expandable accordion row for a single order inside the order list. */
 public class OrderAccordionRow extends Div {
 
-    private final OrderListView parent;
+    private final OrderRowCallbacks parent;
     private final Order order;
     private final Details details;
     private final Div positionsContainer = new Div();
@@ -30,7 +29,7 @@ public class OrderAccordionRow extends Div {
     private Div allChip;
     private PositionStatus activeStatus;
 
-    public OrderAccordionRow(Order order, OrderListView parent) {
+    public OrderAccordionRow(Order order, OrderRowCallbacks parent) {
         this.order = order;
         this.parent = parent;
 
@@ -361,7 +360,7 @@ public class OrderAccordionRow extends Div {
         }
 
         for (OrderPosition position : visiblePositions) {
-            PositionTile tile = new PositionTile(position, parent::getTranslation);
+            PositionTile tile = new PositionTile(position, this::getTranslation);
             tile.addClickListener(e -> UI.getCurrent().navigate("orders/" + order.getId()));
             positionsContainer.add(tile);
         }

@@ -157,6 +157,19 @@ public final class TimetableFormatUtils {
 
     // ── shared UI component builders ───────────────────────────────────
 
+    /** Builds a styled card Div without title, using Lumo spacing for padding. */
+    public static Div createCard() {
+        Div card = new Div();
+        card.setWidthFull();
+        card.getStyle()
+                .set("background", "var(--rom-bg-card)")
+                .set("border", "1px solid var(--rom-border)")
+                .set("border-radius", "6px")
+                .set("padding", "var(--lumo-space-m)")
+                .set("box-sizing", "border-box");
+        return card;
+    }
+
     /** Builds a styled card Div with optional title and child content. */
     public static Div createCard(String title, Component... content) {
         Div card = new Div();

@@ -26,6 +26,7 @@ import com.ordermgmt.railway.domain.pathmanager.model.PmJourneyLocation;
 import com.ordermgmt.railway.domain.pathmanager.model.PmReferenceTrain;
 import com.ordermgmt.railway.domain.pathmanager.model.PmTimetableYear;
 import com.ordermgmt.railway.domain.pathmanager.model.PmTrainVersion;
+import com.ordermgmt.railway.domain.pathmanager.model.TrainHeaderUpdate;
 import com.ordermgmt.railway.domain.pathmanager.model.VersionType;
 import com.ordermgmt.railway.domain.pathmanager.repository.PmJourneyLocationRepository;
 import com.ordermgmt.railway.domain.pathmanager.repository.PmProcessStepRepository;
@@ -143,14 +144,15 @@ public class PathManagerController {
     public ResponseEntity<TrainDetailDto> updateTrain(
             @PathVariable UUID trainId, @RequestBody TrainSubmitRequest request) {
         pathManagerService.updateTrainHeader(
-                trainId,
-                request.operationalTrainNumber(),
-                request.trainType(),
-                request.trafficTypeCode(),
-                null,
-                null,
-                null,
-                null);
+                new TrainHeaderUpdate(
+                        trainId,
+                        request.operationalTrainNumber(),
+                        request.trainType(),
+                        request.trafficTypeCode(),
+                        null,
+                        null,
+                        null,
+                        null));
         return ResponseEntity.ok(loadTrainDetail(trainId));
     }
 

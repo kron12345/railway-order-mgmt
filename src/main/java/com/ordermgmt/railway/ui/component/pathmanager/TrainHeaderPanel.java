@@ -18,7 +18,9 @@ import com.vaadin.flow.component.textfield.IntegerField;
 import com.vaadin.flow.component.textfield.TextField;
 
 import com.ordermgmt.railway.domain.pathmanager.model.PmReferenceTrain;
+import com.ordermgmt.railway.domain.pathmanager.model.TrainHeaderUpdate;
 import com.ordermgmt.railway.domain.pathmanager.service.PathManagerService;
+import com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils;
 
 /** Editable header form for a selected reference train. */
 public class TrainHeaderPanel extends VerticalLayout {
@@ -56,7 +58,7 @@ public class TrainHeaderPanel extends VerticalLayout {
     }
 
     private void buildPanel() {
-        Div card = createCard();
+        Div card = TimetableFormatUtils.createCard();
 
         Span title = new Span(t("pm.train") + " " + t("common.edit"));
         title.getStyle()
@@ -69,18 +71,6 @@ public class TrainHeaderPanel extends VerticalLayout {
         card.add(createFormFields());
         card.add(createSaveButton());
         add(card);
-    }
-
-    private Div createCard() {
-        Div card = new Div();
-        card.setWidthFull();
-        card.getStyle()
-                .set("background", "var(--rom-bg-card)")
-                .set("border", "1px solid var(--rom-border)")
-                .set("border-radius", "6px")
-                .set("padding", "var(--lumo-space-m)")
-                .set("box-sizing", "border-box");
-        return card;
     }
 
     private Div createFormFields() {
@@ -155,14 +145,15 @@ public class TrainHeaderPanel extends VerticalLayout {
 
     private void saveTrain() {
         pathManagerService.updateTrainHeader(
-                train.getId(),
-                otnField.getValue(),
-                trainTypeField.getValue(),
-                trafficTypeField.getValue(),
-                weightField.getValue(),
-                lengthField.getValue(),
-                maxSpeedField.getValue(),
-                null);
+                new TrainHeaderUpdate(
+                        train.getId(),
+                        otnField.getValue(),
+                        trainTypeField.getValue(),
+                        trafficTypeField.getValue(),
+                        weightField.getValue(),
+                        lengthField.getValue(),
+                        maxSpeedField.getValue(),
+                        null));
         Notification.show(t("pm.save"), 2000, Notification.Position.BOTTOM_END)
                 .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
         if (onSaved != null) {

@@ -19,6 +19,7 @@ import com.vaadin.flow.component.textfield.TextField;
 import com.ordermgmt.railway.domain.pathmanager.model.PmJourneyLocation;
 import com.ordermgmt.railway.domain.pathmanager.service.PathManagerService;
 import com.ordermgmt.railway.domain.timetable.model.JourneyLocationType;
+import com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils;
 
 /** Editable form for a selected journey location (operational point). */
 public class JourneyLocationPanel extends VerticalLayout {
@@ -55,7 +56,7 @@ public class JourneyLocationPanel extends VerticalLayout {
     }
 
     private void buildPanel() {
-        Div card = createCard();
+        Div card = TimetableFormatUtils.createCard();
 
         Span title = new Span(t("pm.location"));
         title.getStyle()
@@ -79,18 +80,6 @@ public class JourneyLocationPanel extends VerticalLayout {
         card.add(createFormFields());
         card.add(createSaveButton());
         add(card);
-    }
-
-    private Div createCard() {
-        Div card = new Div();
-        card.setWidthFull();
-        card.getStyle()
-                .set("background", "var(--rom-bg-card)")
-                .set("border", "1px solid var(--rom-border)")
-                .set("border-radius", "6px")
-                .set("padding", "var(--lumo-space-m)")
-                .set("box-sizing", "border-box");
-        return card;
     }
 
     private Div createFormFields() {

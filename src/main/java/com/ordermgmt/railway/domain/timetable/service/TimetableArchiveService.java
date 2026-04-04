@@ -6,16 +6,12 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.ordermgmt.railway.domain.order.model.CoverageType;
@@ -25,6 +21,7 @@ import com.ordermgmt.railway.domain.order.model.PositionStatus;
 import com.ordermgmt.railway.domain.order.model.PositionType;
 import com.ordermgmt.railway.domain.order.model.ResourceNeed;
 import com.ordermgmt.railway.domain.order.model.ResourceType;
+import com.ordermgmt.railway.domain.order.model.ValidityJsonCodec;
 import com.ordermgmt.railway.domain.order.repository.OrderPositionRepository;
 import com.ordermgmt.railway.domain.timetable.model.TimeConstraintMode;
 import com.ordermgmt.railway.domain.timetable.model.TimetableActivityCatalog;
@@ -74,56 +71,11 @@ public class TimetableArchiveService {
 
     @Transactional(readOnly = true)
     public List<LocalDate> parseValidityDates(String validityJson) {
-        List<LocalDate> selectedDates = new ArrayList<>();
-        if (validityJson == null || validityJson.isBlank()) {
-            return selectedDates;
-        }
-        try {
-            var array = OBJECT_MAPPER.readTree(validityJson);
-            if (!array.isArray()) {
-                return selectedDates;
-            }
-            for (var node : array) {
-                LocalDate startDate = LocalDate.parse(node.path("startDate").asText());
-                LocalDate endDate = LocalDate.parse(node.path("endDate").asText());
-                LocalDate cursor = startDate;
-                while (!cursor.isAfter(endDate)) {
-                    selectedDates.add(cursor);
-                    cursor = cursor.plusDays(1);
-                }
-            }
-        } catch (Exception ignored) {
-            return List.of();
-        }
-        return selectedDates;
+        return ValidityJsonCodec.fromJson(validityJson);
     }
 
     public String toValidityJson(List<LocalDate> dates) {
-        LinkedHashSet<LocalDate> uniqueDates = new LinkedHashSet<>(dates);
-        if (uniqueDates.isEmpty()) {
-            return null;
-        }
-
-        List<LocalDate> sortedDates = uniqueDates.stream().sorted().toList();
-        List<Map<String, String>> segments = new ArrayList<>();
-        LocalDate segmentStart = sortedDates.getFirst();
-        LocalDate previous = segmentStart;
-
-        for (int index = 1; index < sortedDates.size(); index++) {
-            LocalDate current = sortedDates.get(index);
-            if (!current.equals(previous.plusDays(1))) {
-                segments.add(segmentMap(segmentStart, previous));
-                segmentStart = current;
-            }
-            previous = current;
-        }
-        segments.add(segmentMap(segmentStart, previous));
-
-        try {
-            return OBJECT_MAPPER.writeValueAsString(segments);
-        } catch (JsonProcessingException e) {
-            return "[]";
-        }
+        return ValidityJsonCodec.toJson(dates);
     }
 
     public List<TimetableActivityOption> activityOptions() {
@@ -359,13 +311,6 @@ public class TimetableArchiveService {
                         && row.getDepartureMode() != TimeConstraintMode.NONE
                 || !blank(row.getActivityCode())
                 || Boolean.TRUE.equals(row.getHalt());
-    }
-
-    private Map<String, String> segmentMap(LocalDate startDate, LocalDate endDate) {
-        Map<String, String> segment = new LinkedHashMap<>();
-        segment.put("startDate", startDate.toString());
-        segment.put("endDate", endDate.toString());
-        return segment;
     }
 
     private LocalTime parseTime(String value) {

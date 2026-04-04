@@ -5,15 +5,11 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.function.BiFunction;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vaadin.flow.component.ComponentEvent;
 import com.vaadin.flow.component.ComponentEventListener;
 import com.vaadin.flow.component.button.Button;
@@ -39,17 +35,17 @@ import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.order.model.PositionStatus;
 import com.ordermgmt.railway.domain.order.model.PositionType;
+import com.ordermgmt.railway.domain.order.model.ValidityJsonCodec;
 import com.ordermgmt.railway.domain.order.service.OrderService;
 import com.ordermgmt.railway.ui.component.ValidityCalendar;
 import com.ordermgmt.railway.ui.util.StringUtils;
+import com.ordermgmt.railway.ui.util.TagSelectionHelper;
 
 /**
  * Dialog for creating/editing a "Leistung" (service) order position. Fahrplan positions use a
  * separate editor.
  */
 public class ServicePositionDialog extends Dialog {
-
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final OrderService orderService;
     private final BiFunction<String, Object[], String> translator;
@@ -59,6 +55,7 @@ public class ServicePositionDialog extends Dialog {
     private final List<PredefinedTag> availableTags;
     private final List<OperationalPoint> availableOperationalPoints = new ArrayList<>();
     private final LinkedHashSet<String> unmatchedTags = new LinkedHashSet<>();
+    private final TagSelectionHelper tagHelper;
 
     private final TextField name = new TextField();
     private final TextField serviceType = new TextField();
@@ -83,6 +80,7 @@ public class ServicePositionDialog extends Dialog {
         this.isNew = existing == null;
         this.position = isNew ? new OrderPosition() : existing;
         this.availableTags = loadTags(tagRepo);
+        this.tagHelper = new TagSelectionHelper(tags, availableTags, unmatchedTags, translator);
 
         setHeaderTitle(
                 isNew
@@ -179,7 +177,7 @@ public class ServicePositionDialog extends Dialog {
         tags.setItems(availableTags);
         tags.setItemLabelGenerator(PredefinedTag::getName);
         tags.setWidthFull();
-        updateTagsHelperText();
+        tagHelper.updateHelperText("position.tags.help", "position.tags.legacy");
 
         comment.setLabel(t("order.comment"));
         comment.setMaxLength(2000);
@@ -254,7 +252,7 @@ public class ServicePositionDialog extends Dialog {
         endTime.setInvalid(false);
 
         // Parse validity JSON → calendar dates
-        List<LocalDate> dates = parseValidityDates(position.getValidity());
+        List<LocalDate> dates = ValidityJsonCodec.fromJson(position.getValidity());
         if (dates.isEmpty() && position.getStart() != null) {
             // Fallback: use start/end as range
             LocalDate d = position.getStart().toLocalDate();
@@ -265,7 +263,8 @@ public class ServicePositionDialog extends Dialog {
             }
         }
         validityCalendar.setSelectedDates(dates);
-        readTags(position.getTags());
+        tagHelper.readTags(position.getTags());
+        tagHelper.updateHelperText("position.tags.help", "position.tags.legacy");
     }
 
     // ── Validation and save ─────────────────────────────────────────────
@@ -320,9 +319,9 @@ public class ServicePositionDialog extends Dialog {
         position.setStart(selectedDates.getFirst().atTime(resolvedStartTime));
         position.setEnd(selectedDates.getLast().atTime(resolvedEndTime));
         // Store all dates as validity JSON
-        position.setValidity(toValidityJson(selectedDates));
+        position.setValidity(ValidityJsonCodec.toJson(selectedDates));
 
-        position.setTags(joinSelectedTags());
+        position.setTags(tagHelper.joinSelectedTags());
         position.setComment(StringUtils.blankToNull(comment.getValue()));
 
         if (isNew) {
@@ -349,35 +348,6 @@ public class ServicePositionDialog extends Dialog {
                 .toList();
     }
 
-    private void readTags(String stored) {
-        Map<String, PredefinedTag> tagsByName = new LinkedHashMap<>();
-        for (PredefinedTag tag : availableTags) {
-            tagsByName.put(normalizeTagName(tag.getName()), tag);
-        }
-
-        unmatchedTags.clear();
-        LinkedHashSet<PredefinedTag> selected = new LinkedHashSet<>();
-        for (String token : StringUtils.splitTags(stored)) {
-            PredefinedTag match = tagsByName.get(normalizeTagName(token));
-            if (match != null) {
-                selected.add(match);
-            } else {
-                unmatchedTags.add(token);
-            }
-        }
-        tags.setValue(selected);
-        updateTagsHelperText();
-    }
-
-    private String joinSelectedTags() {
-        LinkedHashSet<String> names = new LinkedHashSet<>();
-        for (PredefinedTag tag : availableTags) {
-            if (tags.getValue().contains(tag)) names.add(tag.getName());
-        }
-        names.addAll(unmatchedTags);
-        return names.isEmpty() ? null : String.join(", ", names);
-    }
-
     private String opLabel(OperationalPoint op) {
         return op.getName() + " (" + op.getUopid() + ")";
     }
@@ -390,71 +360,6 @@ public class ServicePositionDialog extends Dialog {
                 .filter(op -> name.equalsIgnoreCase(op.getName()))
                 .findFirst()
                 .orElse(null);
-    }
-
-    private void updateTagsHelperText() {
-        String helper = t("position.tags.help");
-        if (!unmatchedTags.isEmpty()) {
-            helper = helper + " " + t("position.tags.legacy", String.join(", ", unmatchedTags));
-        }
-        tags.setHelperText(helper);
-    }
-
-    private String normalizeTagName(String name) {
-        return name == null ? "" : name.trim().toLowerCase(Locale.ROOT);
-    }
-
-    // ── Validity JSON ────────────────────────────────────────────────────
-
-    private String toValidityJson(List<LocalDate> dates) {
-        // Group consecutive dates into segments
-        List<Map<String, String>> segments = new ArrayList<>();
-        LocalDate rangeStart = null;
-        LocalDate prev = null;
-        for (LocalDate d : dates) {
-            if (rangeStart == null) {
-                rangeStart = d;
-            } else if (!d.equals(prev.plusDays(1))) {
-                Map<String, String> segment = new LinkedHashMap<>();
-                segment.put("startDate", rangeStart.toString());
-                segment.put("endDate", prev.toString());
-                segments.add(segment);
-                rangeStart = d;
-            }
-            prev = d;
-        }
-        if (rangeStart != null) {
-            Map<String, String> segment = new LinkedHashMap<>();
-            segment.put("startDate", rangeStart.toString());
-            segment.put("endDate", prev.toString());
-            segments.add(segment);
-        }
-
-        try {
-            return OBJECT_MAPPER.writeValueAsString(segments);
-        } catch (JsonProcessingException e) {
-            return "[]";
-        }
-    }
-
-    private List<LocalDate> parseValidityDates(String json) {
-        List<LocalDate> dates = new ArrayList<>();
-        if (json == null || json.isBlank()) return dates;
-        try {
-            var array = OBJECT_MAPPER.readTree(json);
-            if (array.isArray()) {
-                for (var seg : array) {
-                    var sn = seg.get("startDate");
-                    var en = seg.get("endDate");
-                    if (sn == null || en == null) continue;
-                    LocalDate s = LocalDate.parse(sn.asText());
-                    LocalDate e = LocalDate.parse(en.asText());
-                    for (LocalDate d = s; !d.isAfter(e); d = d.plusDays(1)) dates.add(d);
-                }
-            }
-        } catch (Exception ignored) {
-        }
-        return dates;
     }
 
     // ── Events ────────────────────────────────────────────────────────

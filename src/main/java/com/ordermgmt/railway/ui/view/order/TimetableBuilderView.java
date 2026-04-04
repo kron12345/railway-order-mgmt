@@ -49,6 +49,7 @@ import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.order.model.PositionType;
 import com.ordermgmt.railway.domain.order.service.OrderService;
+import com.ordermgmt.railway.domain.timetable.model.IntervalGenerationCommand;
 import com.ordermgmt.railway.domain.timetable.model.TimetableActivityOption;
 import com.ordermgmt.railway.domain.timetable.model.TimetableRouteResult;
 import com.ordermgmt.railway.domain.timetable.model.TimetableRowData;
@@ -270,17 +271,18 @@ public class TimetableBuilderView extends VerticalLayout implements BeforeEnterO
                                         : List.of();
                         var positions =
                                 intervalTimetableService.generateIntervalPositions(
-                                        order,
-                                        config.namePrefix(),
-                                        config.otnStart(),
-                                        new ArrayList<>(timetableRows),
-                                        config.firstDeparture(),
-                                        config.lastDeparture(),
-                                        config.crossMidnight(),
-                                        config.intervalMinutes(),
-                                        dates,
-                                        joinSelectedTags(),
-                                        commentField.getValue());
+                                        new IntervalGenerationCommand(
+                                                order,
+                                                config.namePrefix(),
+                                                config.otnStart(),
+                                                new ArrayList<>(timetableRows),
+                                                config.firstDeparture(),
+                                                config.lastDeparture(),
+                                                config.crossMidnight(),
+                                                config.intervalMinutes(),
+                                                dates,
+                                                joinSelectedTags(),
+                                                commentField.getValue()));
                         Notification.show(
                                         t("timetable.interval.generated", positions.size()),
                                         3000,

@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
+import com.ordermgmt.railway.domain.timetable.model.IntervalGenerationCommand;
 import com.ordermgmt.railway.domain.timetable.model.TimetableRowData;
 
 /**
@@ -36,55 +37,37 @@ public class IntervalTimetableService {
      * <p>Creates one {@link OrderPosition} per departure slot. All times in the base route are
      * shifted by the delta between the base route's first departure and the target departure time.
      *
-     * @param order the parent order
-     * @param namePrefix prefix for generated position names (departure time is appended)
-     * @param otnStart starting operational train number (incremented per position)
-     * @param baseRows the template route rows to shift
-     * @param firstDeparture first interval departure time
-     * @param lastDeparture last interval departure time
-     * @param crossesMidnight whether the interval window crosses midnight
-     * @param intervalMinutes minutes between consecutive departures
-     * @param validityDates calendar dates on which the positions are valid
-     * @param tags comma-separated tags for the positions
-     * @param comment free-text comment
+     * @param cmd the generation command containing all parameters
      * @return list of created order positions
      */
     @Transactional
-    public List<OrderPosition> generateIntervalPositions(
-            Order order,
-            String namePrefix,
-            String otnStart,
-            List<TimetableRowData> baseRows,
-            LocalTime firstDeparture,
-            LocalTime lastDeparture,
-            boolean crossesMidnight,
-            int intervalMinutes,
-            List<LocalDate> validityDates,
-            String tags,
-            String comment) {
+    public List<OrderPosition> generateIntervalPositions(IntervalGenerationCommand cmd) {
 
         List<LocalTime> departures =
                 calculateDepartureTimes(
-                        firstDeparture, lastDeparture, crossesMidnight, intervalMinutes);
+                        cmd.firstDeparture(),
+                        cmd.lastDeparture(),
+                        cmd.crossesMidnight(),
+                        cmd.intervalMinutes());
 
         // Delta base: use the first row's departure so shifts are relative to the actual route data
-        LocalTime baseDeparture = parseFirstRowDeparture(baseRows, firstDeparture);
+        LocalTime baseDeparture = parseFirstRowDeparture(cmd.baseRows(), cmd.firstDeparture());
 
         List<OrderPosition> positions = new ArrayList<>();
         for (int i = 0; i < departures.size(); i++) {
             LocalTime dep = departures.get(i);
             positions.add(
                     createShiftedPosition(
-                            order,
-                            namePrefix,
-                            otnStart,
-                            baseRows,
+                            cmd.order(),
+                            cmd.namePrefix(),
+                            cmd.otnStart(),
+                            cmd.baseRows(),
                             baseDeparture,
                             dep,
-                            crossesMidnight,
-                            validityDates,
-                            tags,
-                            comment,
+                            cmd.crossesMidnight(),
+                            cmd.validityDates(),
+                            cmd.tags(),
+                            cmd.comment(),
                             i));
         }
         return positions;

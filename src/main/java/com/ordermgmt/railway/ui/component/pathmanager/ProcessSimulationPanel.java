@@ -31,6 +31,7 @@ import com.ordermgmt.railway.domain.pathmanager.repository.PmProcessStepReposito
 import com.ordermgmt.railway.domain.pathmanager.service.PathProcessEngine;
 import com.ordermgmt.railway.domain.pathmanager.service.TtrPhaseResolver;
 import com.ordermgmt.railway.ui.component.StatusBadge;
+import com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils;
 
 /** Interactive TTT process simulation: state badge, action buttons, history grid. */
 public class ProcessSimulationPanel extends VerticalLayout {
@@ -85,7 +86,7 @@ public class ProcessSimulationPanel extends VerticalLayout {
     }
 
     private void buildPanel() {
-        Div card = createCard();
+        Div card = TimetableFormatUtils.createCard();
 
         Span title = new Span(t("pm.process.title"));
         title.getStyle()
@@ -125,18 +126,6 @@ public class ProcessSimulationPanel extends VerticalLayout {
         refreshState();
         refreshActions();
         refreshHistory();
-    }
-
-    private Div createCard() {
-        Div card = new Div();
-        card.setWidthFull();
-        card.getStyle()
-                .set("background", "var(--rom-bg-card)")
-                .set("border", "1px solid var(--rom-border)")
-                .set("border-radius", "6px")
-                .set("padding", "var(--lumo-space-m)")
-                .set("box-sizing", "border-box");
-        return card;
     }
 
     private void refreshState() {
