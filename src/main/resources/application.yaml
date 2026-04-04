@@ -63,6 +63,10 @@ keycloak:
     username: ${KEYCLOAK_ADMIN_USER:admin}
     password: ${KEYCLOAK_ADMIN_PASSWORD:}
 
+app:
+  api:
+    security-enabled: ${API_SECURITY_ENABLED:false}  # Set to true for production
+
 vaadin:
   launch-browser: true
   allowed-packages:

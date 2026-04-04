@@ -16,7 +16,11 @@ import org.jgrapht.Graph;
 import org.jgrapht.alg.shortestpath.DijkstraShortestPath;
 import org.jgrapht.graph.DefaultWeightedEdge;
 import org.jgrapht.graph.SimpleWeightedGraph;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.context.event.EventListener;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -39,12 +43,23 @@ import lombok.RequiredArgsConstructor;
 @Transactional(readOnly = true)
 public class TimetableRoutingService {
 
+    private static final Logger log = LoggerFactory.getLogger(TimetableRoutingService.class);
     private static final int MAX_SEARCH_RESULTS = 50;
     private static final double ASSUMED_SPEED_METERS_PER_SECOND = 70_000D / 3_600D;
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
 
     private final OperationalPointRepository operationalPointRepository;
     private final SectionOfLineRepository sectionOfLineRepository;
+
+    /** Pre-loads the RINF routing graph and operational points into the cache at startup. */
+    @EventListener(ApplicationReadyEvent.class)
+    public void warmUpGraphCache() {
+        log.info("Pre-loading RINF routing graph...");
+        long start = System.currentTimeMillis();
+        loadOperationalPointsByUopid();
+        buildGraph();
+        log.info("RINF routing graph loaded in {} ms", System.currentTimeMillis() - start);
+    }
 
     public List<OperationalPoint> searchOperationalPoints(String filter, int offset, int limit) {
         int pageSize = Math.max(1, Math.min(limit, MAX_SEARCH_RESULTS));

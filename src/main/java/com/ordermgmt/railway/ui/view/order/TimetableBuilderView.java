@@ -22,6 +22,7 @@ import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.checkbox.CheckboxGroup;
+import com.vaadin.flow.component.confirmdialog.ConfirmDialog;
 import com.vaadin.flow.component.details.Details;
 import com.vaadin.flow.component.formlayout.FormLayout;
 import com.vaadin.flow.component.html.Div;
@@ -38,6 +39,8 @@ import com.vaadin.flow.component.textfield.TextArea;
 import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.router.BeforeEnterEvent;
 import com.vaadin.flow.router.BeforeEnterObserver;
+import com.vaadin.flow.router.BeforeLeaveEvent;
+import com.vaadin.flow.router.BeforeLeaveObserver;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 
@@ -69,7 +72,8 @@ import com.ordermgmt.railway.ui.layout.MainLayout;
 @Route(value = "orders/:orderId/timetable-builder", layout = MainLayout.class)
 @PageTitle("Timetable Builder")
 @RolesAllowed({"ADMIN", "DISPATCHER"})
-public class TimetableBuilderView extends VerticalLayout implements BeforeEnterObserver {
+public class TimetableBuilderView extends VerticalLayout
+        implements BeforeEnterObserver, BeforeLeaveObserver {
 
     private final OrderService orderService;
     private final OperationalPointRepository operationalPointRepository;
@@ -154,6 +158,23 @@ public class TimetableBuilderView extends VerticalLayout implements BeforeEnterO
         loadReferenceData();
         buildView();
         loadExistingData();
+    }
+
+    @Override
+    public void beforeLeave(BeforeLeaveEvent event) {
+        if (hasUnsavedChanges()) {
+            BeforeLeaveEvent.ContinueNavigationAction action = event.postpone();
+            ConfirmDialog dialog = new ConfirmDialog();
+            dialog.setHeader(t("common.unsavedChanges"));
+            dialog.setText(t("common.unsavedChanges.text"));
+            dialog.setCancelable(true);
+            dialog.addConfirmListener(e -> action.proceed());
+            dialog.open();
+        }
+    }
+
+    private boolean hasUnsavedChanges() {
+        return !timetableRows.isEmpty() && currentStep != Step.ROUTE;
     }
 
     private OrderPosition resolvePosition(BeforeEnterEvent event) {
