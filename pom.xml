@@ -154,7 +154,7 @@
         <dependency>
             <groupId>org.vaadin.addons.tltv.gantt</groupId>
             <artifactId>gantt-flow-addon</artifactId>
-            <version>24.0.2</version>
+            <version>25.0.0</version>
         </dependency>
 
         <!-- ==================== Architecture Tests ==================== -->
