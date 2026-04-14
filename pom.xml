@@ -22,7 +22,7 @@
         <vaadin.version>24.7.4</vaadin.version>
         <mapstruct.version>1.6.3</mapstruct.version>
         <archunit.version>1.3.0</archunit.version>
-        <spotbugs.version>4.8.6</spotbugs.version>
+        <spotbugs.version>4.9.8.3</spotbugs.version>
         <jacoco.min.coverage>0.60</jacoco.min.coverage>
     </properties>
 
