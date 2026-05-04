@@ -65,3 +65,14 @@ credentials*.json
 # Private documents - local only, never committed
 docs/private/
 !docs/private/README.md
+
+# Test artifacts (Playwright, ad-hoc test runners)
+playwright-report/
+test-results/
+test-playwright.cjs
+
+# AI assistant local state
+.qwen/
+
+# Stray Maven/Vaadin metadata folder that sometimes lands in project root
+/META-INF/
