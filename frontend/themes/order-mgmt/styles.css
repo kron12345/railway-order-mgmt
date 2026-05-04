@@ -1026,6 +1026,44 @@ vaadin-button:focus-visible {
     line-height: 1.2;
 }
 
+/* Order detail header (mirrors Business read header) */
+.order-detail__header {
+    /* extends .biz-read__header for shared padding/border */
+}
+.order-detail__left {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+.order-detail__title-block {
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    min-width: 0;
+}
+.order-detail__number {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--rom-accent);
+    letter-spacing: 0.01em;
+}
+.order-detail__name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--rom-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.order-detail__meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--rom-text-muted);
+}
+
 /* === Amber-themed primary buttons === */
 vaadin-button[theme~="primary"] {
     background: var(--rom-accent) !important;

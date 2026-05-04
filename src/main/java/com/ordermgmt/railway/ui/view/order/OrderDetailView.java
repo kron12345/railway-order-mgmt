@@ -3,6 +3,7 @@ package com.ordermgmt.railway.ui.view.order;
 import java.time.format.DateTimeFormatter;
 import java.util.UUID;
 
+import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
@@ -33,7 +34,6 @@ import com.ordermgmt.railway.domain.order.service.ResourceNeedService;
 import com.ordermgmt.railway.domain.pathmanager.service.PathManagerService;
 import com.ordermgmt.railway.domain.timetable.service.TimetableArchiveService;
 import com.ordermgmt.railway.ui.component.AuditHistoryDialog;
-import com.ordermgmt.railway.ui.component.StatusBadge;
 import com.ordermgmt.railway.ui.component.order.OrderFormPanel;
 import com.ordermgmt.railway.ui.component.order.OrderPositionPanel;
 
@@ -220,39 +220,74 @@ public class OrderDetailView extends VerticalLayout {
     }
 
     /** Compact summary header: order info in one line + action buttons. */
+    /**
+     * Compact Bloomberg-style header consistent with {@code BusinessReadView}: large
+     * title (number + name), themed status pill with icon, customer + dates as a thin
+     * meta row, action buttons on the right.
+     */
     private Div createCompactHeader() {
-        Div header = createHeaderContainer();
+        Div header = new Div();
+        header.addClassName("biz-read__header");
+        header.addClassName("order-detail__header");
+        header.setWidthFull();
+
+        // Title block: order number + name on the same line
+        Div titleBlock = new Div();
+        titleBlock.addClassName("order-detail__title-block");
+
+        Span numberSpan = new Span(order.getOrderNumber() == null ? "—" : order.getOrderNumber());
+        numberSpan.addClassName("order-detail__number");
+        Span nameSpan = new Span(order.getName() == null ? "" : order.getName());
+        nameSpan.addClassName("order-detail__name");
+        titleBlock.add(numberSpan, nameSpan);
+
+        // Meta row: customer and validity
+        Div metaRow = new Div();
+        metaRow.addClassName("order-detail__meta");
+        if (order.getCustomer() != null && order.getCustomer().getName() != null) {
+            Span customer = new Span(order.getCustomer().getName());
+            metaRow.add(customer);
+            metaRow.add(new Span(" · "));
+        }
+        Span dates = new Span(formatDates());
+        metaRow.add(dates);
+
+        Div left = new Div(titleBlock, metaRow);
+        left.addClassName("order-detail__left");
+
+        Component statusPill = buildProcessStatusPill(order.getProcessStatus());
+
         Span spacer = new Span();
         spacer.getStyle().set("flex", "1");
-        header.add(
-                createCompactBackButton(),
-                createOrderNumberLabel(),
-                createOrderNameLabel(),
-                createCustomerLabel(),
-                createProcessBadge(order.getProcessStatus()),
-                createDatesLabel(),
-                spacer,
-                createHistoryButton(),
-                createEditButton(),
-                createDeleteButton());
+
+        header.add(createCompactBackButton(), left, statusPill, spacer,
+                createHistoryButton(), createEditButton(), createDeleteButton());
+        header.getStyle().set("display", "flex").set("align-items", "center").set("gap", "12px");
         return header;
     }
 
-    private Div createHeaderContainer() {
-        Div header = new Div();
-        header.setWidthFull();
-        header.getStyle()
-                .set("background", "var(--rom-bg-card)")
-                .set("border", "1px solid var(--rom-border)")
-                .set("border-radius", "6px")
-                .set("padding", "10px 16px")
-                .set("margin-bottom", "var(--lumo-space-s)")
-                .set("box-sizing", "border-box")
-                .set("display", "flex")
-                .set("align-items", "center")
-                .set("gap", "16px")
-                .set("flex-wrap", "wrap");
-        return header;
+    /** Status pill with icon, matching the master-card and BusinessReadView style. */
+    private Component buildProcessStatusPill(ProcessStatus status) {
+        var pill = new com.vaadin.flow.component.orderedlayout.HorizontalLayout();
+        pill.addClassName("order-status-pill");
+        if (status != null) pill.addClassName("order-status-pill--" + status.name().toLowerCase());
+        pill.setPadding(false);
+        pill.setSpacing(false);
+        VaadinIcon iconSpec = status == null ? VaadinIcon.QUESTION_CIRCLE_O : switch (status) {
+            case AUFTRAG -> VaadinIcon.FILE_TEXT_O;
+            case PLANUNG -> VaadinIcon.CALENDAR;
+            case PRODUKT_LEISTUNG -> VaadinIcon.PACKAGE;
+            case PRODUKTION -> VaadinIcon.COG;
+            case ABRECHNUNG_NACHBEREITUNG -> VaadinIcon.CHECK_CIRCLE_O;
+        };
+        var icon = iconSpec.create();
+        icon.addClassName("order-status-pill__icon");
+        icon.getElement().setAttribute("aria-hidden", "true");
+        pill.add(icon);
+        Span label = new Span(status == null ? "—" : getTranslation("process." + status.name()));
+        label.addClassName("order-status-pill__label");
+        pill.add(label);
+        return pill;
     }
 
     private Button createCompactBackButton() {
@@ -261,43 +296,6 @@ public class OrderDetailView extends VerticalLayout {
         backButton.getStyle().set("color", "var(--rom-text-muted)");
         backButton.addClickListener(e -> UI.getCurrent().navigate("orders"));
         return backButton;
-    }
-
-    private Span createOrderNumberLabel() {
-        Span orderNumber = new Span(order.getOrderNumber());
-        orderNumber
-                .getStyle()
-                .set("font-family", "'JetBrains Mono', monospace")
-                .set("font-size", "13px")
-                .set("font-weight", "700")
-                .set("color", "var(--rom-accent)");
-        return orderNumber;
-    }
-
-    private Span createOrderNameLabel() {
-        Span orderName = new Span(order.getName());
-        orderName
-                .getStyle()
-                .set("font-weight", "600")
-                .set("font-size", "14px")
-                .set("color", "var(--rom-text-primary)");
-        return orderName;
-    }
-
-    private Span createCustomerLabel() {
-        String customerName = order.getCustomer() != null ? order.getCustomer().getName() : "—";
-        Span customer = new Span(customerName);
-        customer.getStyle().set("color", "var(--rom-text-muted)").set("font-size", "12px");
-        return customer;
-    }
-
-    private Span createDatesLabel() {
-        Span dates = new Span(formatDates());
-        dates.getStyle()
-                .set("font-family", "'JetBrains Mono', monospace")
-                .set("font-size", "11px")
-                .set("color", "var(--rom-text-muted)");
-        return dates;
     }
 
     private Button createHistoryButton() {
@@ -390,17 +388,6 @@ public class OrderDetailView extends VerticalLayout {
         dialog.open();
     }
 
-    private StatusBadge createProcessBadge(ProcessStatus status) {
-        if (status == null) return new StatusBadge("—", StatusBadge.StatusType.NEUTRAL);
-        String label = getTranslation("process." + status.name());
-        return switch (status) {
-            case AUFTRAG -> new StatusBadge(label, StatusBadge.StatusType.INFO);
-            case PLANUNG -> new StatusBadge(label, StatusBadge.StatusType.WARNING);
-            case PRODUKT_LEISTUNG -> new StatusBadge(label, StatusBadge.StatusType.INFO);
-            case PRODUKTION -> new StatusBadge(label, StatusBadge.StatusType.SUCCESS);
-            case ABRECHNUNG_NACHBEREITUNG -> new StatusBadge(label, StatusBadge.StatusType.NEUTRAL);
-        };
-    }
 
     private String formatDates() {
         String from = order.getValidFrom() != null ? order.getValidFrom().format(DATE_FMT) : "—";
