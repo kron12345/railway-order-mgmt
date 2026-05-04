@@ -2,6 +2,8 @@ package com.ordermgmt.railway.domain.business.model;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 import jakarta.persistence.*;
@@ -54,11 +56,26 @@ public class Business {
 
     private LocalDate dueDate;
 
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(columnDefinition = "jsonb")
-    private String documents;
-
     private String tags;
+
+    @OneToMany(mappedBy = "business", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<BusinessDocument> documents = new ArrayList<>();
+
+    @ManyToMany
+    @JoinTable(
+        name = "business_order_positions",
+        joinColumns = @JoinColumn(name = "business_id"),
+        inverseJoinColumns = @JoinColumn(name = "order_position_id")
+    )
+    private List<com.ordermgmt.railway.domain.order.model.OrderPosition> orderPositions = new ArrayList<>();
+
+    @ManyToMany
+    @JoinTable(
+        name = "business_purchase_positions",
+        joinColumns = @JoinColumn(name = "business_id"),
+        inverseJoinColumns = @JoinColumn(name = "purchase_position_id")
+    )
+    private List<com.ordermgmt.railway.domain.order.model.PurchasePosition> purchasePositions = new ArrayList<>();
 
     @CreatedDate
     @Column(nullable = false, updatable = false)

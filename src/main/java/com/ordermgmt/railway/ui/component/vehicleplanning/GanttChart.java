@@ -1,10 +1,14 @@
 package com.ordermgmt.railway.ui.component.vehicleplanning;
 
+import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 
 import org.vaadin.tltv.gantt.Gantt;
 import org.vaadin.tltv.gantt.model.Resolution;
@@ -13,27 +17,19 @@ import org.vaadin.tltv.gantt.model.SubStep;
 
 import com.vaadin.flow.component.html.Div;
 
-import com.ordermgmt.railway.domain.pathmanager.model.PmReferenceTrain;
+import com.ordermgmt.railway.domain.vehicleplanning.model.TrainScheduleInfo;
 import com.ordermgmt.railway.domain.vehicleplanning.model.VpRotationEntry;
 import com.ordermgmt.railway.domain.vehicleplanning.model.VpVehicle;
 
 /**
- * Gantt chart component for vehicle rotation planning using the tltv Gantt Flow add-on. Each row
- * (Step) represents either a shelf (unassigned trains) or a duty (vehicle). Each block (SubStep)
- * represents a train placed in that row. Supports drag-and-drop between rows.
+ * Gantt chart component showing a Mon–Fri week view for vehicle rotation planning. Shelf rows hold
+ * unassigned trains; duty rows hold vehicles with their assigned trains.
  */
 public class GanttChart extends Div {
 
-    /** UID prefix for shelf rows to distinguish them from duty rows. */
     public static final String SHELF_PREFIX = "shelf-";
-
-    /** UID prefix for duty rows (uses the VpVehicle UUID). */
     public static final String DUTY_PREFIX = "duty-";
-
-    /** UID prefix for train sub-steps (uses the PmReferenceTrain UUID). */
     public static final String TRAIN_PREFIX = "train-";
-
-    /** UID prefix for entry sub-steps (uses the VpRotationEntry UUID). */
     public static final String ENTRY_PREFIX = "entry-";
 
     private static final String COLOR_SHELF_TRAIN = "#FFB800";
@@ -43,17 +39,12 @@ public class GanttChart extends Div {
 
     private final Gantt gantt;
     private MoveHandler moveHandler;
+    private LocalDate weekStart; // Monday of the displayed week
 
-    /** Callback for when a substep is moved to a new row. */
+    /** Callback when a substep is moved to a new row. */
     @FunctionalInterface
     public interface MoveHandler {
-        /**
-         * Called when a train block is moved.
-         *
-         * @param subStepUid the moved sub-step UID (train- or entry- prefix)
-         * @param newOwnerUid the target row UID (shelf- or duty- prefix)
-         */
-        void onMove(String subStepUid, String newOwnerUid);
+        void onMove(String subStepUid, String newOwnerUid, int dayOfWeek);
     }
 
     public GanttChart() {
@@ -67,17 +58,17 @@ public class GanttChart extends Div {
         gantt.setYearRowVisible(false);
         gantt.setMonthRowVisible(false);
 
-        gantt.addStepMoveListener(
-                event -> {
-                    if (moveHandler == null) {
-                        return;
-                    }
-                    var movedStep = event.getAnyStep();
-                    String newOwnerUid = event.getNewUid();
-                    if (movedStep != null && newOwnerUid != null) {
-                        moveHandler.onMove(movedStep.getUid(), newOwnerUid);
-                    }
-                });
+        gantt.addStepMoveListener(event -> {
+            if (moveHandler == null) {
+                return;
+            }
+            var movedStep = event.getAnyStep();
+            String newOwnerUid = event.getNewUid();
+            if (movedStep != null && newOwnerUid != null) {
+                int dayOfWeek = deriveDayOfWeek(movedStep.getStartDate());
+                moveHandler.onMove(movedStep.getUid(), newOwnerUid, dayOfWeek);
+            }
+        });
 
         add(gantt);
         setSizeFull();
@@ -88,253 +79,161 @@ public class GanttChart extends Div {
     }
 
     /**
-     * Sets the visible time range for the Gantt chart.
+     * Loads a Mon–Fri week view with shelf rows (unassigned trains) and duty rows (vehicles).
      *
-     * @param start start of the range
-     * @param end end of the range
-     */
-    public void setTimeRange(LocalDateTime start, LocalDateTime end) {
-        gantt.setStartDateTime(start);
-        gantt.setEndDateTime(end);
-    }
-
-    /**
-     * Loads and renders all data: shelf rows for unassigned trains and duty rows for vehicles.
-     *
-     * @param unassignedTrains trains not yet assigned to any vehicle
-     * @param vehicles the vehicles (duties) with their rotation entries
-     * @param baseDate the reference date for time calculations (determines the day shown)
+     * @param unassigned schedule info for unassigned trains
+     * @param vehicles vehicles with their rotation entries
+     * @param scheduleMap train-ID → schedule lookup for assigned trains
+     * @param monday the Monday of the week to display
      */
     public void loadData(
-            List<PmReferenceTrain> unassignedTrains,
+            List<TrainScheduleInfo> unassigned,
             List<VpVehicle> vehicles,
-            LocalDateTime baseDate) {
+            Map<java.util.UUID, TrainScheduleInfo> scheduleMap,
+            LocalDate monday) {
         clearAll();
+        this.weekStart = monday;
 
-        // Set time range to cover a full day
-        setTimeRange(baseDate.with(LocalTime.MIN), baseDate.with(LocalTime.MAX));
+        LocalDateTime rangeStart = monday.atStartOfDay();
+        LocalDateTime rangeEnd = monday.plusDays(4).atTime(LocalTime.MAX); // Friday 23:59
+        gantt.setStartDateTime(rangeStart);
+        gantt.setEndDateTime(rangeEnd);
 
-        // Build shelf rows from unassigned trains
-        List<List<PmReferenceTrain>> shelves = calculateShelves(unassignedTrains, baseDate);
+        // Shelf rows: unassigned trains distributed to avoid overlap (all shown on Monday)
+        List<List<TrainScheduleInfo>> shelves = distributeShelves(unassigned);
         for (int i = 0; i < shelves.size(); i++) {
-            addShelfRow(i, shelves.get(i), baseDate);
+            addShelfRow(i, shelves.get(i));
         }
 
-        // Build duty rows from vehicles
+        // Duty rows: one per vehicle, entries positioned on their dayOfWeek
         for (VpVehicle vehicle : vehicles) {
-            addDutyRow(vehicle, baseDate);
+            addDutyRow(vehicle, scheduleMap);
         }
     }
 
-    /** Removes all steps from the Gantt chart. */
     public void clearAll() {
         List<Step> steps = new ArrayList<>(gantt.getStepsList());
         gantt.removeSteps(steps);
     }
 
-    /** Returns the underlying Gantt component (for embedding in layouts). */
     public Gantt getGantt() {
         return gantt;
     }
 
-    private void addShelfRow(int index, List<PmReferenceTrain> trains, LocalDateTime baseDate) {
-        Step shelfRow = new Step();
-        shelfRow.setUid(SHELF_PREFIX + index);
-        shelfRow.setCaption("Shelf " + (index + 1));
-        shelfRow.setBackgroundColor(COLOR_SHELF_ROW);
-        shelfRow.setStartDate(baseDate.with(LocalTime.MIN));
-        shelfRow.setEndDate(baseDate.with(LocalTime.MAX));
-        shelfRow.setMovable(false);
-        shelfRow.setResizable(false);
-        gantt.addStep(shelfRow);
+    // --- Shelf rows ---
 
-        for (PmReferenceTrain train : trains) {
-            SubStep sub = createTrainSubStep(train, shelfRow, baseDate, COLOR_SHELF_TRAIN);
+    private void addShelfRow(int index, List<TrainScheduleInfo> trains) {
+        Step row = createRow(SHELF_PREFIX + index, "Shelf " + (index + 1), COLOR_SHELF_ROW);
+        gantt.addStep(row);
+
+        for (TrainScheduleInfo info : trains) {
+            SubStep sub = new SubStep(row);
+            sub.setUid(TRAIN_PREFIX + info.trainId());
+            sub.setCaption(info.label());
+            sub.setBackgroundColor(COLOR_SHELF_TRAIN);
+            sub.setMovable(true);
+            sub.setResizable(false);
+            // Show on Monday (day 1)
+            sub.setStartDate(weekStart.atTime(info.departure()));
+            sub.setEndDate(weekStart.atTime(info.arrival()));
             gantt.addSubStep(sub);
         }
     }
 
-    private void addDutyRow(VpVehicle vehicle, LocalDateTime baseDate) {
-        Step dutyRow = new Step();
-        dutyRow.setUid(DUTY_PREFIX + vehicle.getId());
-        dutyRow.setCaption(vehicle.getLabel());
-        dutyRow.setBackgroundColor(COLOR_DUTY_ROW);
-        dutyRow.setStartDate(baseDate.with(LocalTime.MIN));
-        dutyRow.setEndDate(baseDate.with(LocalTime.MAX));
-        dutyRow.setMovable(false);
-        dutyRow.setResizable(false);
-        gantt.addStep(dutyRow);
+    // --- Duty rows ---
 
-        List<VpRotationEntry> entries =
-                vehicle.getEntries().stream()
-                        .sorted(Comparator.comparingInt(VpRotationEntry::getSequenceInDay))
-                        .toList();
+    private void addDutyRow(VpVehicle vehicle, Map<java.util.UUID, TrainScheduleInfo> scheduleMap) {
+        Step row = createRow(DUTY_PREFIX + vehicle.getId(), vehicle.getLabel(), COLOR_DUTY_ROW);
+        gantt.addStep(row);
+
+        List<VpRotationEntry> entries = vehicle.getEntries().stream()
+                .sorted(Comparator.comparingInt(VpRotationEntry::getDayOfWeek)
+                        .thenComparingInt(VpRotationEntry::getSequenceInDay))
+                .toList();
 
         for (VpRotationEntry entry : entries) {
-            SubStep sub = createEntrySubStep(entry, dutyRow, baseDate);
+            TrainScheduleInfo info = scheduleMap.get(entry.getReferenceTrain().getId());
+            if (info == null) {
+                continue;
+            }
+
+            int day = entry.getDayOfWeek(); // 1=Mon, 5=Fri
+            if (day < 1 || day > 5) {
+                continue;
+            }
+            LocalDate entryDate = weekStart.plusDays(day - 1);
+
+            SubStep sub = new SubStep(row);
+            sub.setUid(ENTRY_PREFIX + entry.getId());
+            sub.setCaption(info.label());
+            sub.setBackgroundColor(COLOR_DUTY_TRAIN);
+            sub.setMovable(true);
+            sub.setResizable(false);
+            sub.setStartDate(entryDate.atTime(info.departure()));
+            sub.setEndDate(entryDate.atTime(info.arrival()));
             gantt.addSubStep(sub);
         }
     }
 
-    private SubStep createTrainSubStep(
-            PmReferenceTrain train, Step owner, LocalDateTime baseDate, String color) {
-        SubStep sub = new SubStep(owner);
-        sub.setUid(TRAIN_PREFIX + train.getId());
-        sub.setCaption(buildTrainLabel(train));
-        sub.setBackgroundColor(color);
-        sub.setMovable(true);
-        sub.setResizable(false);
+    // --- Helpers ---
 
-        TrainTimeWindow tw = resolveTrainTimes(train, baseDate);
-        sub.setStartDate(tw.start());
-        sub.setEndDate(tw.end());
-
-        return sub;
+    private Step createRow(String uid, String caption, String bgColor) {
+        Step row = new Step();
+        row.setUid(uid);
+        row.setCaption(caption);
+        row.setBackgroundColor(bgColor);
+        row.setStartDate(weekStart.atStartOfDay());
+        row.setEndDate(weekStart.plusDays(4).atTime(LocalTime.MAX));
+        row.setMovable(false);
+        row.setResizable(false);
+        return row;
     }
 
-    private SubStep createEntrySubStep(VpRotationEntry entry, Step owner, LocalDateTime baseDate) {
-        PmReferenceTrain train = entry.getReferenceTrain();
-        SubStep sub = new SubStep(owner);
-        sub.setUid(ENTRY_PREFIX + entry.getId());
-        sub.setCaption(buildTrainLabel(train));
-        sub.setBackgroundColor(COLOR_DUTY_TRAIN);
-        sub.setMovable(true);
-        sub.setResizable(false);
-
-        TrainTimeWindow tw = resolveTrainTimes(train, baseDate);
-        sub.setStartDate(tw.start());
-        sub.setEndDate(tw.end());
-
-        return sub;
-    }
-
-    private String buildTrainLabel(PmReferenceTrain train) {
-        String otn = train.getOperationalTrainNumber();
-        return otn != null ? otn : train.getTridCore();
+    private int deriveDayOfWeek(LocalDateTime dateTime) {
+        if (dateTime == null || weekStart == null) {
+            return 1;
+        }
+        int days = (int) ChronoUnit.DAYS.between(weekStart, dateTime.toLocalDate());
+        int dow = days + 1;
+        return Math.max(1, Math.min(5, dow));
     }
 
     /**
-     * Resolves departure/arrival times for a train into a time window on the given base date. Falls
-     * back to a 1-hour placeholder if no journey data is available.
+     * Distributes trains into shelf rows so that no two trains overlap in time. Uses a greedy
+     * first-fit algorithm. Always returns at least one (possibly empty) shelf.
      */
-    private TrainTimeWindow resolveTrainTimes(PmReferenceTrain train, LocalDateTime baseDate) {
-        // Try to get times from the latest train version's journey locations.
-        // Both trainVersions and journeyLocations are lazy-loaded; if the Hibernate
-        // session is closed (typical in Vaadin UI threads), we fall through to the
-        // fallback placeholder.
-        try {
-            var versions = train.getTrainVersions();
-            if (versions != null && !versions.isEmpty()) {
-                var latest =
-                        versions.stream()
-                                .max(
-                                        Comparator.comparingInt(
-                                                com.ordermgmt.railway.domain.pathmanager.model
-                                                                .PmTrainVersion
-                                                        ::getVersionNumber))
-                                .orElse(null);
-                if (latest != null) {
-                    String depTime = null;
-                    String arrTime = null;
-                    var jlocs = latest.getJourneyLocations();
-                    if (jlocs != null && !jlocs.isEmpty()) {
-                        var sorted =
-                                jlocs.stream()
-                                        .sorted(
-                                                Comparator.comparingInt(
-                                                        com.ordermgmt.railway.domain.pathmanager
-                                                                        .model.PmJourneyLocation
-                                                                ::getSequence))
-                                        .toList();
-                        depTime = sorted.getFirst().getDepartureTime();
-                        arrTime = sorted.getLast().getArrivalTime();
-                    }
+    private List<List<TrainScheduleInfo>> distributeShelves(List<TrainScheduleInfo> trains) {
+        List<List<TrainScheduleInfo>> shelves = new ArrayList<>();
+        List<List<LocalTime>> shelfEnds = new ArrayList<>();
 
-                    if (depTime != null && arrTime != null) {
-                        LocalDateTime start = parseTimeOnDate(depTime, baseDate);
-                        LocalDateTime end = parseTimeOnDate(arrTime, baseDate);
-                        if (end.isAfter(start)) {
-                            return new TrainTimeWindow(start, end);
-                        }
-                    }
-                }
-            }
-        } catch (org.hibernate.LazyInitializationException ignored) {
-            // Train versions or journey locations not in session; use fallback
-        }
+        List<TrainScheduleInfo> sorted = trains.stream()
+                .sorted(Comparator.comparing(TrainScheduleInfo::departure))
+                .toList();
 
-        // Fallback: 1-hour placeholder block at 06:00
-        LocalDateTime fallbackStart = baseDate.with(LocalTime.of(6, 0));
-        return new TrainTimeWindow(fallbackStart, fallbackStart.plusHours(1));
-    }
-
-    /** Parses a time string (HH:mm or HH:mm:ss) and places it on the given base date. */
-    private LocalDateTime parseTimeOnDate(String time, LocalDateTime baseDate) {
-        try {
-            String[] parts = time.split(":");
-            int hour = Integer.parseInt(parts[0]);
-            int minute = parts.length > 1 ? Integer.parseInt(parts[1]) : 0;
-            // Handle times > 24h (next day) by clamping
-            if (hour >= 24) {
-                hour = 23;
-                minute = 59;
-            }
-            return baseDate.with(LocalTime.of(hour, minute));
-        } catch (Exception e) {
-            return baseDate.with(LocalTime.of(6, 0));
-        }
-    }
-
-    /**
-     * Distributes trains into shelf rows so that no two trains in the same shelf overlap in time.
-     * Uses a greedy first-fit algorithm.
-     */
-    private List<List<PmReferenceTrain>> calculateShelves(
-            List<PmReferenceTrain> trains, LocalDateTime baseDate) {
-        List<List<PmReferenceTrain>> shelves = new ArrayList<>();
-        List<List<TrainTimeWindow>> shelfWindows = new ArrayList<>();
-
-        List<PmReferenceTrain> sorted =
-                trains.stream()
-                        .sorted(Comparator.comparing(t -> resolveTrainTimes(t, baseDate).start()))
-                        .toList();
-
-        for (PmReferenceTrain train : sorted) {
-            TrainTimeWindow tw = resolveTrainTimes(train, baseDate);
+        for (TrainScheduleInfo info : sorted) {
             boolean placed = false;
             for (int i = 0; i < shelves.size(); i++) {
-                if (!overlapsAny(tw, shelfWindows.get(i))) {
-                    shelves.get(i).add(train);
-                    shelfWindows.get(i).add(tw);
+                List<LocalTime> ends = shelfEnds.get(i);
+                if (ends.isEmpty() || !info.departure().isBefore(ends.getLast())) {
+                    shelves.get(i).add(info);
+                    ends.add(info.arrival());
                     placed = true;
                     break;
                 }
             }
             if (!placed) {
-                List<PmReferenceTrain> newShelf = new ArrayList<>();
-                newShelf.add(train);
+                List<TrainScheduleInfo> newShelf = new ArrayList<>();
+                newShelf.add(info);
                 shelves.add(newShelf);
-                List<TrainTimeWindow> newWindows = new ArrayList<>();
-                newWindows.add(tw);
-                shelfWindows.add(newWindows);
+                List<LocalTime> newEnds = new ArrayList<>();
+                newEnds.add(info.arrival());
+                shelfEnds.add(newEnds);
             }
         }
 
-        // Always have at least one shelf row even if empty
         if (shelves.isEmpty()) {
             shelves.add(new ArrayList<>());
         }
         return shelves;
     }
-
-    private boolean overlapsAny(TrainTimeWindow candidate, List<TrainTimeWindow> existing) {
-        for (TrainTimeWindow tw : existing) {
-            if (candidate.start().isBefore(tw.end()) && candidate.end().isAfter(tw.start())) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private record TrainTimeWindow(LocalDateTime start, LocalDateTime end) {}
 }

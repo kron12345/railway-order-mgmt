@@ -136,6 +136,70 @@ public class KeycloakUserService {
         }
     }
 
+    /** Search users in Keycloak by username or email. */
+    public List<Map<String, String>> searchUsers(String query) {
+        try {
+            String token = getAdminToken();
+            String url = keycloakUrl + "/admin/realms/" + realm + "/users?"
+                    + "firstNameOrLastName=true"
+                    + "&email=" + query
+                    + "&username=" + query
+                    + "&max=50";
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setBearerAuth(token);
+            ResponseEntity<JsonNode[]> resp =
+                    rest.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), JsonNode[].class);
+
+            List<Map<String, String>> result = new java.util.ArrayList<>();
+            if (resp.getBody() != null) {
+                for (JsonNode user : resp.getBody()) {
+                    Map<String, String> entry = new LinkedHashMap<>();
+                    entry.put("id", user.path("id").asText());
+                    entry.put("username", user.path("username").asText(""));
+                    entry.put("email", user.path("email").asText(""));
+                    entry.put("firstName", user.path("firstName").asText(""));
+                    entry.put("lastName", user.path("lastName").asText(""));
+                    result.add(entry);
+                }
+            }
+            return result;
+        } catch (Exception e) {
+            log.error("Failed to search users in Keycloak", e);
+            return Collections.emptyList();
+        }
+    }
+
+    /** Search groups in Keycloak by name. */
+    public List<Map<String, String>> searchGroups(String query) {
+        try {
+            String token = getAdminToken();
+            String url = keycloakUrl + "/admin/realms/" + realm + "/groups?"
+                    + "search=" + query
+                    + "&max=50";
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setBearerAuth(token);
+            ResponseEntity<JsonNode[]> resp =
+                    rest.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), JsonNode[].class);
+
+            List<Map<String, String>> result = new java.util.ArrayList<>();
+            if (resp.getBody() != null) {
+                for (JsonNode group : resp.getBody()) {
+                    Map<String, String> entry = new LinkedHashMap<>();
+                    entry.put("id", group.path("id").asText());
+                    entry.put("name", group.path("name").asText(""));
+                    entry.put("path", group.path("path").asText(""));
+                    result.add(entry);
+                }
+            }
+            return result;
+        } catch (Exception e) {
+            log.error("Failed to search groups in Keycloak", e);
+            return Collections.emptyList();
+        }
+    }
+
     private String getAdminToken() {
         String tokenUrl = keycloakUrl + "/realms/master/protocol/openid-connect/token";
 

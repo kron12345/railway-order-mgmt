@@ -19,9 +19,13 @@ import com.vaadin.flow.router.AfterNavigationEvent;
 import com.vaadin.flow.router.AfterNavigationObserver;
 import com.vaadin.flow.router.RouterLayout;
 
+import com.ordermgmt.railway.domain.business.service.BusinessService;
+import com.ordermgmt.railway.domain.order.service.OrderService;
 import com.ordermgmt.railway.infrastructure.keycloak.CurrentUserHelper;
 import com.ordermgmt.railway.infrastructure.keycloak.KeycloakUserService;
 import com.ordermgmt.railway.ui.component.LanguageSwitcher;
+import com.ordermgmt.railway.ui.component.a11y.CommandPalette;
+import com.ordermgmt.railway.ui.component.a11y.KeyboardHelpOverlay;
 import com.ordermgmt.railway.ui.theme.UiThemeUtil;
 
 /** Shared application shell with navigation, breadcrumbs, and locale switching. */
@@ -29,16 +33,77 @@ public class MainLayout extends AppLayout
         implements RouterLayout, LocaleChangeObserver, AfterNavigationObserver {
 
     private final KeycloakUserService keycloakUserService;
+    private final OrderService orderService;
+    private final BusinessService businessService;
     private H1 title;
     private SideNav sideNav;
     private Div breadcrumb;
 
-    public MainLayout(KeycloakUserService keycloakUserService) {
+    public MainLayout(KeycloakUserService keycloakUserService,
+                      OrderService orderService,
+                      BusinessService businessService) {
         this.keycloakUserService = keycloakUserService;
+        this.orderService = orderService;
+        this.businessService = businessService;
         setPrimarySection(Section.DRAWER);
         applyCurrentUserTheme();
         createHeader();
         createDrawer();
+        registerGlobalShortcuts();
+    }
+
+    /**
+     * Vim-style two-step shortcuts (g o → /orders, g b → /businesses) plus single-key
+     * helpers. Implemented as a global keydown listener on the body so any focus state
+     * works, except when typing into a text input.
+     */
+    private void registerGlobalShortcuts() {
+        getElement().executeJs(
+                "if (!window.__romShortcuts) {"
+                + "  window.__romShortcuts = true;"
+                + "  let pendingG = false;"
+                + "  let pendingTimeout = null;"
+                + "  document.addEventListener('keydown', (e) => {"
+                + "    const t = e.target;"
+                + "    const tag = (t && t.tagName) || '';"
+                + "    const inEditable = tag === 'INPUT' || tag === 'TEXTAREA' || (t && t.isContentEditable)"
+                + "      || (t && t.matches && t.matches('vaadin-text-field, vaadin-text-area, vaadin-combo-box, vaadin-date-picker, vaadin-checkbox'));"
+                + "    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (e.key === 'k' || e.key === 'K')) {"
+                + "      e.preventDefault();"
+                + "      $0.dispatchEvent(new CustomEvent('rom-palette', {bubbles: true, composed: true}));"
+                + "      return;"
+                + "    }"
+                + "    if (e.ctrlKey || e.metaKey || e.altKey) return;"
+                + "    if (inEditable) return;"
+                + "    if (pendingG) {"
+                + "      pendingG = false; clearTimeout(pendingTimeout);"
+                + "      if (e.key === 'o') { e.preventDefault(); window.location.assign('/orders'); }"
+                + "      else if (e.key === 'b') { e.preventDefault(); window.location.assign('/businesses'); }"
+                + "      else if (e.key === 'h') { e.preventDefault(); window.location.assign('/'); }"
+                + "      return;"
+                + "    }"
+                + "    if (e.key === 'g') {"
+                + "      pendingG = true;"
+                + "      pendingTimeout = setTimeout(() => { pendingG = false; }, 1200);"
+                + "      e.preventDefault();"
+                + "    } else if (e.key === '?' && e.shiftKey) {"
+                + "      e.preventDefault();"
+                + "      $0.dispatchEvent(new CustomEvent('rom-help', {bubbles: true, composed: true}));"
+                + "    }"
+                + "  });"
+                + "}", getElement());
+
+        // Bridge custom DOM events back into Vaadin so we can open dialogs server-side.
+        getElement().addEventListener("rom-palette", e -> openCommandPalette());
+        getElement().addEventListener("rom-help", e -> openHelpOverlay());
+    }
+
+    private void openCommandPalette() {
+        new CommandPalette(orderService, businessService).open();
+    }
+
+    private void openHelpOverlay() {
+        new KeyboardHelpOverlay(this::getTranslation).open();
     }
 
     private void applyCurrentUserTheme() {
@@ -126,11 +191,19 @@ public class MainLayout extends AppLayout
                         getTranslation("nav.orders"), "orders", VaadinIcon.CLIPBOARD.create()));
         sideNav.addItem(
                 new SideNavItem(
+                        getTranslation("nav.businesses"), "businesses", VaadinIcon.BRIEFCASE.create()));
+        sideNav.addItem(
+                new SideNavItem(
                         getTranslation("nav.customers"), "customers", VaadinIcon.USERS.create()));
         sideNav.addItem(
                 new SideNavItem(
                         getTranslation("nav.pathmanager"),
                         "pathmanager",
+                        VaadinIcon.TRAIN.create()));
+        sideNav.addItem(
+                new SideNavItem(
+                        getTranslation("nav.railcars"),
+                        "rollingstock",
                         VaadinIcon.TRAIN.create()));
         sideNav.addItem(
                 new SideNavItem(

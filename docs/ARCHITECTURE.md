@@ -16,9 +16,9 @@ graph LR
 ```mermaid
 graph TB
     subgraph UI["UI Layer"]
-        Layout["MainLayout"]
-        Views["Views<br/>(Dashboard, Orders, Settings, Timetable Builder,<br/>Path Manager, Vehicle Planning)"]
-        Components["Reusable Components<br/>(StatusBadge, PositionTile, TimetableMap, ValidityCalendar,<br/>GanttChart, TrainPalette, ConflictPanel,<br/>ResourcePanel, ResourceDialog, PurchaseDialog,<br/>TttOrderDialog, CatalogTab)"]
+        Layout["MainLayout<br/>(global shortcuts g o/g b/g h, Ctrl+K, Shift+?)"]
+        Views["Views<br/>(Dashboard, OrderOverview, BusinessOverview, Settings,<br/>Timetable Builder, Path Manager, Vehicle Planning)"]
+        Components["Reusable Components<br/>(MasterDetailLayout, BreadcrumbBar, SkipLinks, AriaLive,<br/>CommandPalette, KeyboardHelpOverlay, GridPreferenceBinder,<br/>GridSettingsButton, OrderCard, BusinessCard,<br/>BusinessLinksTree, BusinessDocsCard,<br/>StatusBadge, PositionTile, TimetableMap, ValidityCalendar,<br/>GanttChart, TrainPalette, ConflictPanel,<br/>ResourcePanel, ResourceDialog, PurchaseDialog,<br/>TttOrderDialog, CatalogTab)"]
     end
 
     subgraph Domain["Domain Layer (DDD)"]
@@ -26,7 +26,8 @@ graph TB
         Timetable["Timetable Context<br/>routing / archive / timetable rows"]
         InfraDomain["Infrastructure Context<br/>operational points / sections / tags / imports"]
         Customer["Customer Context"]
-        Business["Business Context"]
+        Business["Business Context<br/>businesses + M2M to OrderPosition / PurchasePosition"]
+        UserPrefs["UserPrefs Context<br/>per-user view state (grid columns, …)"]
     end
 
     subgraph Infra["Infrastructure Layer"]

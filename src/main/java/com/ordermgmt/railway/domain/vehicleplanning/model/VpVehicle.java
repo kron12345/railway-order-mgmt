@@ -26,6 +26,8 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
+import com.ordermgmt.railway.domain.rollingstock.model.RollingStockItem;
+
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -52,6 +54,11 @@ public class VpVehicle {
 
     @Column(name = "vehicle_class", length = 50)
     private String vehicleClass;
+
+    /** Optional link to rolling stock master data. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "rolling_stock_id")
+    private RollingStockItem rollingStock;
 
     @Column(nullable = false)
     private Integer sequence = 0;

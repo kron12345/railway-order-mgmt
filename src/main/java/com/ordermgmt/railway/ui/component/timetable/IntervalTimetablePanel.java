@@ -79,7 +79,14 @@ public class IntervalTimetablePanel extends Div {
 
         namePrefix.setLabel(t("timetable.interval.namePrefix"));
         namePrefix.setPlaceholder("IC 717");
+        namePrefix.setRequired(true);
         namePrefix.setWidthFull();
+        namePrefix.addValueChangeListener(e -> {
+            if (!e.getValue().isBlank()) {
+                namePrefix.setInvalid(false);
+            }
+            updatePreview();
+        });
 
         otnStart.setLabel(t("timetable.interval.otnStart"));
         otnStart.setPlaceholder("95001");
@@ -138,10 +145,24 @@ public class IntervalTimetablePanel extends Div {
     }
 
     private void fireGenerate() {
-        if (onGenerate == null
-                || firstDep.getValue() == null
-                || lastDep.getValue() == null
-                || namePrefix.getValue().isBlank()) {
+        if (onGenerate == null) {
+            return;
+        }
+        boolean valid = true;
+        if (firstDep.getValue() == null) {
+            firstDep.setInvalid(true);
+            valid = false;
+        }
+        if (lastDep.getValue() == null) {
+            lastDep.setInvalid(true);
+            valid = false;
+        }
+        if (namePrefix.getValue().isBlank()) {
+            namePrefix.setInvalid(true);
+            namePrefix.setErrorMessage(t("timetable.interval.namePrefix.required"));
+            valid = false;
+        }
+        if (!valid) {
             return;
         }
         onGenerate.accept(
@@ -170,7 +191,7 @@ public class IntervalTimetablePanel extends Div {
         String last = lastDep.getValue().format(HH_MM);
         preview.setText(t("timetable.interval.preview", count, first, last));
         generateBtn.setText(t("timetable.interval.generate", count));
-        generateBtn.setEnabled(count > 0 && !namePrefix.getValue().isBlank());
+        generateBtn.setEnabled(count > 0);
     }
 
     private int calculateCount() {

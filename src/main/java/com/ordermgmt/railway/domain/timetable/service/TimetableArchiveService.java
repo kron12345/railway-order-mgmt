@@ -23,6 +23,7 @@ import com.ordermgmt.railway.domain.order.model.ResourceNeed;
 import com.ordermgmt.railway.domain.order.model.ResourceType;
 import com.ordermgmt.railway.domain.order.model.ValidityJsonCodec;
 import com.ordermgmt.railway.domain.order.repository.OrderPositionRepository;
+import com.ordermgmt.railway.domain.pathmanager.service.PathManagerService;
 import com.ordermgmt.railway.domain.timetable.model.TimeConstraintMode;
 import com.ordermgmt.railway.domain.timetable.model.TimetableActivityCatalog;
 import com.ordermgmt.railway.domain.timetable.model.TimetableActivityOption;
@@ -43,6 +44,7 @@ public class TimetableArchiveService {
 
     private final TimetableArchiveRepository timetableArchiveRepository;
     private final OrderPositionRepository orderPositionRepository;
+    private final PathManagerService pathManagerService;
 
     @Transactional(readOnly = true)
     public Optional<TimetableArchive> findArchive(OrderPosition position) {
@@ -137,7 +139,13 @@ public class TimetableArchiveService {
         ResourceNeed resourceNeed = ensureCapacityResourceNeed(position);
         resourceNeed.setLinkedFahrplanId(archive.getId());
 
-        return orderPositionRepository.save(position);
+        position = orderPositionRepository.save(position);
+
+        // Sync timetable data to Path Manager (create or update reference train)
+        pathManagerService.syncFromTimetable(position, archive, preparedRows);
+        orderPositionRepository.save(position);
+
+        return position;
     }
 
     private Optional<TimetableArchive> findArchiveForExistingPosition(

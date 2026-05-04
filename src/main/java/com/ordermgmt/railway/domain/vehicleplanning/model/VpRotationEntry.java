@@ -62,6 +62,14 @@ public class VpRotationEntry {
     @Column(name = "coupling_type", nullable = false, length = 20)
     private CouplingPosition couplingType = CouplingPosition.FULL;
 
+    /** Location where the vehicle joins this train (null = from start). */
+    @Column(name = "join_at_location", length = 255)
+    private String joinAtLocation;
+
+    /** Location where the vehicle leaves this train (null = until end). */
+    @Column(name = "leave_at_location", length = 255)
+    private String leaveAtLocation;
+
     @OneToMany(mappedBy = "rotationEntry", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<VpVehicleOperation> operations = new ArrayList<>();
 

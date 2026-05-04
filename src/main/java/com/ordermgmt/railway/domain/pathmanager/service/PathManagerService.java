@@ -27,6 +27,7 @@ import com.ordermgmt.railway.domain.pathmanager.repository.PmRouteRepository;
 import com.ordermgmt.railway.domain.pathmanager.repository.PmTimetableYearRepository;
 import com.ordermgmt.railway.domain.pathmanager.repository.PmTrainVersionRepository;
 import com.ordermgmt.railway.domain.timetable.model.JourneyLocationType;
+import com.ordermgmt.railway.domain.timetable.model.TimeConstraintMode;
 import com.ordermgmt.railway.domain.timetable.model.TimetableArchive;
 import com.ordermgmt.railway.domain.timetable.model.TimetableRowData;
 
@@ -86,6 +87,59 @@ public class PathManagerService {
         trainVersionRepository.save(initialVersion);
 
         return train;
+    }
+
+    /**
+     * Syncs timetable data to the path manager. Creates a new reference train if none exists for the
+     * position, or updates the existing one's journey locations.
+     */
+    public PmReferenceTrain syncFromTimetable(
+            OrderPosition position, TimetableArchive archive, List<TimetableRowData> rows) {
+        if (position.getPmReferenceTrainId() != null) {
+            return updateExistingTrain(position.getPmReferenceTrainId(), archive, rows);
+        }
+        PmReferenceTrain train = createTrainFromOrderPosition(position, archive, rows);
+        position.setPmReferenceTrainId(train.getId());
+        return train;
+    }
+
+    private PmReferenceTrain updateExistingTrain(
+            UUID trainId, TimetableArchive archive, List<TimetableRowData> rows) {
+        PmReferenceTrain train =
+                referenceTrainRepository
+                        .findById(trainId)
+                        .orElseThrow(
+                                () ->
+                                        new IllegalArgumentException(
+                                                "Reference train not found: " + trainId));
+        if (archive != null) {
+            train.setOperationalTrainNumber(archive.getOperationalTrainNumber());
+        }
+
+        // Update route points
+        List<PmRoute> routes = routeRepository.findByReferenceTrainId(train.getId());
+        if (!routes.isEmpty()) {
+            PmRoute route = routes.getFirst();
+            route.setRoutePoints(routePointsToJson(rows));
+            routeRepository.save(route);
+        }
+
+        // Replace journey locations on the latest version
+        List<PmTrainVersion> versions =
+                trainVersionRepository.findByReferenceTrainIdOrderByVersionNumberDesc(
+                        train.getId());
+        if (!versions.isEmpty()) {
+            PmTrainVersion version = versions.getLast();
+            journeyLocationRepository.deleteAll(version.getJourneyLocations());
+            version.getJourneyLocations().clear();
+            for (TimetableRowData row : rows) {
+                PmJourneyLocation location = mapRowToJourneyLocation(row, version);
+                version.getJourneyLocations().add(location);
+            }
+            trainVersionRepository.save(version);
+        }
+
+        return referenceTrainRepository.save(train);
     }
 
     @Transactional(readOnly = true)
@@ -264,10 +318,50 @@ public class PathManagerService {
         location.setCountryCodeIso(row.getCountry());
         location.setJourneyLocationType(
                 JourneyLocationType.fromString(row.getJourneyLocationType()).code());
-        location.setArrivalTime(row.getEstimatedArrival());
-        location.setDepartureTime(row.getEstimatedDeparture());
+
+        // Times: prefer constraint times, fall back to estimated
+        location.setArrivalTime(resolveTime(row, true));
+        location.setDepartureTime(resolveTime(row, false));
         location.setDwellTime(row.getDwellMinutes());
+
+        // Timing qualifiers from constraint mode
+        location.setArrivalQualifier(toTttQualifier(row.getArrivalMode(), true));
+        location.setDepartureQualifier(toTttQualifier(row.getDepartureMode(), false));
+
+        // Activity code → activities JSON
+        if (row.getActivityCode() != null && !row.getActivityCode().isBlank()) {
+            location.setActivities("[\"" + row.getActivityCode() + "\"]");
+        }
+
         location.setAssociatedTrainOtn(row.getAssociatedTrainOtn());
         return location;
+    }
+
+    private String resolveTime(TimetableRowData row, boolean arrival) {
+        if (arrival) {
+            if (row.getArrivalMode() == TimeConstraintMode.EXACT
+                    && row.getArrivalExact() != null) {
+                return row.getArrivalExact();
+            }
+            return row.getEstimatedArrival();
+        }
+        if (row.getDepartureMode() == TimeConstraintMode.EXACT
+                && row.getDepartureExact() != null) {
+            return row.getDepartureExact();
+        }
+        return row.getEstimatedDeparture();
+    }
+
+    /** Maps a TimeConstraintMode to a TTT TimingQualifierCode. */
+    private String toTttQualifier(TimeConstraintMode mode, boolean arrival) {
+        if (mode == null || mode == TimeConstraintMode.NONE) {
+            return null;
+        }
+        return switch (mode) {
+            case EXACT -> arrival ? "ALA" : "ALD";
+            case WINDOW -> arrival ? "ELA" : "ELD";
+            case COMMERCIAL -> arrival ? "PLA" : "PLD";
+            default -> null;
+        };
     }
 }

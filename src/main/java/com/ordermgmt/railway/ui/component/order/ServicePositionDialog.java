@@ -16,6 +16,7 @@ import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.checkbox.CheckboxGroup;
 import com.vaadin.flow.component.combobox.ComboBox;
+import com.vaadin.flow.component.details.Details;
 import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.formlayout.FormLayout;
 import com.vaadin.flow.component.html.Div;
@@ -64,6 +65,7 @@ public class ServicePositionDialog extends Dialog {
     private final TimePicker startTime = new TimePicker();
     private final TimePicker endTime = new TimePicker();
     private ValidityCalendar validityCalendar;
+    private Details validityDetails;
     private final CheckboxGroup<PredefinedTag> tags = new CheckboxGroup<>();
     private final TextArea comment = new TextArea();
 
@@ -167,11 +169,12 @@ public class ServicePositionDialog extends Dialog {
                     }
                 });
 
-        // Validity calendar — multi-date selection within order range
+        // Validity calendar — compact multi-date selection within order range
         LocalDate orderFrom = order.getValidFrom() != null ? order.getValidFrom() : LocalDate.now();
         LocalDate orderTo =
                 order.getValidTo() != null ? order.getValidTo() : orderFrom.plusMonths(3);
         validityCalendar = new ValidityCalendar(orderFrom, orderTo);
+        validityCalendar.setCompact(true);
 
         tags.setLabel(t("order.tags"));
         tags.setItems(availableTags);
@@ -193,15 +196,18 @@ public class ServicePositionDialog extends Dialog {
         form.add(fromOp, toOp);
         form.add(startTime, endTime);
 
-        // Validity calendar spans full width
-        Div calSection = new Div();
-        Span calLabel = new Span(t("position.validity"));
-        calLabel.getStyle()
-                .set("font-weight", "600")
-                .set("font-size", "12px")
-                .set("color", "var(--rom-text-primary)")
-                .set("display", "block")
-                .set("margin-bottom", "6px");
+        // Validity calendar — compact collapsible (same style as TimetableTableStep)
+        int selectedCount = validityCalendar.getSelectedDates().size();
+        String validitySummary =
+                t("position.validity")
+                        + " \u2014 "
+                        + selectedCount
+                        + " "
+                        + t("timetable.archive.days", selectedCount);
+        validityDetails = new Details();
+        validityDetails.setSummaryText(validitySummary);
+        Div calendarWrapper = new Div(validityCalendar);
+        calendarWrapper.getStyle().set("max-height", "200px").set("overflow-y", "auto");
         Span calHelper =
                 new Span(t("position.validity.help", orderFrom.toString(), orderTo.toString()));
         calHelper
@@ -211,9 +217,16 @@ public class ServicePositionDialog extends Dialog {
                 .set("color", "var(--rom-text-muted)")
                 .set("display", "block")
                 .set("margin-bottom", "8px");
-        calSection.add(calLabel, calHelper, validityCalendar);
-        form.setColspan(calSection, 2);
-        form.add(calSection);
+        validityDetails.add(calHelper, calendarWrapper);
+        validityDetails.setWidthFull();
+        validityDetails
+                .getStyle()
+                .set("background", "var(--rom-bg-card)")
+                .set("border", "1px solid var(--rom-border)")
+                .set("border-radius", "6px");
+        validityDetails.setOpened(selectedCount == 0);
+        form.setColspan(validityDetails, 2);
+        form.add(validityDetails);
 
         form.setColspan(tags, 2);
         form.add(tags);
@@ -263,8 +276,20 @@ public class ServicePositionDialog extends Dialog {
             }
         }
         validityCalendar.setSelectedDates(dates);
+        updateValiditySummary();
         tagHelper.readTags(position.getTags());
         tagHelper.updateHelperText("position.tags.help", "position.tags.legacy");
+    }
+
+    private void updateValiditySummary() {
+        int count = validityCalendar.getSelectedDates().size();
+        validityDetails.setSummaryText(
+                t("position.validity")
+                        + " \u2014 "
+                        + count
+                        + " "
+                        + t("timetable.archive.days", count));
+        validityDetails.setOpened(count == 0);
     }
 
     // ── Validation and save ─────────────────────────────────────────────

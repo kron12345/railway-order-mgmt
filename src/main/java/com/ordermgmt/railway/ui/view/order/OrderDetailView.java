@@ -3,8 +3,6 @@ package com.ordermgmt.railway.ui.view.order;
 import java.time.format.DateTimeFormatter;
 import java.util.UUID;
 
-import jakarta.annotation.security.PermitAll;
-
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
@@ -18,10 +16,9 @@ import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
-import com.vaadin.flow.router.BeforeEnterEvent;
-import com.vaadin.flow.router.BeforeEnterObserver;
-import com.vaadin.flow.router.PageTitle;
-import com.vaadin.flow.router.Route;
+import com.vaadin.flow.spring.annotation.SpringComponent;
+import org.springframework.beans.factory.config.ConfigurableBeanFactory;
+import org.springframework.context.annotation.Scope;
 
 import com.ordermgmt.railway.domain.customer.repository.CustomerRepository;
 import com.ordermgmt.railway.domain.infrastructure.repository.PredefinedTagRepository;
@@ -39,13 +36,18 @@ import com.ordermgmt.railway.ui.component.AuditHistoryDialog;
 import com.ordermgmt.railway.ui.component.StatusBadge;
 import com.ordermgmt.railway.ui.component.order.OrderFormPanel;
 import com.ordermgmt.railway.ui.component.order.OrderPositionPanel;
-import com.ordermgmt.railway.ui.layout.MainLayout;
 
-/** Handles creation, editing, and deletion for a single order. */
-@Route(value = "orders/:orderId", layout = MainLayout.class)
-@PageTitle("Order Detail")
-@PermitAll // Read access is OK for all authenticated users; mutations are guarded in service layer
-public class OrderDetailView extends VerticalLayout implements BeforeEnterObserver {
+/**
+ * Embeddable detail panel for a single {@link Order}. No longer a Vaadin route — it is
+ * instantiated by {@link OrderOverviewView} via {@link org.springframework.beans.factory.ObjectProvider}
+ * so each navigation gets a fresh instance with all 11 services auto-wired.
+ *
+ * <p>Caller drives the lifecycle: {@link #setMode(UUID, boolean)} loads the order and
+ * builds the appropriate sub-tree (new-form vs edit + positions panel).
+ */
+@SpringComponent
+@Scope(ConfigurableBeanFactory.SCOPE_PROTOTYPE)
+public class OrderDetailView extends VerticalLayout {
 
     private final OrderService orderService;
     private final CustomerRepository customerRepository;
@@ -99,29 +101,24 @@ public class OrderDetailView extends VerticalLayout implements BeforeEnterObserv
                 .set("box-sizing", "border-box");
     }
 
-    @Override
-    public void beforeEnter(BeforeEnterEvent event) {
-        String param = event.getRouteParameters().get("orderId").orElse("new");
-
-        if ("new".equals(param)) {
+    /**
+     * Configure this detail panel for the given order id. Pass {@code null} to render
+     * the new-order form. Returns {@code true} on success, {@code false} when the id was
+     * given but no order exists (caller should redirect away).
+     */
+    public boolean setMode(UUID orderId, boolean newMode) {
+        if (newMode || orderId == null) {
             isNew = true;
             order = new Order();
             order.setProcessStatus(ProcessStatus.AUFTRAG);
             buildNewOrderView();
-        } else {
-            isNew = false;
-            try {
-                UUID id = UUID.fromString(param);
-                order = orderService.findById(id).orElse(null);
-            } catch (IllegalArgumentException e) {
-                order = null;
-            }
-            if (order == null) {
-                event.forwardTo("orders");
-                return;
-            }
-            buildDetailView();
+            return true;
         }
+        isNew = false;
+        order = orderService.findById(orderId).orElse(null);
+        if (order == null) return false;
+        buildDetailView();
+        return true;
     }
 
     /** New order: show form directly (needs data first). */

@@ -48,10 +48,12 @@ public class OrderPositionRow extends Div {
         this.auditService = auditService;
 
         setWidthFull();
+        addClassName("order-position-row");
         getStyle()
                 .set("border-bottom", "1px solid var(--rom-border)")
                 .set("padding", "0")
-                .set("box-sizing", "border-box");
+                .set("box-sizing", "border-box")
+                .set("transition", "background-color 120ms ease, box-shadow 120ms ease");
 
         add(createSummary(translator, onEdit, onDelete, onSendToPm));
 

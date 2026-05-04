@@ -1,6 +1,9 @@
 package com.ordermgmt.railway.domain.vehicleplanning.service;
 
+import java.time.LocalTime;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -18,6 +21,8 @@ import com.ordermgmt.railway.domain.pathmanager.repository.PmReferenceTrainRepos
 import com.ordermgmt.railway.domain.pathmanager.repository.PmTimetableYearRepository;
 import com.ordermgmt.railway.domain.pathmanager.repository.PmTrainVersionRepository;
 import com.ordermgmt.railway.domain.vehicleplanning.model.CouplingPosition;
+import com.ordermgmt.railway.domain.vehicleplanning.model.TrainDisplayInfo;
+import com.ordermgmt.railway.domain.vehicleplanning.model.TrainScheduleInfo;
 import com.ordermgmt.railway.domain.vehicleplanning.model.VehicleType;
 import com.ordermgmt.railway.domain.vehicleplanning.model.VpRotationEntry;
 import com.ordermgmt.railway.domain.vehicleplanning.model.VpRotationSet;
@@ -68,6 +73,25 @@ public class VehiclePlanningService {
         this.journeyLocationRepo = journeyLocationRepo;
     }
 
+    // --- Journey locations (for join/leave selection) ---
+
+    /** Returns the location names of the latest version of a train, in route order. */
+    @Transactional(readOnly = true)
+    public List<String> getTrainLocationNames(UUID trainId) {
+        PmTrainVersion latest =
+                trainVersionRepo
+                        .findFirstByReferenceTrainIdOrderByVersionNumberDesc(trainId)
+                        .orElse(null);
+        if (latest == null) return List.of();
+
+        return journeyLocationRepo
+                .findByTrainVersionIdOrderBySequenceAsc(latest.getId())
+                .stream()
+                .map(PmJourneyLocation::getPrimaryLocationName)
+                .filter(name -> name != null && !name.isBlank())
+                .toList();
+    }
+
     // --- Rotation Set CRUD ---
 
     /** Returns all rotation sets for the given timetable year, ordered by name. */
@@ -114,6 +138,66 @@ public class VehiclePlanningService {
     @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
     public void deleteRotationSet(UUID rotationSetId) {
         rotationSetRepo.deleteById(rotationSetId);
+    }
+
+    // --- Train display info (resolved within transaction) ---
+
+    /** Returns display info for all unassigned trains in the given rotation set. */
+    @Transactional(readOnly = true)
+    public List<TrainDisplayInfo> getUnassignedDisplayInfos(UUID rotationSetId, int year) {
+        List<PmReferenceTrain> trains = getUnassignedTrains(rotationSetId, year);
+        return trains.stream().map(this::resolveDisplayInfo).toList();
+    }
+
+    /** Returns a display-info map keyed by train ID for looking up assigned trains. */
+    @Transactional(readOnly = true)
+    public Map<UUID, TrainDisplayInfo> getDisplayInfoMap(int year) {
+        List<PmReferenceTrain> trains = trainRepo.findByYearWithVersions(year);
+        return trains.stream()
+                .collect(Collectors.toMap(PmReferenceTrain::getId, this::resolveDisplayInfo));
+    }
+
+    private TrainDisplayInfo resolveDisplayInfo(PmReferenceTrain train) {
+        String otn =
+                train.getOperationalTrainNumber() != null
+                        ? train.getOperationalTrainNumber()
+                        : train.getTridCore();
+        String fromLoc = "\u2013";
+        String toLoc = "\u2013";
+        LocalTime dep = LocalTime.of(6, 0);
+        LocalTime arr = LocalTime.of(7, 0);
+
+        var versions = train.getTrainVersions();
+        if (versions != null && !versions.isEmpty()) {
+            var latest =
+                    versions.stream()
+                            .max(Comparator.comparingInt(PmTrainVersion::getVersionNumber))
+                            .orElse(null);
+            if (latest != null) {
+                var jlocs = latest.getJourneyLocations();
+                if (jlocs != null && !jlocs.isEmpty()) {
+                    var sorted =
+                            jlocs.stream()
+                                    .sorted(
+                                            Comparator.comparingInt(
+                                                    PmJourneyLocation::getSequence))
+                                    .toList();
+                    var first = sorted.getFirst();
+                    var last = sorted.getLast();
+                    if (first.getPrimaryLocationName() != null) {
+                        fromLoc = first.getPrimaryLocationName();
+                    }
+                    if (last.getPrimaryLocationName() != null) {
+                        toLoc = last.getPrimaryLocationName();
+                    }
+                    LocalTime d = parseTimeOfDay(first.getDepartureTime());
+                    LocalTime a = parseTimeOfDay(last.getArrivalTime());
+                    if (d != null) dep = d;
+                    if (a != null) arr = a;
+                }
+            }
+        }
+        return new TrainDisplayInfo(train.getId(), otn, fromLoc, toLoc, dep, arr);
     }
 
     // --- Vehicle CRUD ---
@@ -199,6 +283,80 @@ public class VehiclePlanningService {
         return allTrains.stream().filter(t -> !assignedTrainIds.contains(t.getId())).toList();
     }
 
+    // --- Schedule resolution (within transaction to avoid LazyInitializationException) ---
+
+    /**
+     * Returns schedule information for all unassigned trains. Times are resolved within the
+     * transaction so that lazy-loaded journey locations are accessible.
+     */
+    @Transactional(readOnly = true)
+    public List<TrainScheduleInfo> getUnassignedTrainSchedules(UUID rotationSetId, int year) {
+        List<PmReferenceTrain> trains = getUnassignedTrains(rotationSetId, year);
+        return trains.stream().map(this::resolveScheduleInfo).toList();
+    }
+
+    /**
+     * Returns a schedule-info map keyed by train ID for all trains in the given year. Used by the
+     * Gantt chart to look up times for assigned trains.
+     */
+    @Transactional(readOnly = true)
+    public Map<UUID, TrainScheduleInfo> getScheduleMap(int year) {
+        List<PmReferenceTrain> trains = trainRepo.findByYearWithVersions(year);
+        return trains.stream()
+                .collect(Collectors.toMap(PmReferenceTrain::getId, this::resolveScheduleInfo));
+    }
+
+    private TrainScheduleInfo resolveScheduleInfo(PmReferenceTrain train) {
+        String label =
+                train.getOperationalTrainNumber() != null
+                        ? train.getOperationalTrainNumber()
+                        : train.getTridCore();
+
+        var versions = train.getTrainVersions();
+        if (versions != null && !versions.isEmpty()) {
+            var latest =
+                    versions.stream()
+                            .max(Comparator.comparingInt(PmTrainVersion::getVersionNumber))
+                            .orElse(null);
+            if (latest != null) {
+                var jlocs = latest.getJourneyLocations();
+                if (jlocs != null && !jlocs.isEmpty()) {
+                    var sorted =
+                            jlocs.stream()
+                                    .sorted(
+                                            Comparator.comparingInt(
+                                                    PmJourneyLocation::getSequence))
+                                    .toList();
+                    LocalTime dep = parseTimeOfDay(sorted.getFirst().getDepartureTime());
+                    LocalTime arr = parseTimeOfDay(sorted.getLast().getArrivalTime());
+                    if (dep != null && arr != null) {
+                        return new TrainScheduleInfo(train.getId(), label, dep, arr);
+                    }
+                }
+            }
+        }
+        return new TrainScheduleInfo(
+                train.getId(), label, LocalTime.of(6, 0), LocalTime.of(7, 0));
+    }
+
+    private LocalTime parseTimeOfDay(String time) {
+        if (time == null || time.isBlank()) {
+            return null;
+        }
+        try {
+            String[] parts = time.split(":");
+            int hour = Integer.parseInt(parts[0]);
+            int minute = parts.length > 1 ? Integer.parseInt(parts[1]) : 0;
+            if (hour >= 24) {
+                hour = 23;
+                minute = 59;
+            }
+            return LocalTime.of(hour, minute);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     // --- Entry management ---
 
     /**
@@ -213,7 +371,12 @@ public class VehiclePlanningService {
      */
     @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
     public VpRotationEntry addTrainToVehicle(
-            UUID vehicleId, UUID trainId, int dayOfWeek, CouplingPosition coupling) {
+            UUID vehicleId,
+            UUID trainId,
+            int dayOfWeek,
+            CouplingPosition coupling,
+            String joinAtLocation,
+            String leaveAtLocation) {
         validateDayOfWeek(dayOfWeek);
 
         VpVehicle vehicle =
@@ -246,6 +409,8 @@ public class VehiclePlanningService {
         entry.setDayOfWeek(dayOfWeek);
         entry.setSequenceInDay(nextSeq);
         entry.setCouplingType(coupling);
+        entry.setJoinAtLocation(joinAtLocation);
+        entry.setLeaveAtLocation(leaveAtLocation);
         return entryRepo.save(entry);
     }
 
