@@ -1009,3 +1009,96 @@ vaadin-button:focus-visible {
     color: var(--rom-text-primary);
     letter-spacing: 0.02em;
 }
+
+/* === Detail header polish === */
+.biz-read__header {
+    padding: 12px 16px !important;
+    border-bottom: 1px solid var(--rom-border-subtle);
+    background: var(--rom-bg-secondary);
+    flex: 0 0 auto;
+}
+.biz-read__title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--rom-text-primary);
+    letter-spacing: 0.01em;
+    line-height: 1.2;
+}
+
+/* === Amber-themed primary buttons === */
+vaadin-button[theme~="primary"] {
+    background: var(--rom-accent) !important;
+    color: var(--rom-bg-primary) !important;
+    font-weight: 600;
+}
+vaadin-button[theme~="primary"]:hover,
+vaadin-button[theme~="primary"]:focus-visible {
+    background: var(--rom-accent-hover) !important;
+}
+vaadin-button[theme~="primary"]::part(label) {
+    color: var(--rom-bg-primary) !important;
+}
+
+/* === Bearbeiter / assignee — make it more readable on the cards === */
+.biz-card-tile__assignee-select::part(input-field) {
+    font-size: 11px !important;
+    color: var(--rom-text-primary) !important;
+    font-weight: 500;
+}
+.biz-card-tile__assignee-select::part(value) {
+    color: var(--rom-text-primary) !important;
+}
+
+/* === Stammdaten 2-column on full HD === */
+@media (min-width: 1280px) {
+    .biz-info-grid {
+        grid-template-columns: 130px minmax(0, 1fr) 130px minmax(0, 1fr);
+    }
+}
+
+/* === Detail panel — fill available height === */
+.biz-read {
+    height: 100%;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+.biz-read .biz-card {
+    flex: 0 0 auto;
+}
+
+/* === Master list spacing === */
+.md-list {
+    gap: 10px;
+}
+
+/* === Bloomberg-style scrollbars === */
+.md-list,
+.md-detail,
+.biz-read {
+    scrollbar-width: thin;
+    scrollbar-color: var(--rom-border) transparent;
+}
+.md-list::-webkit-scrollbar,
+.md-detail::-webkit-scrollbar,
+.biz-read::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+.md-list::-webkit-scrollbar-track,
+.md-detail::-webkit-scrollbar-track,
+.biz-read::-webkit-scrollbar-track {
+    background: transparent;
+}
+.md-list::-webkit-scrollbar-thumb,
+.md-detail::-webkit-scrollbar-thumb,
+.biz-read::-webkit-scrollbar-thumb {
+    background: var(--rom-border);
+    border-radius: 4px;
+}
+.md-list::-webkit-scrollbar-thumb:hover,
+.md-detail::-webkit-scrollbar-thumb:hover,
+.biz-read::-webkit-scrollbar-thumb:hover {
+    background: var(--rom-text-muted);
+}

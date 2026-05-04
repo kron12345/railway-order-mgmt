@@ -26,7 +26,6 @@ import com.ordermgmt.railway.domain.business.service.BusinessService;
 import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.domain.order.repository.OrderPositionRepository;
 import com.ordermgmt.railway.domain.order.service.OrderService;
-import com.ordermgmt.railway.ui.component.a11y.BreadcrumbBar;
 import com.ordermgmt.railway.ui.component.a11y.SkipLinks;
 import com.ordermgmt.railway.ui.component.masterdetail.MasterDetailLayout;
 import com.ordermgmt.railway.ui.component.order.OrderCard;
@@ -55,7 +54,6 @@ public class OrderOverviewView extends VerticalLayout implements BeforeEnterObse
     private final BusinessService businessService;
     private final ObjectProvider<OrderDetailView> detailFactory;
     private final MasterDetailLayout<Order> shell;
-    private final BreadcrumbBar breadcrumb = new BreadcrumbBar();
     private final Map<UUID, Integer> positionCounts = new HashMap<>();
 
     public OrderOverviewView(OrderService orderService,
@@ -74,7 +72,6 @@ public class OrderOverviewView extends VerticalLayout implements BeforeEnterObse
         addClassName("order-overview");
 
         add(buildSkipLinks());
-        add(breadcrumb);
 
         Function<String, String> tr = this::getTranslation;
         shell = MasterDetailLayout.<Order>spec()
@@ -124,7 +121,6 @@ public class OrderOverviewView extends VerticalLayout implements BeforeEnterObse
         if (orderParam == null) {
             shell.setSelectedId(null);
             shell.setDetail(null);
-            updateBreadcrumb(null, null, false);
             return;
         }
 
@@ -134,7 +130,6 @@ public class OrderOverviewView extends VerticalLayout implements BeforeEnterObse
             OrderDetailView detail = detailFactory.getObject();
             detail.setMode(null, true);
             shell.setDetail(detail);
-            updateBreadcrumb(null, null, true);
             return;
         }
 
@@ -158,7 +153,6 @@ public class OrderOverviewView extends VerticalLayout implements BeforeEnterObse
                 UUID posId = UUID.fromString(posParam);
                 shell.setDetail(new OrderPositionDetailView(positionRepository, businessService,
                         orderId, posId, this::getTranslation));
-                updateBreadcrumb(order, posId, false);
             } catch (IllegalArgumentException ex) {
                 UI.getCurrent().navigate("orders/" + orderId);
             }
@@ -172,7 +166,6 @@ public class OrderOverviewView extends VerticalLayout implements BeforeEnterObse
             return;
         }
         shell.setDetail(detail);
-        updateBreadcrumb(order, null, false);
     }
 
     private Component buildSkipLinks() {
@@ -190,27 +183,6 @@ public class OrderOverviewView extends VerticalLayout implements BeforeEnterObse
         return btn;
     }
 
-    private void updateBreadcrumb(Order order, UUID positionId, boolean isNewMode) {
-        if (order == null && !isNewMode) {
-            breadcrumb.setCrumbs(List.of(
-                    new BreadcrumbBar.Crumb(getTranslation("order.title"), null)));
-        } else if (isNewMode) {
-            breadcrumb.setCrumbs(List.of(
-                    new BreadcrumbBar.Crumb(getTranslation("order.title"), "orders"),
-                    new BreadcrumbBar.Crumb(getTranslation("order.new"), null)));
-        } else if (positionId != null) {
-            breadcrumb.setCrumbs(List.of(
-                    new BreadcrumbBar.Crumb(getTranslation("order.title"), "orders"),
-                    new BreadcrumbBar.Crumb(order.getOrderNumber() == null ? "—"
-                            : order.getOrderNumber(), "orders/" + order.getId()),
-                    new BreadcrumbBar.Crumb(getTranslation("order.position.crumb"), null)));
-        } else {
-            breadcrumb.setCrumbs(List.of(
-                    new BreadcrumbBar.Crumb(getTranslation("order.title"), "orders"),
-                    new BreadcrumbBar.Crumb(order.getOrderNumber() == null ? "—"
-                            : order.getOrderNumber(), null)));
-        }
-    }
 
     private void loadOrders() {
         List<Order> orders = orderService.findAllWithPositions();

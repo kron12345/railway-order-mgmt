@@ -24,7 +24,6 @@ import com.ordermgmt.railway.domain.business.model.Business;
 import com.ordermgmt.railway.domain.business.service.BusinessService;
 import com.ordermgmt.railway.domain.userprefs.service.UserViewPreferenceService;
 import com.ordermgmt.railway.infrastructure.keycloak.KeycloakUserService;
-import com.ordermgmt.railway.ui.component.a11y.BreadcrumbBar;
 import com.ordermgmt.railway.ui.component.a11y.SkipLinks;
 import com.ordermgmt.railway.ui.component.business.BusinessCard;
 import com.ordermgmt.railway.ui.component.masterdetail.MasterDetailLayout;
@@ -49,7 +48,6 @@ public class BusinessOverviewView extends VerticalLayout implements BeforeEnterO
     private final UserViewPreferenceService prefsService;
     private final KeycloakUserService keycloakUserService;
     private final MasterDetailLayout<Business> shell;
-    private final BreadcrumbBar breadcrumb = new BreadcrumbBar();
     private final Map<UUID, int[]> linkCountsCache = new HashMap<>();
 
     public BusinessOverviewView(BusinessService businessService,
@@ -66,7 +64,6 @@ public class BusinessOverviewView extends VerticalLayout implements BeforeEnterO
         addClassName("biz-overview");
 
         add(buildSkipLinks());
-        add(breadcrumb);
 
         Function<String, String> tr = this::getTranslation;
         shell = MasterDetailLayout.<Business>spec()
@@ -113,13 +110,11 @@ public class BusinessOverviewView extends VerticalLayout implements BeforeEnterO
         if (param == null) {
             shell.setSelectedId(null);
             shell.setDetail(null);
-            updateBreadcrumb(null, false);
             return;
         }
         if ("new".equals(param)) {
             shell.setSelectedId(null);
             shell.setDetail(new BusinessDetailView(businessService, prefsService, null));
-            updateBreadcrumb(null, true);
             return;
         }
         try {
@@ -135,7 +130,6 @@ public class BusinessOverviewView extends VerticalLayout implements BeforeEnterO
             } else {
                 shell.setDetail(new BusinessReadView(businessService, id, this::getTranslation));
             }
-            updateBreadcrumb(b, false);
         } catch (IllegalArgumentException ex) {
             UI.getCurrent().navigate("businesses");
         }
@@ -156,21 +150,6 @@ public class BusinessOverviewView extends VerticalLayout implements BeforeEnterO
         return btn;
     }
 
-    private void updateBreadcrumb(Business selected, boolean isNewMode) {
-        if (selected == null && !isNewMode) {
-            breadcrumb.setCrumbs(List.of(
-                    new BreadcrumbBar.Crumb(getTranslation("business.title"), null)));
-        } else if (isNewMode) {
-            breadcrumb.setCrumbs(List.of(
-                    new BreadcrumbBar.Crumb(getTranslation("business.title"), "businesses"),
-                    new BreadcrumbBar.Crumb(getTranslation("business.new"), null)));
-        } else {
-            breadcrumb.setCrumbs(List.of(
-                    new BreadcrumbBar.Crumb(getTranslation("business.title"), "businesses"),
-                    new BreadcrumbBar.Crumb(
-                            selected.getTitle() == null ? "—" : selected.getTitle(), null)));
-        }
-    }
 
     private void loadBusinesses() {
         linkCountsCache.clear();

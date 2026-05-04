@@ -78,38 +78,58 @@ public class BusinessReadView extends VerticalLayout {
     private HorizontalLayout buildHeader() {
         var bar = new HorizontalLayout();
         bar.addClassName("biz-detail__header");
+        bar.addClassName("biz-read__header");
         bar.setWidthFull();
         bar.setPadding(false);
         bar.setSpacing(true);
         bar.setAlignItems(FlexComponent.Alignment.CENTER);
 
-        var label = new Span(tr.apply("business.title").toUpperCase());
-        label.addClassName("biz-section-title");
         var titleSpan = new Span(safe(business.getTitle()).isEmpty() ? "—" : business.getTitle());
-        titleSpan.addClassName("biz-detail__title");
+        titleSpan.addClassName("biz-read__title");
 
-        var leftGroup = new HorizontalLayout(label, titleSpan);
-        leftGroup.setAlignItems(FlexComponent.Alignment.CENTER);
-        leftGroup.setSpacing(true);
-
-        var statusBadge = new Span(tr.apply("business.status." + business.getStatus().name()));
-        statusBadge.addClassName("biz-status-pill");
-        statusBadge.addClassName("biz-status-pill-icon--" + business.getStatus().name().toLowerCase());
+        var statusBadge = buildStatusPillWithIcon(tr);
 
         var spacer = new Div();
         spacer.getStyle().set("flex", "1");
 
         var editBtn = new Button(tr.apply("common.edit"), VaadinIcon.EDIT.create());
         editBtn.addThemeVariants(ButtonVariant.LUMO_PRIMARY, ButtonVariant.LUMO_SMALL);
+        editBtn.addClassName("rom-btn-primary");
         editBtn.addClickListener(e -> UI.getCurrent().navigate("businesses/" + business.getId() + "/edit"));
 
         var deleteBtn = new Button(VaadinIcon.TRASH.create(), e -> confirmDelete());
         deleteBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
         deleteBtn.getStyle().setColor("var(--rom-status-danger)");
 
-        bar.add(leftGroup, statusBadge, spacer, editBtn, deleteBtn);
+        bar.add(titleSpan, statusBadge, spacer, editBtn, deleteBtn);
         bar.setFlexGrow(1, spacer);
         return bar;
+    }
+
+    /** Status pill with icon, matching the master-card style. */
+    private com.vaadin.flow.component.orderedlayout.HorizontalLayout buildStatusPillWithIcon(
+            java.util.function.Function<String, String> tr) {
+        var pill = new com.vaadin.flow.component.orderedlayout.HorizontalLayout();
+        pill.addClassName("biz-status-pill-icon");
+        pill.addClassName("biz-status-pill-icon--"
+                + business.getStatus().name().toLowerCase());
+        pill.setPadding(false);
+        pill.setSpacing(false);
+        var iconSpec = switch (business.getStatus()) {
+            case IN_BEARBEITUNG -> VaadinIcon.HOURGLASS;
+            case FREIGEGEBEN -> VaadinIcon.CHECK_CIRCLE_O;
+            case UEBERARBEITEN -> VaadinIcon.WARNING;
+            case ABGESCHLOSSEN -> VaadinIcon.LOCK;
+            case ANNULLIERT -> VaadinIcon.BAN;
+        };
+        var icon = iconSpec.create();
+        icon.addClassName("biz-status-pill-icon__icon");
+        icon.getElement().setAttribute("aria-hidden", "true");
+        pill.add(icon);
+        var label = new Span(tr.apply("business.status." + business.getStatus().name()));
+        label.addClassName("biz-status-pill-icon__label");
+        pill.add(label);
+        return pill;
     }
 
     // ─── Stammdaten ────────────────────────────────────────────
