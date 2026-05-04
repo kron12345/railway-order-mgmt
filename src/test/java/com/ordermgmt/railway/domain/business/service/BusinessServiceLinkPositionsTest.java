@@ -102,6 +102,38 @@ class BusinessServiceLinkPositionsTest {
                 .doesNotThrowAnyException();
     }
 
+    @Test
+    void setAssigneeIsIdempotentWhenValuesUnchanged() {
+        Business saved = businessService.create("Z", "z", List.of(), List.of());
+        var v1 = businessService.setAssignee(saved.getId(),
+                com.ordermgmt.railway.domain.business.model.AssignmentType.USER, "sebastian");
+        Long version1 = v1.getVersion();
+        // Calling again with the same values must not bump the @Version (no save).
+        var v2 = businessService.setAssignee(saved.getId(),
+                com.ordermgmt.railway.domain.business.model.AssignmentType.USER, "sebastian");
+        assertThat(v2.getAssignmentName()).isEqualTo("sebastian");
+        assertThat(v2.getAssignmentType()).isEqualTo("USER");
+        assertThat(v2.getVersion()).isEqualTo(version1);
+    }
+
+    @Test
+    void closedBusinessRejectsTransitions() {
+        Business saved = businessService.create("Closed", "x", List.of(), List.of());
+        // IN_BEARBEITUNG -> FREIGEGEBEN -> ABGESCHLOSSEN
+        businessService.setStatus(saved.getId(),
+                com.ordermgmt.railway.domain.business.model.BusinessStatus.FREIGEGEBEN);
+        businessService.setStatus(saved.getId(),
+                com.ordermgmt.railway.domain.business.model.BusinessStatus.ABGESCHLOSSEN);
+        // From ABGESCHLOSSEN no further transition is allowed.
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () ->
+                businessService.setStatus(saved.getId(),
+                        com.ordermgmt.railway.domain.business.model.BusinessStatus.IN_BEARBEITUNG));
+        // But assignee changes are still possible on closed businesses.
+        var updated = businessService.setAssignee(saved.getId(),
+                com.ordermgmt.railway.domain.business.model.AssignmentType.USER, "sebastian");
+        assertThat(updated.getAssignmentName()).isEqualTo("sebastian");
+    }
+
     // ─── helpers ─────────
 
     private Order persistOrder(String number, String name) {

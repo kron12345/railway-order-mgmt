@@ -49,6 +49,9 @@ public class AssigneeComboBox extends ComboBox<AssigneeComboBox.Item> {
         });
 
         addValueChangeListener(e -> {
+            // Ignore programmatic changes (e.g. preset() during card render) — only act
+            // on user-initiated selections, otherwise every render would persist again.
+            if (!e.isFromClient()) return;
             Item v = e.getValue();
             if (v == null) onChange.accept(null, null);
             else onChange.accept(v.type(), v.value());

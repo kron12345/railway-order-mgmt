@@ -922,36 +922,85 @@ vaadin-button:focus-visible {
 .biz-doc-download { color: var(--rom-accent); }
 .biz-doc-download:hover { color: var(--rom-accent-hover); }
 
-/* === Quick-edit overlays on the master card === */
-.biz-card-tile__status-row,
-.biz-card-tile__assignee-row {
-    position: relative;
-    display: flex;
-    align-items: center;
+/* === Inline editable controls on the master card =========================
+   Controls are always rendered (no toggle) so card height is stable and Tab
+   navigation works without tricks. In the default state the controls are
+   styled to look like static pills/labels; the dropdown affordance only
+   reveals itself on hover or keyboard focus. */
+
+/* Status as Select styled like a pill */
+.biz-card-tile__status-select {
+    width: max-content !important;
+    min-height: 0 !important;
+    --vaadin-input-field-height: 18px;
+    --vaadin-input-field-border-radius: 2px;
+    --vaadin-input-field-background: transparent;
+    --vaadin-input-field-border-color: transparent;
+    --vaadin-input-field-padding: 0;
 }
-.biz-card-tile__status-select,
+.biz-card-tile__status-select::part(input-field) {
+    padding: 2px 6px;
+    border: 1px solid currentColor;
+    border-radius: 2px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    height: 20px;
+    background: var(--rom-bg-card);
+}
+.biz-card-tile__status-select::part(toggle-button) {
+    opacity: 0;
+    width: 14px;
+    transition: opacity 0.12s ease;
+}
+.biz-card-tile:hover .biz-card-tile__status-select::part(toggle-button),
+.biz-card-tile__status-select:focus-within::part(toggle-button) {
+    opacity: 0.7;
+}
+/* keep the per-status colour scheme on the pill */
+.biz-card-tile__status-select.biz-status-pill-icon--in_bearbeitung::part(input-field) { color: var(--rom-status-warning); background: rgba(255,184,0,0.12); }
+.biz-card-tile__status-select.biz-status-pill-icon--freigegeben::part(input-field)    { color: var(--rom-status-active);  background: rgba(0,230,118,0.12); }
+.biz-card-tile__status-select.biz-status-pill-icon--ueberarbeiten::part(input-field)  { color: var(--rom-status-danger);  background: rgba(255,82,82,0.12); }
+.biz-card-tile__status-select.biz-status-pill-icon--abgeschlossen::part(input-field)  { color: var(--rom-status-neutral); background: rgba(120,144,156,0.14); }
+.biz-card-tile__status-select.biz-status-pill-icon--annulliert::part(input-field)     { color: var(--rom-text-muted);     background: rgba(122,139,158,0.14); }
+
+/* Assignee combobox styled like a thin text line */
 .biz-card-tile__assignee-select {
-    display: none !important;
-    width: 100%;
+    width: 100% !important;
+    min-height: 0 !important;
     margin-top: 2px;
+    --vaadin-input-field-border-radius: 2px;
+    --vaadin-input-field-background: transparent;
+    --vaadin-input-field-border-color: transparent;
 }
-.biz-card-tile:hover .biz-card-tile__status-select,
-.biz-card-tile:hover .biz-card-tile__assignee-select,
-.biz-card-tile:focus-within .biz-card-tile__status-select,
-.biz-card-tile:focus-within .biz-card-tile__assignee-select {
-    display: inline-flex !important;
-}
-.biz-card-tile:hover .biz-card-tile__status-pill,
-.biz-card-tile:hover .biz-card-tile__assignee,
-.biz-card-tile:focus-within .biz-card-tile__status-pill,
-.biz-card-tile:focus-within .biz-card-tile__assignee {
-    opacity: 0.45;
-}
-.biz-card-tile__assignee {
+.biz-card-tile__assignee-select::part(input-field) {
+    padding: 0 4px;
+    height: 22px;
+    background: transparent;
+    border: 1px solid transparent;
     font-family: 'JetBrains Mono', monospace;
     font-size: 10px;
     color: var(--rom-text-secondary);
-    padding-top: 2px;
+}
+.biz-card-tile:hover .biz-card-tile__assignee-select::part(input-field),
+.biz-card-tile__assignee-select:focus-within::part(input-field) {
+    border-color: var(--rom-border-subtle);
+    background: var(--rom-bg-hover);
+    color: var(--rom-text-primary);
+}
+.biz-card-tile__assignee-select::part(toggle-button),
+.biz-card-tile__assignee-select::part(clear-button) {
+    opacity: 0;
+    transition: opacity 0.12s ease;
+}
+.biz-card-tile:hover .biz-card-tile__assignee-select::part(toggle-button),
+.biz-card-tile__assignee-select:focus-within::part(toggle-button),
+.biz-card-tile:hover .biz-card-tile__assignee-select::part(clear-button),
+.biz-card-tile__assignee-select:focus-within::part(clear-button) {
+    opacity: 0.7;
 }
 .biz-detail__title { /* re-used by ReadView header */
     font-family: 'JetBrains Mono', monospace;

@@ -90,12 +90,21 @@ public class BusinessService {
 
     /**
      * Set the assignee (user or team) for a business. Pass {@code (null, null)} to clear.
+     * No-op when the values are already what the caller is asking for, so repeated calls
+     * from re-renders do not churn through the audit log.
      */
     @Transactional
     public Business setAssignee(UUID id, com.ordermgmt.railway.domain.business.model.AssignmentType type, String name) {
         Business business = businessRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Business not found: " + id));
-        business.setAssignmentType(type == null ? null : type.name());
+        String newType = type == null ? null : type.name();
+        String currentType = business.getAssignmentType();
+        String currentName = business.getAssignmentName();
+        if (java.util.Objects.equals(currentType, newType)
+                && java.util.Objects.equals(currentName, name)) {
+            return business;
+        }
+        business.setAssignmentType(newType);
         business.setAssignmentName(name);
         return businessRepository.save(business);
     }

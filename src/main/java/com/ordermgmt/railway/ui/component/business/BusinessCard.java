@@ -1,15 +1,17 @@
 package com.ordermgmt.railway.ui.component.business;
 
 import java.time.format.DateTimeFormatter;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.function.Function;
 
-import com.vaadin.flow.component.combobox.ComboBox;
-import com.vaadin.flow.component.combobox.ComboBoxVariant;
+import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
+import com.vaadin.flow.component.select.Select;
 
 import com.ordermgmt.railway.domain.business.model.AssignmentType;
 import com.ordermgmt.railway.domain.business.model.Business;
@@ -18,12 +20,13 @@ import com.ordermgmt.railway.domain.business.service.BusinessService;
 import com.ordermgmt.railway.infrastructure.keycloak.KeycloakUserService;
 
 /**
- * Bloomberg-style master-list card for a {@link Business}. Status gutter, status pill
- * (icon + text — never colour alone), title, link counts, due date.
+ * Bloomberg-style master-list card for a {@link Business}. Status gutter, status
+ * (icon + text), title, link counts, due date, assignee.
  *
- * <p>Two inline quick-edits revealed on hover/focus: status (limited to allowed
- * transitions) and assignee (Keycloak user or group). Mutations call the service
- * directly and trigger {@code onChange} so the master list can refresh.
+ * <p>Status and assignee are always rendered as real form controls (not toggled on
+ * hover). Default styling makes them look like static pills — the dropdown affordance
+ * shows only on hover/focus. This keeps the card height stable (no layout jiggle when
+ * cycling cards) and makes both edits reachable via Tab without any visibility games.
  */
 public class BusinessCard extends Div {
 
@@ -52,7 +55,7 @@ public class BusinessCard extends Div {
         Div body = new Div();
         body.addClassName("biz-card-tile__body");
 
-        body.add(buildStatusRow(business, tr, businessService, onChange));
+        body.add(buildStatusControl(business, tr, businessService, onChange));
 
         Span title = new Span(safe(business.getTitle()).isEmpty()
                 ? "—" : safe(business.getTitle()));
@@ -60,48 +63,53 @@ public class BusinessCard extends Div {
         body.add(title);
 
         body.add(buildMetaRow(business, linkedOrderPositions, linkedPurchasePositions, tr));
-        body.add(buildAssigneeRow(business, tr, businessService, keycloakUserService, onChange));
+        body.add(buildAssigneeControl(business, tr, businessService, keycloakUserService, onChange));
 
         add(body);
     }
 
-    // ─── Status pill + inline-edit overlay ─────────────────────
+    // ─── Status as Select styled like a pill ───────────────────
 
-    private Div buildStatusRow(Business business, Function<String, String> tr,
-                               BusinessService businessService, Runnable onChange) {
-        Div row = new Div();
-        row.addClassName("biz-card-tile__status-row");
-
-        // Static pill (default state).
-        row.add(buildStatusPill(business.getStatus(), tr));
-
-        // Hidden quick-edit select (revealed on hover via CSS).
-        var nextStatuses = business.getStatus().nextTargets();
-        if (!nextStatuses.isEmpty()) {
-            ComboBox<BusinessStatus> select = new ComboBox<>();
-            select.addClassName("biz-card-tile__status-select");
-            select.addThemeVariants(ComboBoxVariant.LUMO_SMALL);
-            select.setItems(List.copyOf(nextStatuses));
-            select.setItemLabelGenerator(s -> tr.apply("business.status." + s.name()));
-            select.setPlaceholder(tr.apply("business.quickEdit.changeStatus"));
-            // Stop click propagation so the card body click (open detail) does not fire.
-            select.getElement().addEventListener("click", e -> {})
-                    .addEventData("event.stopPropagation()");
-            select.addValueChangeListener(e -> {
-                if (e.getValue() == null || !e.isFromClient()) return;
-                try {
-                    businessService.setStatus(business.getId(), e.getValue());
-                    onChange.run();
-                } catch (RuntimeException ex) {
-                    // swallow; could surface a notification but parent will refresh anyway
-                }
-            });
-            row.add(select);
+    private Component buildStatusControl(Business business, Function<String, String> tr,
+                                         BusinessService businessService, Runnable onChange) {
+        // Terminal status (no transitions allowed) → static pill, not editable.
+        Set<BusinessStatus> next = business.getStatus().nextTargets();
+        if (next.isEmpty()) {
+            return buildStaticStatusPill(business.getStatus(), tr);
         }
-        return row;
+
+        // Otherwise: a Select that includes current + valid transitions, styled like the pill.
+        Set<BusinessStatus> options = new LinkedHashSet<>();
+        options.add(business.getStatus());
+        options.addAll(next);
+
+        Select<BusinessStatus> select = new Select<>();
+        select.addClassName("biz-card-tile__status-select");
+        select.addClassName("biz-status-pill-icon--" + business.getStatus().name().toLowerCase());
+        select.setItems(options);
+        select.setValue(business.getStatus());
+        select.setItemLabelGenerator(s -> tr.apply("business.status." + s.name()));
+        select.getElement().setAttribute("aria-label", tr.apply("business.status"));
+        // Stop card click → detail when interacting with the select.
+        select.getElement().addEventListener("click", e -> {})
+                .addEventData("event.stopPropagation()");
+        select.getElement().addEventListener("mousedown", e -> {})
+                .addEventData("event.stopPropagation()");
+        select.addValueChangeListener(e -> {
+            if (e.getValue() == null || !e.isFromClient()) return;
+            if (e.getValue() == e.getOldValue()) return;
+            try {
+                businessService.setStatus(business.getId(), e.getValue());
+                onChange.run();
+            } catch (RuntimeException ex) {
+                // parent refresh shows current state
+            }
+        });
+        return select;
     }
 
-    private HorizontalLayout buildStatusPill(BusinessStatus status, Function<String, String> tr) {
+    private HorizontalLayout buildStaticStatusPill(BusinessStatus status,
+                                                   Function<String, String> tr) {
         var pill = new HorizontalLayout();
         pill.addClassName("biz-status-pill-icon");
         pill.addClassName("biz-card-tile__status-pill");
@@ -124,51 +132,33 @@ public class BusinessCard extends Div {
         Span label = new Span(tr.apply("business.status." + status.name()));
         label.addClassName("biz-status-pill-icon__label");
         pill.add(label);
-
         return pill;
     }
 
-    // ─── Assignee row + inline-edit overlay ───────────────────
+    // ─── Assignee always-on combo styled like text ─────────────
 
-    private Div buildAssigneeRow(Business business, Function<String, String> tr,
-                                 BusinessService businessService,
-                                 KeycloakUserService keycloakUserService, Runnable onChange) {
-        Div row = new Div();
-        row.addClassName("biz-card-tile__assignee-row");
-
-        // Static label (default).
-        Div display = new Div();
-        display.addClassName("biz-card-tile__assignee");
-        AssignmentType type = AssignmentType.fromString(business.getAssignmentType());
-        String name = business.getAssignmentName();
-        String text;
-        if (type != null && name != null && !name.isBlank()) {
-            text = (type == AssignmentType.USER ? "👤 " : "👥 ") + name;
-        } else if (name != null && !name.isBlank()) {
-            text = name;
-        } else {
-            text = "— " + tr.apply("business.unassigned");
-        }
-        display.setText(text);
-        row.add(display);
-
-        // Hidden quick-edit (revealed on hover).
+    private Component buildAssigneeControl(Business business, Function<String, String> tr,
+                                           BusinessService businessService,
+                                           KeycloakUserService keycloakUserService,
+                                           Runnable onChange) {
         var picker = new AssigneeComboBox(keycloakUserService, (t, v) -> {
             try {
                 businessService.setAssignee(business.getId(), t, v);
                 onChange.run();
             } catch (RuntimeException ex) {
-                // ignore — parent refresh will reflect failure
+                // parent refresh shows current state
             }
         });
         picker.addClassName("biz-card-tile__assignee-select");
-        picker.preset(type, name);
-        picker.setPlaceholder(tr.apply("business.quickEdit.changeAssignee"));
+        picker.preset(AssignmentType.fromString(business.getAssignmentType()),
+                business.getAssignmentName());
+        picker.setPlaceholder("— " + tr.apply("business.unassigned"));
+        picker.getElement().setAttribute("aria-label", tr.apply("business.assignment"));
         picker.getElement().addEventListener("click", e -> {})
                 .addEventData("event.stopPropagation()");
-        row.add(picker);
-
-        return row;
+        picker.getElement().addEventListener("mousedown", e -> {})
+                .addEventData("event.stopPropagation()");
+        return picker;
     }
 
     private Div buildMetaRow(Business business, int linkedOps, int linkedPps,
@@ -196,7 +186,6 @@ public class BusinessCard extends Div {
             due.setText("—");
         }
         meta.add(due);
-
         return meta;
     }
 
