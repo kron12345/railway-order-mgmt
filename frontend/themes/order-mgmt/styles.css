@@ -858,3 +858,105 @@ vaadin-button:focus-visible {
     background: var(--rom-bg-hover); border: 1px solid var(--rom-border);
     border-radius: 2px; color: var(--rom-accent); min-width: 100px; text-align: center; }
 .kbd-help__desc { font-size: 12px; color: var(--rom-text-primary); }
+
+/* === Business Read view === */
+.biz-read { padding: 0; gap: 0; }
+.biz-info-grid {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    column-gap: 12px;
+    row-gap: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+}
+.biz-info-grid__label {
+    color: var(--rom-text-muted);
+    text-transform: uppercase;
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    line-height: 18px;
+}
+.biz-info-grid__value {
+    color: var(--rom-text-primary);
+    line-height: 18px;
+    word-break: break-word;
+}
+.biz-empty {
+    display: block;
+    color: var(--rom-text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 4px 0;
+}
+.biz-link-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.biz-link-row {
+    padding: 4px 8px;
+    border-radius: 2px;
+    transition: background 0.1s ease;
+    border: 1px solid transparent;
+}
+.biz-link-row:hover {
+    background: var(--rom-bg-hover);
+    border-color: var(--rom-border-subtle);
+}
+.biz-link-row__name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--rom-text-primary);
+}
+.biz-link-row__sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--rom-text-muted);
+}
+.biz-doc-icon {
+    width: 14px !important;
+    height: 14px !important;
+    color: var(--rom-text-muted);
+}
+.biz-doc-download { color: var(--rom-accent); }
+.biz-doc-download:hover { color: var(--rom-accent-hover); }
+
+/* === Quick-edit overlays on the master card === */
+.biz-card-tile__status-row,
+.biz-card-tile__assignee-row {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+.biz-card-tile__status-select,
+.biz-card-tile__assignee-select {
+    display: none !important;
+    width: 100%;
+    margin-top: 2px;
+}
+.biz-card-tile:hover .biz-card-tile__status-select,
+.biz-card-tile:hover .biz-card-tile__assignee-select,
+.biz-card-tile:focus-within .biz-card-tile__status-select,
+.biz-card-tile:focus-within .biz-card-tile__assignee-select {
+    display: inline-flex !important;
+}
+.biz-card-tile:hover .biz-card-tile__status-pill,
+.biz-card-tile:hover .biz-card-tile__assignee,
+.biz-card-tile:focus-within .biz-card-tile__status-pill,
+.biz-card-tile:focus-within .biz-card-tile__assignee {
+    opacity: 0.45;
+}
+.biz-card-tile__assignee {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--rom-text-secondary);
+    padding-top: 2px;
+}
+.biz-detail__title { /* re-used by ReadView header */
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--rom-text-primary);
+    letter-spacing: 0.02em;
+}

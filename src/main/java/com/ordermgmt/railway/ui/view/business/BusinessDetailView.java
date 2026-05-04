@@ -130,8 +130,15 @@ public class BusinessDetailView extends VerticalLayout {
         bar.setSpacing(true);
         bar.setAlignItems(FlexComponent.Alignment.CENTER);
 
+        // From edit mode: go back to read view; from new mode: back to overview.
         var backBtn = new Button(VaadinIcon.ARROW_LEFT.create(),
-                e -> UI.getCurrent().navigate("businesses"));
+                e -> {
+                    if (!isNew && business.getId() != null) {
+                        UI.getCurrent().navigate("businesses/" + business.getId());
+                    } else {
+                        UI.getCurrent().navigate("businesses");
+                    }
+                });
         backBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
 
         var label = new Span(isNew ? getTranslation("business.new").toUpperCase()

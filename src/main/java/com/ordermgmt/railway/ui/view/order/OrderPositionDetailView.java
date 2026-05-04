@@ -17,8 +17,10 @@ import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.notification.NotificationVariant;
 
+import com.ordermgmt.railway.domain.business.service.BusinessService;
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.order.repository.OrderPositionRepository;
+import com.ordermgmt.railway.ui.component.business.LinkedBusinessesPanel;
 
 /**
  * Read-only detail panel for a single {@link OrderPosition}, embedded by
@@ -32,6 +34,7 @@ public class OrderPositionDetailView extends VerticalLayout {
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("dd.MM.yy HH:mm");
 
     public OrderPositionDetailView(OrderPositionRepository positionRepo,
+                                   BusinessService businessService,
                                    UUID orderId, UUID positionId,
                                    Function<String, String> tr) {
         addClassName("order-pos-detail");
@@ -53,6 +56,8 @@ public class OrderPositionDetailView extends VerticalLayout {
 
         add(buildActionBar(orderId, tr));
         add(buildBody(pos, tr));
+        add(new LinkedBusinessesPanel(
+                businessService.findByLinkedOrderPosition(positionId), tr));
     }
 
     private HorizontalLayout buildActionBar(UUID orderId, Function<String, String> tr) {

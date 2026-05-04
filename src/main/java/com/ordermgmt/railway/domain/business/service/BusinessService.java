@@ -89,6 +89,18 @@ public class BusinessService {
     }
 
     /**
+     * Set the assignee (user or team) for a business. Pass {@code (null, null)} to clear.
+     */
+    @Transactional
+    public Business setAssignee(UUID id, com.ordermgmt.railway.domain.business.model.AssignmentType type, String name) {
+        Business business = businessRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Business not found: " + id));
+        business.setAssignmentType(type == null ? null : type.name());
+        business.setAssignmentName(name);
+        return businessRepository.save(business);
+    }
+
+    /**
      * Transition to a new status if allowed by the transition rules.
      * @return the updated business
      */
@@ -258,6 +270,21 @@ public class BusinessService {
     @Transactional(readOnly = true)
     public List<Business> listAll() {
         return businessRepository.findAll();
+    }
+
+    @Transactional(readOnly = true)
+    public List<Business> findByLinkedOrderPosition(UUID orderPositionId) {
+        return businessRepository.findByLinkedOrderPositionId(orderPositionId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Business> findByLinkedPurchasePosition(UUID purchasePositionId) {
+        return businessRepository.findByLinkedPurchasePositionId(purchasePositionId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Business> findByLinkedOrder(UUID orderId) {
+        return businessRepository.findByLinkedOrderId(orderId);
     }
 
     /** {@code Map<businessId, [orderPositionCount, purchasePositionCount]>}. */

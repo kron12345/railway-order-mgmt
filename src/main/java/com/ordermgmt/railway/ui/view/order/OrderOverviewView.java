@@ -22,6 +22,7 @@ import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.router.RouteAlias;
 
+import com.ordermgmt.railway.domain.business.service.BusinessService;
 import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.domain.order.repository.OrderPositionRepository;
 import com.ordermgmt.railway.domain.order.service.OrderService;
@@ -51,6 +52,7 @@ public class OrderOverviewView extends VerticalLayout implements BeforeEnterObse
 
     private final OrderService orderService;
     private final OrderPositionRepository positionRepository;
+    private final BusinessService businessService;
     private final ObjectProvider<OrderDetailView> detailFactory;
     private final MasterDetailLayout<Order> shell;
     private final BreadcrumbBar breadcrumb = new BreadcrumbBar();
@@ -58,9 +60,11 @@ public class OrderOverviewView extends VerticalLayout implements BeforeEnterObse
 
     public OrderOverviewView(OrderService orderService,
                              OrderPositionRepository positionRepository,
+                             BusinessService businessService,
                              ObjectProvider<OrderDetailView> detailFactory) {
         this.orderService = orderService;
         this.positionRepository = positionRepository;
+        this.businessService = businessService;
         this.detailFactory = detailFactory;
 
         setSizeFull();
@@ -152,7 +156,7 @@ public class OrderOverviewView extends VerticalLayout implements BeforeEnterObse
         if (posParam != null) {
             try {
                 UUID posId = UUID.fromString(posParam);
-                shell.setDetail(new OrderPositionDetailView(positionRepository,
+                shell.setDetail(new OrderPositionDetailView(positionRepository, businessService,
                         orderId, posId, this::getTranslation));
                 updateBreadcrumb(order, posId, false);
             } catch (IllegalArgumentException ex) {

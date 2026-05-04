@@ -61,6 +61,7 @@ public class OrderDetailView extends VerticalLayout {
     private final ResourceCatalogItemRepository catalogItemRepository;
     private final PurchasePositionRepository purchasePositionRepository;
     private final AuditService auditService;
+    private final com.ordermgmt.railway.domain.business.service.BusinessService businessService;
     private Order order;
     private boolean isNew;
 
@@ -78,7 +79,8 @@ public class OrderDetailView extends VerticalLayout {
             PurchaseOrderService purchaseOrderService,
             ResourceCatalogItemRepository catalogItemRepository,
             PurchasePositionRepository purchasePositionRepository,
-            AuditService auditService) {
+            AuditService auditService,
+            com.ordermgmt.railway.domain.business.service.BusinessService businessService) {
         this.orderService = orderService;
         this.customerRepository = customerRepository;
         this.predefinedTagRepository = predefinedTagRepository;
@@ -89,6 +91,7 @@ public class OrderDetailView extends VerticalLayout {
         this.purchaseOrderService = purchaseOrderService;
         this.catalogItemRepository = catalogItemRepository;
         this.purchasePositionRepository = purchasePositionRepository;
+        this.businessService = businessService;
         this.auditService = auditService;
         setPadding(false);
         setSpacing(false);
@@ -154,6 +157,7 @@ public class OrderDetailView extends VerticalLayout {
     private void buildDetailView() {
         removeAll();
         add(createCompactHeader());
+
         var positionPanel =
                 new OrderPositionPanel(
                         order,
@@ -168,7 +172,32 @@ public class OrderDetailView extends VerticalLayout {
                         purchasePositionRepository,
                         auditService,
                         this::getTranslation);
-        add(positionPanel);
+
+        // Tab sheet: Positionen | Verknüpfte Geschäfte
+        var tabPositions = new com.vaadin.flow.component.tabs.Tab(
+                getTranslation("order.tab.positions"));
+        var tabBusinesses = new com.vaadin.flow.component.tabs.Tab(
+                getTranslation("order.tab.linkedBusinesses"));
+        var tabs = new com.vaadin.flow.component.tabs.Tabs(tabPositions, tabBusinesses);
+        tabs.setWidthFull();
+
+        var tabContent = new com.vaadin.flow.component.html.Div();
+        tabContent.setSizeFull();
+        tabContent.add(positionPanel);
+
+        tabs.addSelectedChangeListener(e -> {
+            tabContent.removeAll();
+            if (e.getSelectedTab() == tabPositions) {
+                tabContent.add(positionPanel);
+            } else if (businessService != null) {
+                tabContent.add(new com.ordermgmt.railway.ui.component.business.LinkedBusinessesPanel(
+                        businessService.findByLinkedOrder(order.getId()),
+                        this::getTranslation));
+            }
+        });
+
+        add(tabs);
+        add(tabContent);
     }
 
     private HorizontalLayout createBackRow(String titleText) {

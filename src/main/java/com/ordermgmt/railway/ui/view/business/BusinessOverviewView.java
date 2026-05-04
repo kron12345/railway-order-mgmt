@@ -23,6 +23,7 @@ import com.vaadin.flow.router.RouteAlias;
 import com.ordermgmt.railway.domain.business.model.Business;
 import com.ordermgmt.railway.domain.business.service.BusinessService;
 import com.ordermgmt.railway.domain.userprefs.service.UserViewPreferenceService;
+import com.ordermgmt.railway.infrastructure.keycloak.KeycloakUserService;
 import com.ordermgmt.railway.ui.component.a11y.BreadcrumbBar;
 import com.ordermgmt.railway.ui.component.a11y.SkipLinks;
 import com.ordermgmt.railway.ui.component.business.BusinessCard;
@@ -37,7 +38,8 @@ import com.ordermgmt.railway.ui.layout.MainLayout;
  * provided by {@link MasterDetailLayout} and {@link SkipLinks}; URL drives selection so
  * deep links and browser back/forward keep working.
  */
-@Route(value = "businesses/:businessId", layout = MainLayout.class)
+@Route(value = "businesses/:businessId/:mode", layout = MainLayout.class)
+@RouteAlias(value = "businesses/:businessId", layout = MainLayout.class)
 @RouteAlias(value = "businesses", layout = MainLayout.class)
 @PageTitle("Geschäfte")
 @PermitAll
@@ -45,14 +47,17 @@ public class BusinessOverviewView extends VerticalLayout implements BeforeEnterO
 
     private final BusinessService businessService;
     private final UserViewPreferenceService prefsService;
+    private final KeycloakUserService keycloakUserService;
     private final MasterDetailLayout<Business> shell;
     private final BreadcrumbBar breadcrumb = new BreadcrumbBar();
     private final Map<UUID, int[]> linkCountsCache = new HashMap<>();
 
     public BusinessOverviewView(BusinessService businessService,
-                                UserViewPreferenceService prefsService) {
+                                UserViewPreferenceService prefsService,
+                                KeycloakUserService keycloakUserService) {
         this.businessService = businessService;
         this.prefsService = prefsService;
+        this.keycloakUserService = keycloakUserService;
 
         setSizeFull();
         setPadding(false);
@@ -68,7 +73,8 @@ public class BusinessOverviewView extends VerticalLayout implements BeforeEnterO
                 .idExtractor(Business::getId)
                 .cardRenderer(b -> {
                     int[] counts = countsFor(b);
-                    return new BusinessCard(b, tr, counts[0], counts[1]);
+                    return new BusinessCard(b, tr, counts[0], counts[1],
+                            businessService, keycloakUserService, this::loadBusinesses);
                 })
                 .matcher((b, q) -> {
                     String title = b.getTitle() == null ? "" : b.getTitle().toLowerCase();
@@ -102,6 +108,7 @@ public class BusinessOverviewView extends VerticalLayout implements BeforeEnterO
     @Override
     public void beforeEnter(BeforeEnterEvent event) {
         String param = event.getRouteParameters().get("businessId").orElse(null);
+        String mode = event.getRouteParameters().get("mode").orElse(null);
         loadBusinesses();
         if (param == null) {
             shell.setSelectedId(null);
@@ -123,7 +130,11 @@ public class BusinessOverviewView extends VerticalLayout implements BeforeEnterO
                 return;
             }
             shell.setSelectedId(id);
-            shell.setDetail(new BusinessDetailView(businessService, prefsService, id));
+            if ("edit".equals(mode)) {
+                shell.setDetail(new BusinessDetailView(businessService, prefsService, id));
+            } else {
+                shell.setDetail(new BusinessReadView(businessService, id, this::getTranslation));
+            }
             updateBreadcrumb(b, false);
         } catch (IllegalArgumentException ex) {
             UI.getCurrent().navigate("businesses");
