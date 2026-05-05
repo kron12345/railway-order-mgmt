@@ -150,6 +150,11 @@ vaadin-app-layout::part(drawer) {
 vaadin-side-nav-item {
     --lumo-primary-text-color: var(--rom-accent);
 }
+vaadin-side-nav-item vaadin-icon[slot="prefix"],
+vaadin-side-nav-item [slot="prefix"] vaadin-icon {
+    width: 22px;
+    height: 22px;
+}
 
 /* === Terminal-dense Grid === */
 vaadin-grid::part(header-cell) {
@@ -512,11 +517,11 @@ vaadin-button:focus-visible {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 22px;
-    padding: 1px 5px;
-    border-radius: 2px;
+    min-width: 32px;
+    padding: 3px 8px;
+    border-radius: 3px;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 9px;
+    font-size: 12px;
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -758,20 +763,20 @@ vaadin-button:focus-visible {
 .biz-status-pill-icon {
     display: inline-flex !important;
     align-items: center;
-    gap: 4px;
-    padding: 2px 6px;
-    border-radius: 2px;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 3px;
     border: 1px solid currentColor;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 9px;
+    font-size: 12px;
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;
     width: max-content;
 }
 .biz-status-pill-icon__icon {
-    width: 10px !important;
-    height: 10px !important;
+    width: 16px !important;
+    height: 16px !important;
 }
 .biz-status-pill-icon--in_bearbeitung { color: var(--rom-status-warning); background: rgba(255, 184, 0, 0.12); }
 .biz-status-pill-icon--freigegeben    { color: var(--rom-status-active);  background: rgba(0, 230, 118, 0.12); }
@@ -805,10 +810,10 @@ vaadin-button:focus-visible {
 
 /* Order status pill (icon + text) */
 .order-status-pill { display: inline-flex !important; align-items: center;
-    gap: 4px; padding: 2px 6px; border-radius: 2px; border: 1px solid currentColor;
-    font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 700;
+    gap: 6px; padding: 4px 10px; border-radius: 3px; border: 1px solid currentColor;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700;
     letter-spacing: 0.06em; text-transform: uppercase; width: max-content; }
-.order-status-pill__icon { width: 10px !important; height: 10px !important; }
+.order-status-pill__icon { width: 16px !important; height: 16px !important; }
 .order-status-pill--auftrag                  { color: var(--rom-status-info);    background: rgba(68, 138, 255, 0.12); }
 .order-status-pill--planung                  { color: var(--rom-status-warning); background: rgba(255, 184, 0, 0.12); }
 .order-status-pill--produkt_leistung         { color: var(--rom-accent);         background: var(--rom-accent-muted); }
@@ -915,12 +920,31 @@ vaadin-button:focus-visible {
     color: var(--rom-text-muted);
 }
 .biz-doc-icon {
-    width: 14px !important;
-    height: 14px !important;
+    width: 22px !important;
+    height: 22px !important;
     color: var(--rom-text-muted);
 }
-.biz-doc-download { color: var(--rom-accent); }
+.biz-doc-download {
+    color: var(--rom-accent);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.biz-doc-download vaadin-icon {
+    width: 22px;
+    height: 22px;
+}
 .biz-doc-download:hover { color: var(--rom-accent-hover); }
+
+/* Larger icons inside action buttons in the read-view header and document rows. */
+.biz-read__header vaadin-button vaadin-icon,
+.biz-link-row vaadin-button vaadin-icon {
+    width: 20px;
+    height: 20px;
+}
+.biz-read__header vaadin-button {
+    --lumo-button-size: 36px;
+}
 
 /* === Inline editable controls on the master card =========================
    Controls are always rendered (no toggle) so card height is stable and Tab
@@ -932,28 +956,28 @@ vaadin-button:focus-visible {
 .biz-card-tile__status-select {
     width: max-content !important;
     min-height: 0 !important;
-    --vaadin-input-field-height: 18px;
-    --vaadin-input-field-border-radius: 2px;
+    --vaadin-input-field-height: 26px;
+    --vaadin-input-field-border-radius: 3px;
     --vaadin-input-field-background: transparent;
     --vaadin-input-field-border-color: transparent;
     --vaadin-input-field-padding: 0;
 }
 .biz-card-tile__status-select::part(input-field) {
-    padding: 2px 6px;
+    padding: 4px 10px;
     border: 1px solid currentColor;
-    border-radius: 2px;
+    border-radius: 3px;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 9px;
+    font-size: 12px;
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;
     cursor: pointer;
-    height: 20px;
+    height: 28px;
     background: var(--rom-bg-card);
 }
 .biz-card-tile__status-select::part(toggle-button) {
     opacity: 0;
-    width: 14px;
+    width: 18px;
     transition: opacity 0.12s ease;
 }
 .biz-card-tile:hover .biz-card-tile__status-select::part(toggle-button),
