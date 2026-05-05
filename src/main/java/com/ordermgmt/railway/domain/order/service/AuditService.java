@@ -54,6 +54,18 @@ public class AuditService {
         return getEntityHistory(ResourceNeed.class, resourceNeedId);
     }
 
+    /** Returns audit history for a Business (status, assignee, fields, links). */
+    public List<AuditEntry> getBusinessHistory(UUID businessId) {
+        return getEntityHistory(
+                com.ordermgmt.railway.domain.business.model.Business.class, businessId);
+    }
+
+    /** Returns audit history for a single BusinessDocument. */
+    public List<AuditEntry> getBusinessDocumentHistory(UUID documentId) {
+        return getEntityHistory(
+                com.ordermgmt.railway.domain.business.model.BusinessDocument.class, documentId);
+    }
+
     /** Generic method to retrieve audit history for any {@code @Audited} entity. */
     @SuppressWarnings("unchecked")
     public <T> List<AuditEntry> getEntityHistory(Class<T> entityClass, UUID id) {

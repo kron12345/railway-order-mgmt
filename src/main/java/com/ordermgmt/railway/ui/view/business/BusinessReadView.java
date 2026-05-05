@@ -30,6 +30,8 @@ import com.ordermgmt.railway.domain.business.model.BusinessDocument;
 import com.ordermgmt.railway.domain.business.service.BusinessService;
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.order.model.PurchasePosition;
+import com.ordermgmt.railway.domain.order.service.AuditService;
+import com.ordermgmt.railway.ui.component.AuditHistoryDialog;
 
 /**
  * Read-only detail view for a {@link Business}. Default mode in /businesses/{id}.
@@ -46,12 +48,16 @@ public class BusinessReadView extends VerticalLayout {
     private static final DateTimeFormatter TS_FMT = DateTimeFormatter.ofPattern("dd.MM.yy HH:mm");
 
     private final BusinessService businessService;
+    private final AuditService auditService;
     private final java.util.function.Function<String, String> tr;
     private final Business business;
 
-    public BusinessReadView(BusinessService businessService, UUID businessId,
+    public BusinessReadView(BusinessService businessService,
+                            AuditService auditService,
+                            UUID businessId,
                             java.util.function.Function<String, String> tr) {
         this.businessService = businessService;
+        this.auditService = auditService;
         this.tr = tr;
         this.business = businessService.getById(businessId).orElse(null);
 
@@ -92,6 +98,10 @@ public class BusinessReadView extends VerticalLayout {
         var spacer = new Div();
         spacer.getStyle().set("flex", "1");
 
+        var historyBtn = new Button(tr.apply("audit.button"), VaadinIcon.CLOCK.create());
+        historyBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
+        historyBtn.addClickListener(e -> openAuditHistory());
+
         var editBtn = new Button(tr.apply("common.edit"), VaadinIcon.EDIT.create());
         editBtn.addThemeVariants(ButtonVariant.LUMO_PRIMARY, ButtonVariant.LUMO_SMALL);
         editBtn.addClassName("rom-btn-primary");
@@ -101,9 +111,18 @@ public class BusinessReadView extends VerticalLayout {
         deleteBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
         deleteBtn.getStyle().setColor("var(--rom-status-danger)");
 
-        bar.add(titleSpan, statusBadge, spacer, editBtn, deleteBtn);
+        bar.add(titleSpan, statusBadge, spacer, historyBtn, editBtn, deleteBtn);
         bar.setFlexGrow(1, spacer);
         return bar;
+    }
+
+    private void openAuditHistory() {
+        var entries = auditService.getBusinessHistory(business.getId());
+        new AuditHistoryDialog(
+                tr.apply("audit.title") + " — " + safe(business.getTitle()),
+                entries,
+                (k, args) -> tr.apply(k))
+                .open();
     }
 
     /** Status pill with icon, matching the master-card style. */
@@ -343,9 +362,24 @@ public class BusinessReadView extends VerticalLayout {
         download.addClassName("biz-doc-download");
         download.getElement().setAttribute("aria-label", tr.apply("business.downloadDocument"));
 
-        row.add(icon, name, meta, spacer, download);
+        var historyBtn = new Button(VaadinIcon.CLOCK.create(),
+                e -> openDocumentHistory(doc));
+        historyBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY,
+                ButtonVariant.LUMO_ICON);
+        historyBtn.getElement().setAttribute("aria-label", tr.apply("audit.button"));
+
+        row.add(icon, name, meta, spacer, historyBtn, download);
         row.setFlexGrow(1, spacer);
         return row;
+    }
+
+    private void openDocumentHistory(BusinessDocument doc) {
+        var entries = auditService.getBusinessDocumentHistory(doc.getId());
+        new AuditHistoryDialog(
+                tr.apply("audit.title") + " — " + safe(doc.getFilename()),
+                entries,
+                (k, args) -> tr.apply(k))
+                .open();
     }
 
     // ─── Helpers ───────────────────────────────────────────────

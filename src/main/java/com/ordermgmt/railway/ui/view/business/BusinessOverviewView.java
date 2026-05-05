@@ -22,6 +22,7 @@ import com.vaadin.flow.router.RouteAlias;
 
 import com.ordermgmt.railway.domain.business.model.Business;
 import com.ordermgmt.railway.domain.business.service.BusinessService;
+import com.ordermgmt.railway.domain.order.service.AuditService;
 import com.ordermgmt.railway.domain.userprefs.service.UserViewPreferenceService;
 import com.ordermgmt.railway.infrastructure.keycloak.KeycloakUserService;
 import com.ordermgmt.railway.ui.component.a11y.SkipLinks;
@@ -47,15 +48,18 @@ public class BusinessOverviewView extends VerticalLayout implements BeforeEnterO
     private final BusinessService businessService;
     private final UserViewPreferenceService prefsService;
     private final KeycloakUserService keycloakUserService;
+    private final AuditService auditService;
     private final MasterDetailLayout<Business> shell;
     private final Map<UUID, int[]> linkCountsCache = new HashMap<>();
 
     public BusinessOverviewView(BusinessService businessService,
                                 UserViewPreferenceService prefsService,
-                                KeycloakUserService keycloakUserService) {
+                                KeycloakUserService keycloakUserService,
+                                AuditService auditService) {
         this.businessService = businessService;
         this.prefsService = prefsService;
         this.keycloakUserService = keycloakUserService;
+        this.auditService = auditService;
 
         setSizeFull();
         setPadding(false);
@@ -128,7 +132,7 @@ public class BusinessOverviewView extends VerticalLayout implements BeforeEnterO
             if ("edit".equals(mode)) {
                 shell.setDetail(new BusinessDetailView(businessService, prefsService, id));
             } else {
-                shell.setDetail(new BusinessReadView(businessService, id, this::getTranslation));
+                shell.setDetail(new BusinessReadView(businessService, auditService, id, this::getTranslation));
             }
         } catch (IllegalArgumentException ex) {
             UI.getCurrent().navigate("businesses");
