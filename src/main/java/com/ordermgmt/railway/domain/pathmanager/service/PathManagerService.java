@@ -7,8 +7,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -50,6 +54,36 @@ public class PathManagerService {
     private final PmRouteRepository routeRepository;
     private final PmTimetableYearRepository timetableYearRepository;
     private final IdentifierGenerator identifierGenerator;
+
+    @PersistenceContext
+    private EntityManager entityManager;
+
+    /**
+     * Wipes <em>all</em> Path Manager state (trains, versions, journey locations, paths,
+     * routes, process steps), the depending Vehicle Planning rotations, and the
+     * timetable archive entries linked to FAHRPLAN positions. Intended as a "reset"
+     * shortcut while the path manager is still a mock — the upstream system would not
+     * permit this in production.
+     *
+     * <p>Will fail if any current OrderPosition still references a timetable archive
+     * (FAHRPLAN positions); in that case the user should delete those positions first.
+     */
+    @PreAuthorize("hasRole('ADMIN')")
+    public void clearAllMockData() {
+        // Order matters: child rows before parents.
+        entityManager.createNativeQuery("DELETE FROM vp_vehicle_operations").executeUpdate();
+        entityManager.createNativeQuery("DELETE FROM vp_rotation_entries").executeUpdate();
+        entityManager.createNativeQuery("DELETE FROM vp_vehicles").executeUpdate();
+        entityManager.createNativeQuery("DELETE FROM vp_rotation_sets").executeUpdate();
+        entityManager.createNativeQuery("DELETE FROM pm_journey_locations").executeUpdate();
+        entityManager.createNativeQuery("DELETE FROM pm_train_versions").executeUpdate();
+        entityManager.createNativeQuery("DELETE FROM pm_process_steps").executeUpdate();
+        entityManager.createNativeQuery("DELETE FROM pm_paths").executeUpdate();
+        entityManager.createNativeQuery("DELETE FROM pm_path_requests").executeUpdate();
+        entityManager.createNativeQuery("DELETE FROM pm_routes").executeUpdate();
+        entityManager.createNativeQuery("DELETE FROM pm_reference_trains").executeUpdate();
+        entityManager.createNativeQuery("DELETE FROM timetable_archives").executeUpdate();
+    }
 
     /**
      * Creates a new reference train from an order position and its timetable data.

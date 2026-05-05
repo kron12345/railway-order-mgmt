@@ -90,6 +90,8 @@ public class PathManagerView extends VerticalLayout {
     }
 
     private void buildLayout() {
+        add(buildToolbar());
+
         SplitLayout split = new SplitLayout();
         split.setSizeFull();
         split.setSplitterPosition(40);
@@ -98,6 +100,71 @@ public class PathManagerView extends VerticalLayout {
         split.addToSecondary(createDetailPanel());
 
         add(split);
+        setFlexGrow(1, split);
+    }
+
+    /**
+     * Toolbar with the mock-only "Reset" button. The path manager is a stand-in for an
+     * upstream system; this lets a developer wipe the local state without going through
+     * the database directly. The button is admin-only client-side <em>and</em>
+     * server-side (via {@code @PreAuthorize}).
+     */
+    private com.vaadin.flow.component.Component buildToolbar() {
+        var bar = new com.vaadin.flow.component.orderedlayout.HorizontalLayout();
+        bar.setWidthFull();
+        bar.setPadding(false);
+        bar.setSpacing(true);
+        bar.setAlignItems(com.vaadin.flow.component.orderedlayout.FlexComponent.Alignment.CENTER);
+        bar.getStyle().set("padding", "8px 12px")
+                .set("border-bottom", "1px solid var(--rom-border-subtle)");
+
+        var label = new com.vaadin.flow.component.html.Span("PATH MANAGER (MOCK)");
+        label.addClassName("biz-section-title");
+        label.getStyle().set("margin", "0");
+
+        var spacer = new com.vaadin.flow.component.html.Div();
+        spacer.getStyle().set("flex", "1");
+
+        var resetBtn = new com.vaadin.flow.component.button.Button(
+                getTranslation("pm.reset"),
+                com.vaadin.flow.component.icon.VaadinIcon.TRASH.create(),
+                e -> confirmReset());
+        resetBtn.addThemeVariants(
+                com.vaadin.flow.component.button.ButtonVariant.LUMO_SMALL,
+                com.vaadin.flow.component.button.ButtonVariant.LUMO_TERTIARY);
+        resetBtn.getStyle().setColor("var(--rom-status-danger)");
+
+        bar.add(label, spacer, resetBtn);
+        bar.setFlexGrow(1, spacer);
+        return bar;
+    }
+
+    private void confirmReset() {
+        var dialog = new com.vaadin.flow.component.confirmdialog.ConfirmDialog();
+        dialog.setHeader(getTranslation("pm.reset.title"));
+        dialog.setText(getTranslation("pm.reset.text"));
+        dialog.setCancelable(true);
+        dialog.setCancelText(getTranslation("common.cancel"));
+        dialog.setConfirmText(getTranslation("common.delete"));
+        dialog.setConfirmButtonTheme("error primary");
+        dialog.addConfirmListener(e -> {
+            try {
+                pathManagerService.clearAllMockData();
+                com.vaadin.flow.component.notification.Notification.show(
+                        getTranslation("pm.reset.done"), 1500,
+                        com.vaadin.flow.component.notification.Notification.Position.BOTTOM_END)
+                        .addThemeVariants(
+                                com.vaadin.flow.component.notification.NotificationVariant.LUMO_SUCCESS);
+                com.vaadin.flow.component.UI.getCurrent().getPage().reload();
+            } catch (RuntimeException ex) {
+                com.vaadin.flow.component.notification.Notification.show(
+                        getTranslation("common.errorGeneric"), 3000,
+                        com.vaadin.flow.component.notification.Notification.Position.BOTTOM_END)
+                        .addThemeVariants(
+                                com.vaadin.flow.component.notification.NotificationVariant.LUMO_ERROR);
+            }
+        });
+        dialog.open();
     }
 
     private VerticalLayout createTreePanel() {
