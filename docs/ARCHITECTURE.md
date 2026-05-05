@@ -464,3 +464,23 @@ The resolver has no persistence of its own -- it computes phases from `PmTimetab
 - **SpotBugs**: static analysis
 - **OWASP Dependency Check**: dependency CVE scanning
 - **Playwright**: browser-based regression paths, including the timetable builder
+
+## Documentation Conventions
+
+Documentation is layered so a new contributor can land at any level and find what
+they need without reading the next one.
+
+| Scope | Lives in | Enforced by |
+| --- | --- | --- |
+| Single class | JavaDoc class header — what the class is for + non-obvious why | `JavaDocCoverageTest` regex-walks `src/main/java` and fails the build if any `@Service` / `@Entity` / `@Repository` / `@RestController` / `@Component` / `@Configuration` / `@SpringComponent` lacks a header |
+| Package / bounded context | `package-info.java` — aggregate roots, key relationships (with `@link`), authorisation model, architectural constraints | manual review, but the IDE renders it on package hover so it is hard to miss |
+| Layer (ui / domain / infrastructure / api) | This document + `ArchitectureTest` (ArchUnit `layeredArchitecture()`) | ArchUnit fails the build on illegal cross-layer imports |
+| Naming convention | `NamingConventionTest` (ArchUnit) | ArchUnit |
+| Architectural decision | `docs/decisions/ADR-NNN-*.md` — one ADR per decision, kept Accepted / Superseded | manual |
+| Living project state | `docs/PROJECT_STATUS.md` — top entry summarises the latest meaningful change, plus a dated changelog | updated as part of every functional change |
+| Data model | `docs/datenmodel.md` — ER diagrams, migration list | updated whenever a Flyway migration changes the schema |
+| Domain glossary | `docs/GLOSSARY.md` | updated on new domain terminology |
+| End-user manual | GitLab Wiki (`docs/wiki/` mirrored) | updated when user-visible behaviour changes |
+
+Methods are deliberately *not* documented unless the behaviour is non-obvious — see
+`CLAUDE.md`. Class-level JavaDoc plus self-explanatory method names is the contract.
