@@ -327,10 +327,15 @@ public class BusinessReadView extends VerticalLayout {
         var spacer = new Div();
         spacer.getStyle().set("flex", "1");
 
-        StreamResource resource = new StreamResource(
-                doc.getFilename() != null ? doc.getFilename() : "document",
+        // Always force download. Even with a sanitised content-type, never let the
+        // browser render uploaded business documents inline (defence in depth against
+        // user-supplied HTML/SVG slipping past the MIME whitelist via filename guesses).
+        String safeName = doc.getFilename() != null ? doc.getFilename() : "document";
+        StreamResource resource = new StreamResource(safeName,
                 () -> new ByteArrayInputStream(doc.getData() == null ? new byte[0] : doc.getData()));
         if (doc.getContentType() != null) resource.setContentType(doc.getContentType());
+        resource.setHeader("Content-Disposition",
+                "attachment; filename=\"" + sanitiseHeaderValue(safeName) + "\"");
 
         var download = new Anchor(resource, "");
         download.add(VaadinIcon.DOWNLOAD.create());
@@ -409,5 +414,11 @@ public class BusinessReadView extends VerticalLayout {
 
     private static String safe(String s) {
         return s == null ? "" : s;
+    }
+
+    /** Strip CR/LF/quotes from a value before it lands in an HTTP header (RFC 7230). */
+    private static String sanitiseHeaderValue(String s) {
+        if (s == null) return "";
+        return s.replaceAll("[\\r\\n\"]", "");
     }
 }

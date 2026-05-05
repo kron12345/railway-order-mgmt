@@ -198,6 +198,13 @@ Hinweise:
 - Routing ist bewusst datengetrieben: wenn im geladenen OP-/SoL-Graph ein Segment fehlt, blockiert der Fahrplanbuilder mit `No route found`
 - Repo-weit existieren noch Formatabweichungen fuer `spotless:check`, die nicht funktional am aktuellen Feature haengen
 
+## Security Backlog (offen, dokumentierte Design-Entscheidungen)
+
+Aus dem Codex-Pen-Test 2026-05-05 stehen offen:
+
+- **H2 (HIGH) Reverse-Link / Cross-Domain Sichtbarkeit** — `BusinessRepository.findByLinkedOrderId` / `findByLinkedOrderPositionId` und die Reverse-Link-Sektionen in `OrderDetailView` / `OrderPositionDetailView` filtern nicht nach User-Scope. Konsistent mit dem etablierten Modell „alle authentifizierten Benutzer sehen alles" — wenn Multi-Tenancy/Owner-basierte Sichtbarkeit gewuenscht wird, muss das fuer Aufträge, Geschaefte UND ihre Reverse-Links gleichzeitig eingefuehrt werden, separater Tag Aufwand.
+- **M2 (MEDIUM) User-Enumeration ueber AssigneeComboBox** — jeder authentifizierte UI-Benutzer kann mit `/businesses` Zugriff Keycloak-User und -Gruppen ueber `KeycloakUserService.searchUsers/searchGroups` enumerieren. Mitigation-Optionen: rolle-basiertes Gating der Combo (nur ADMIN/DISPATCHER), serverseitige Rate-Limits, oder Wechsel auf einen abgeleiteten Username-Cache. Verschoben, weil das Daten-Modell „Bearbeiter aus Keycloak waehlen" gerade erst eingefuehrt wurde.
+
 ## Architektur-Entscheidungen (ADRs)
 
 1. **ADR-001**: Spring Security OAuth2 statt Keycloak Adapter

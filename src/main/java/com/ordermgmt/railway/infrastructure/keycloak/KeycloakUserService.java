@@ -1,5 +1,7 @@
 package com.ordermgmt.railway.infrastructure.keycloak;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -140,10 +142,11 @@ public class KeycloakUserService {
     public List<Map<String, String>> searchUsers(String query) {
         try {
             String token = getAdminToken();
+            String enc = URLEncoder.encode(query == null ? "" : query, StandardCharsets.UTF_8);
             String url = keycloakUrl + "/admin/realms/" + realm + "/users?"
                     + "firstNameOrLastName=true"
-                    + "&email=" + query
-                    + "&username=" + query
+                    + "&email=" + enc
+                    + "&username=" + enc
                     + "&max=50";
 
             HttpHeaders headers = new HttpHeaders();
@@ -174,8 +177,9 @@ public class KeycloakUserService {
     public List<Map<String, String>> searchGroups(String query) {
         try {
             String token = getAdminToken();
+            String enc = URLEncoder.encode(query == null ? "" : query, StandardCharsets.UTF_8);
             String url = keycloakUrl + "/admin/realms/" + realm + "/groups?"
-                    + "search=" + query
+                    + "search=" + enc
                     + "&max=50";
 
             HttpHeaders headers = new HttpHeaders();

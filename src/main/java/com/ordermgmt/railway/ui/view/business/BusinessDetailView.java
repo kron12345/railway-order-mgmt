@@ -8,6 +8,9 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
@@ -45,6 +48,8 @@ import com.ordermgmt.railway.ui.component.business.BusinessLinksTree;
  * {@link BusinessOverviewView} into the right pane of the master-detail layout.
  */
 public class BusinessDetailView extends VerticalLayout {
+
+    private static final Logger log = LoggerFactory.getLogger(BusinessDetailView.class);
 
     private final BusinessService businessService;
     private final UserViewPreferenceService prefsService;
@@ -383,7 +388,8 @@ public class BusinessDetailView extends VerticalLayout {
                 businessService.addDocument(saved.getId(), d.filename, d.contentType, d.data);
             }
         } catch (Exception ex) {
-            Notification.show("Fehler: " + ex.getMessage(), 3000,
+            log.error("Failed to save new business {}", saved.getId(), ex);
+            Notification.show(getTranslation("common.errorGeneric"), 3000,
                     Notification.Position.BOTTOM_END)
                     .addThemeVariants(NotificationVariant.LUMO_ERROR);
             return;
@@ -402,7 +408,8 @@ public class BusinessDetailView extends VerticalLayout {
                     validFromField.getValue(), validToField.getValue(),
                     dueDateField.getValue(), tagsField.getValue());
         } catch (Exception ex) {
-            Notification.show("Fehler: " + ex.getMessage(), 3000,
+            log.error("Failed to update business {}", business.getId(), ex);
+            Notification.show(getTranslation("common.errorGeneric"), 3000,
                     Notification.Position.BOTTOM_END)
                     .addThemeVariants(NotificationVariant.LUMO_ERROR);
             return;

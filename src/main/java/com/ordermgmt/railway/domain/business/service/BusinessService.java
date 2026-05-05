@@ -7,6 +7,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import org.hibernate.Hibernate;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +29,10 @@ import jakarta.persistence.EntityNotFoundException;
 @Service
 public class BusinessService {
 
+    /** Roles allowed to mutate business records. Read access remains open to all
+     *  authenticated users (Vaadin route is {@code @PermitAll}). */
+    private static final String MUTATION_ROLES = "hasAnyRole('ADMIN', 'DISPATCHER')";
+
     private final BusinessRepository businessRepository;
     private final OrderPositionRepository orderPositionRepository;
     private final PurchasePositionRepository purchasePositionRepository;
@@ -43,6 +48,7 @@ public class BusinessService {
     /**
      * Creates a new business in the given status.
      */
+    @PreAuthorize(MUTATION_ROLES)
     @Transactional
     public Business create(String title, String description) {
         return create(title, description, List.of(), List.of());
@@ -51,6 +57,7 @@ public class BusinessService {
     /**
      * Creates a new business and links it to the given order/purchase positions in one transaction.
      */
+    @PreAuthorize(MUTATION_ROLES)
     @Transactional
     public Business create(String title, String description,
                            List<UUID> orderPositionIds, List<UUID> purchasePositionIds) {
@@ -70,6 +77,7 @@ public class BusinessService {
     /**
      * Updates basic fields of an existing business.
      */
+    @PreAuthorize(MUTATION_ROLES)
     @Transactional
     public Business update(UUID id, String title, String description, String assignmentType,
                            String assignmentName, String team, LocalDate validFrom,
@@ -93,6 +101,7 @@ public class BusinessService {
      * No-op when the values are already what the caller is asking for, so repeated calls
      * from re-renders do not churn through the audit log.
      */
+    @PreAuthorize(MUTATION_ROLES)
     @Transactional
     public Business setAssignee(UUID id, com.ordermgmt.railway.domain.business.model.AssignmentType type, String name) {
         Business business = businessRepository.findById(id)
@@ -113,6 +122,7 @@ public class BusinessService {
      * Transition to a new status if allowed by the transition rules.
      * @return the updated business
      */
+    @PreAuthorize(MUTATION_ROLES)
     @Transactional
     public Business setStatus(UUID id, BusinessStatus newStatus) {
         Business business = businessRepository.findById(id)
@@ -137,6 +147,7 @@ public class BusinessService {
     /**
      * Link the business to an order position (many-to-many).
      */
+    @PreAuthorize(MUTATION_ROLES)
     @Transactional
     public void linkOrderPosition(UUID businessId, UUID orderPositionId) {
         Business business = businessRepository.findById(businessId)
@@ -150,6 +161,7 @@ public class BusinessService {
     /**
      * Unlink an order position from the business.
      */
+    @PreAuthorize(MUTATION_ROLES)
     @Transactional
     public void unlinkOrderPosition(UUID businessId, UUID orderPositionId) {
         Business business = businessRepository.findById(businessId)
@@ -181,6 +193,7 @@ public class BusinessService {
         return orderPositionRepository.findAllWithOrder();
     }
 
+    @PreAuthorize(MUTATION_ROLES)
     @Transactional
     public void linkPurchasePosition(UUID businessId, UUID purchasePositionId) {
         Business business = businessRepository.findById(businessId)
@@ -193,6 +206,7 @@ public class BusinessService {
         }
     }
 
+    @PreAuthorize(MUTATION_ROLES)
     @Transactional
     public void unlinkPurchasePosition(UUID businessId, UUID purchasePositionId) {
         Business business = businessRepository.findById(businessId)
@@ -221,8 +235,33 @@ public class BusinessService {
     }
 
     /**
-     * Add a document to the business.
+     * Whitelist of MIME types we accept on document upload. The client-supplied
+     * content-type is sanitised against this list so an attacker cannot upload
+     * {@code text/html} or {@code image/svg+xml} and have it served back inline.
      */
+    private static final java.util.Set<String> ALLOWED_DOCUMENT_MIME_TYPES = java.util.Set.of(
+            "application/pdf",
+            "application/msword",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.ms-excel",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/vnd.ms-powerpoint",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            "application/zip",
+            "application/x-zip-compressed",
+            "image/png",
+            "image/jpeg",
+            "image/gif",
+            "image/webp",
+            "text/plain",
+            "text/csv");
+
+    /**
+     * Add a document to the business. Sanitises the client-supplied MIME type
+     * against {@link #ALLOWED_DOCUMENT_MIME_TYPES}; anything else is stored as
+     * {@code application/octet-stream} so it cannot trigger inline rendering.
+     */
+    @PreAuthorize(MUTATION_ROLES)
     @Transactional
     public BusinessDocument addDocument(UUID businessId, String filename, String contentType, byte[] data) {
         Business business = businessRepository.findById(businessId)
@@ -230,16 +269,26 @@ public class BusinessService {
         BusinessDocument doc = new BusinessDocument();
         doc.setBusiness(business);
         doc.setFilename(filename);
-        doc.setContentType(contentType);
+        doc.setContentType(sanitiseContentType(contentType));
         doc.setData(data);
         business.getDocuments().add(doc);
         businessRepository.save(business);
         return doc;
     }
 
+    private static String sanitiseContentType(String raw) {
+        if (raw == null) return "application/octet-stream";
+        String trimmed = raw.toLowerCase(java.util.Locale.ROOT).trim();
+        // Strip parameters such as ; charset=utf-8 before matching the whitelist.
+        int semi = trimmed.indexOf(';');
+        String base = semi < 0 ? trimmed : trimmed.substring(0, semi).trim();
+        return ALLOWED_DOCUMENT_MIME_TYPES.contains(base) ? base : "application/octet-stream";
+    }
+
     /**
      * Remove a document from the business (cascades to BusinessDocument).
      */
+    @PreAuthorize(MUTATION_ROLES)
     @Transactional
     public void removeDocument(UUID businessId, UUID documentId) {
         Business business = businessRepository.findById(businessId)
@@ -269,6 +318,7 @@ public class BusinessService {
     /**
      * Delete a business.
      */
+    @PreAuthorize(MUTATION_ROLES)
     @Transactional
     public void delete(UUID id) {
         businessRepository.deleteById(id);

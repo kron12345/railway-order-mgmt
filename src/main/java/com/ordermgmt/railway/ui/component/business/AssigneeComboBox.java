@@ -29,6 +29,9 @@ public class AssigneeComboBox extends ComboBox<AssigneeComboBox.Item> {
 
     private final KeycloakUserService keycloakUserService;
     private final BiConsumer<AssignmentType, String> onChange;
+    /** Currently selected item; surfaced from the lazy data callback so the preset
+     *  value is visible even before the dropdown queries Keycloak. */
+    private Item currentItem;
 
     public AssigneeComboBox(KeycloakUserService keycloakUserService,
                             BiConsumer<AssignmentType, String> onChange) {
@@ -58,22 +61,31 @@ public class AssigneeComboBox extends ComboBox<AssigneeComboBox.Item> {
         });
     }
 
-    /** Pre-select an item by type+value without triggering the change callback. */
+    /**
+     * Pre-select an item by type+value. Stores the {@link #currentItem} so the
+     * lazy data callback surfaces it on first dropdown open — does <em>not</em>
+     * replace the data provider, so the user can still search and reassign.
+     */
     public void preset(AssignmentType type, String value) {
         if (type == null || value == null || value.isBlank()) {
+            this.currentItem = null;
             setValue(null);
             return;
         }
-        // Build a synthetic item so the combo can render the current value even
-        // before the user opens the dropdown.
         String label = type == AssignmentType.USER ? "👤 " + value : "👥 " + value;
-        Item item = new Item(type, value, label);
-        setItems(List.of(item));
-        setValue(item);
+        this.currentItem = new Item(type, value, label);
+        setValue(this.currentItem);
     }
 
     private List<Item> search(String filter) {
         List<Item> result = new ArrayList<>();
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        // Always surface the current selection so it stays visible regardless of the
+        // Keycloak filter — Vaadin needs the value to be present in the data provider.
+        if (currentItem != null && matchesFilter(currentItem, filter)) {
+            result.add(currentItem);
+            seen.add(currentItem.type() + ":" + currentItem.value());
+        }
         if (keycloakUserService == null) return result;
         try {
             String q = filter == null ? "" : filter;
@@ -81,6 +93,7 @@ public class AssigneeComboBox extends ComboBox<AssigneeComboBox.Item> {
             for (Map<String, String> u : users) {
                 String username = u.getOrDefault("username", "");
                 if (username.isBlank()) continue;
+                if (!seen.add(AssignmentType.USER + ":" + username)) continue;
                 String full = (u.getOrDefault("firstName", "") + " "
                         + u.getOrDefault("lastName", "")).trim();
                 String label = "👤 " + username + (full.isBlank() ? "" : "  ·  " + full);
@@ -90,15 +103,21 @@ public class AssigneeComboBox extends ComboBox<AssigneeComboBox.Item> {
             for (Map<String, String> g : groups) {
                 String name = g.getOrDefault("name", g.getOrDefault("path", ""));
                 if (name.isBlank()) continue;
+                if (!seen.add(AssignmentType.GROUP + ":" + name)) continue;
                 result.add(new Item(AssignmentType.GROUP, name, "👥 " + name));
             }
             // Sort by label, with users typically appearing first.
             result.sort((a, b) -> a.label().toLowerCase(Locale.ROOT)
                     .compareTo(b.label().toLowerCase(Locale.ROOT)));
         } catch (RuntimeException ex) {
-            // Keycloak unreachable in tests / dev: degrade gracefully to empty list.
+            // Keycloak unreachable in tests / dev: degrade gracefully.
         }
         return result;
+    }
+
+    private static boolean matchesFilter(Item item, String filter) {
+        if (filter == null || filter.isBlank()) return true;
+        return item.value().toLowerCase(Locale.ROOT).contains(filter.toLowerCase(Locale.ROOT));
     }
 
     private com.vaadin.flow.component.html.Span renderItem(Item it) {

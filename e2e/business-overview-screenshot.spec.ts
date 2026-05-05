@@ -1,12 +1,23 @@
 import { test } from "@playwright/test";
 
-const KC_USER = "test-screenshot";
-const KC_PASS = "ScreenshotTest123!";
-const EXISTING_BUSINESS_ID = "afecfc5f-68ee-47c3-a17d-dc49d7fa3f41";
+/**
+ * Local-only screenshot capture for design review. Skipped by default — set
+ * RUN_SCREENSHOTS=true and provide BIZ_KC_USER / BIZ_KC_PASS / BIZ_BUSINESS_ID
+ * env vars before running. Hard-coded fixtures would otherwise break CI and
+ * other developer machines.
+ */
+const RUN_SCREENSHOTS = process.env.RUN_SCREENSHOTS === "true";
+const KC_USER = process.env.BIZ_KC_USER ?? "";
+const KC_PASS = process.env.BIZ_KC_PASS ?? "";
+const EXISTING_BUSINESS_ID = process.env.BIZ_BUSINESS_ID ?? "";
 
 test.use({ viewport: { width: 1920, height: 1080 } });
 
 test("screenshots: business overview master-detail", async ({ page }) => {
+    test.skip(!RUN_SCREENSHOTS,
+            "Set RUN_SCREENSHOTS=true and BIZ_KC_USER/PASS/BUSINESS_ID to enable.");
+    test.skip(!KC_USER || !KC_PASS || !EXISTING_BUSINESS_ID,
+            "Missing BIZ_KC_USER / BIZ_KC_PASS / BIZ_BUSINESS_ID env vars.");
     test.setTimeout(180_000);
 
     await page.goto("/businesses");
