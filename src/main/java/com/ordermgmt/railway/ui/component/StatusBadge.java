@@ -16,16 +16,17 @@ public class StatusBadge extends Span {
                     case NEUTRAL -> "var(--rom-status-neutral)";
                 };
 
+        addClassName("status-badge");
         getStyle()
                 .set("display", "inline-flex")
                 .set("align-items", "center")
-                .set("padding", "2px 8px")
-                .set("border-radius", "4px")
-                .set("font-size", "0.7rem")
-                .set("font-weight", "600")
-                .set("font-family", "'Inter', sans-serif")
+                .set("padding", "3px 9px")
+                .set("border-radius", "3px")
+                .set("font-size", "0.78rem")
+                .set("font-weight", "700")
+                .set("font-family", "'JetBrains Mono', monospace")
                 .set("text-transform", "uppercase")
-                .set("letter-spacing", "0.03em")
+                .set("letter-spacing", "0.06em")
                 .set("color", color)
                 .set("background", "color-mix(in srgb, " + color + " 12%, transparent)")
                 .set("border", "1px solid " + color);

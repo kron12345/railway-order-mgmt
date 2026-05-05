@@ -214,6 +214,24 @@ vaadin-details::part(summary) {
     box-shadow: inset 2px 0 0 var(--rom-accent);
 }
 
+/* Action-button icons inside position rows: ~18 px so they scan as clearly
+   as the order-level header buttons (20 px) but stay one step smaller to
+   preserve the visual hierarchy Order > OrderPosition. */
+.order-position-row vaadin-button vaadin-icon,
+.order-position-row vaadin-button iron-icon {
+    width: 18px;
+    height: 18px;
+}
+.order-position-row vaadin-button {
+    --lumo-button-size: 32px;
+}
+/* Position-tile train glyph (FAHRPLAN positions) */
+.position-tile vaadin-icon,
+.position-tile iron-icon {
+    width: 18px;
+    height: 18px;
+}
+
 /* === Form field labels — prominent, readable === */
 vaadin-text-field::part(label),
 vaadin-text-area::part(label),
