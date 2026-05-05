@@ -3,6 +3,8 @@ package com.ordermgmt.railway.ui.layout;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.applayout.AppLayout;
 import com.vaadin.flow.component.applayout.DrawerToggle;
+import com.vaadin.flow.component.dependency.JsModule;
+import com.vaadin.flow.component.dependency.NpmPackage;
 import com.vaadin.flow.component.html.Anchor;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.H1;
@@ -29,6 +31,8 @@ import com.ordermgmt.railway.ui.component.a11y.KeyboardHelpOverlay;
 import com.ordermgmt.railway.ui.theme.UiThemeUtil;
 
 /** Shared application shell with navigation, breadcrumbs, and locale switching. */
+@NpmPackage(value = "hotkeys-js", version = "3.13.7")
+@JsModule("./rom-shortcuts.ts")
 public class MainLayout extends AppLayout
         implements RouterLayout, LocaleChangeObserver, AfterNavigationObserver {
 
@@ -58,40 +62,10 @@ public class MainLayout extends AppLayout
      * works, except when typing into a text input.
      */
     private void registerGlobalShortcuts() {
-        getElement().executeJs(
-                "if (!window.__romShortcuts) {"
-                + "  window.__romShortcuts = true;"
-                + "  let pendingG = false;"
-                + "  let pendingTimeout = null;"
-                + "  document.addEventListener('keydown', (e) => {"
-                + "    const t = e.target;"
-                + "    const tag = (t && t.tagName) || '';"
-                + "    const inEditable = tag === 'INPUT' || tag === 'TEXTAREA' || (t && t.isContentEditable)"
-                + "      || (t && t.matches && t.matches('vaadin-text-field, vaadin-text-area, vaadin-combo-box, vaadin-date-picker, vaadin-checkbox'));"
-                + "    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (e.key === 'k' || e.key === 'K')) {"
-                + "      e.preventDefault();"
-                + "      $0.dispatchEvent(new CustomEvent('rom-palette', {bubbles: true, composed: true}));"
-                + "      return;"
-                + "    }"
-                + "    if (e.ctrlKey || e.metaKey || e.altKey) return;"
-                + "    if (inEditable) return;"
-                + "    if (pendingG) {"
-                + "      pendingG = false; clearTimeout(pendingTimeout);"
-                + "      if (e.key === 'o') { e.preventDefault(); window.location.assign('/orders'); }"
-                + "      else if (e.key === 'b') { e.preventDefault(); window.location.assign('/businesses'); }"
-                + "      else if (e.key === 'h') { e.preventDefault(); window.location.assign('/'); }"
-                + "      return;"
-                + "    }"
-                + "    if (e.key === 'g') {"
-                + "      pendingG = true;"
-                + "      pendingTimeout = setTimeout(() => { pendingG = false; }, 1200);"
-                + "      e.preventDefault();"
-                + "    } else if (e.key === '?' && e.shiftKey) {"
-                + "      e.preventDefault();"
-                + "      $0.dispatchEvent(new CustomEvent('rom-help', {bubbles: true, composed: true}));"
-                + "    }"
-                + "  });"
-                + "}", getElement());
+        // Wires global vim-style keys, Ctrl+K (command palette), and Shift+? (help)
+        // through the hotkeys-js helper in frontend/rom-shortcuts.ts. The helper
+        // dispatches CustomEvents that Vaadin listens for below.
+        getElement().executeJs("window.romShortcuts && window.romShortcuts.registerGlobal();");
 
         // Bridge custom DOM events back into Vaadin so we can open dialogs server-side.
         getElement().addEventListener("rom-palette", e -> openCommandPalette());

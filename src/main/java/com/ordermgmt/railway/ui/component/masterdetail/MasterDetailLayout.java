@@ -57,48 +57,25 @@ public class MasterDetailLayout<T> extends Div {
     }
 
     /**
-     * View-local keyboard shortcuts via a body-level keydown listener that explicitly
-     * skips when the user is typing into a text input — Vaadin's {@link Shortcuts}
-     * matches by physical key code, so on layouts where the SLASH key sits where US
-     * keyboards have it (e.g. German "-"), the shortcut would fire on every dash typed
-     * inside a form. The JS-level filter checks both the actual character ({@code key})
-     * and the focused element so neither "n" nor "/" hijacks regular text entry.
+     * View-local shortcuts via the shared hotkeys-js wrapper in
+     * {@code frontend/rom-shortcuts.ts}. Single entry point keeps the editable-input
+     * detection consistent across master-detail views and lets us add new shortcuts
+     * by editing one TS file instead of duplicated inline JS.
      */
     private void registerShortcuts() {
-        // Browser-side keymap for "/" (focus filter), "n" (new), and Esc (clear filter).
-        // Listens at document level but only acts when no editable element has focus.
         getElement().executeJs(
-                "const root = $0;"
-                + "const filter = root.querySelector('#' + $1);"
-                + "const newBtnEvent = $2;"
-                + "if (!root.__mdShortcutsBound) {"
-                + "  root.__mdShortcutsBound = true;"
-                + "  document.addEventListener('keydown', (e) => {"
-                + "    if (!root.isConnected) return;"
-                + "    const t = e.target;"
-                + "    const tag = (t && t.tagName) || '';"
-                + "    const inEditable = tag === 'INPUT' || tag === 'TEXTAREA'"
-                + "        || (t && t.isContentEditable)"
-                + "        || (t && t.matches && t.matches('vaadin-text-field, vaadin-text-area,"
-                + "             vaadin-combo-box, vaadin-date-picker, vaadin-checkbox,"
-                + "             vaadin-select, vaadin-number-field'));"
-                + "    if (e.ctrlKey || e.metaKey || e.altKey) return;"
-                + "    if (e.key === 'Escape' && filter && document.activeElement === filter) {"
-                + "      filter.value = '';"
-                + "      filter.dispatchEvent(new Event('change', {bubbles: true}));"
-                + "      e.preventDefault();"
-                + "      return;"
-                + "    }"
-                + "    if (inEditable) return;"
-                + "    if (e.key === '/' && filter) {"
-                + "      e.preventDefault();"
-                + "      filter.focus();"
-                + "    } else if (e.key === 'n' && newBtnEvent) {"
-                + "      e.preventDefault();"
-                + "      root.dispatchEvent(new CustomEvent('md-new', {bubbles: true, composed: true}));"
-                + "    }"
-                + "  });"
-                + "}", getElement(), spec.filterId, spec.shortcutNew != null);
+                "window.romShortcuts && window.romShortcuts.registerView($0, $1);",
+                spec.filterId, spec.shortcutNew != null);
+
+        // The Esc-clears-filter behaviour is now scoped to the actual filter input via
+        // a Vaadin keydown listener, so it only fires when the filter has focus and
+        // doesn't depend on the global JS shortcut handler.
+        filter.getElement().addEventListener("keydown", e -> {
+            String key = e.getEventData().getString("event.key");
+            if ("Escape".equals(key)) {
+                filter.setValue("");
+            }
+        }).addEventData("event.key").setFilter("event.key === 'Escape'");
 
         if (spec.shortcutNew != null) {
             getElement().addEventListener("md-new", e -> spec.shortcutNew.run());
