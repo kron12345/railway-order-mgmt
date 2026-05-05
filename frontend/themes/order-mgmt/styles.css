@@ -700,7 +700,8 @@ vaadin-button:focus-visible {
 .md-card-wrapper--selected {
     background: var(--rom-bg-selected);
 }
-.md-card-wrapper--selected .biz-card-tile {
+.md-card-wrapper--selected .biz-card-tile,
+.md-card-wrapper--selected .order-card-tile {
     border-color: var(--rom-accent);
     border-width: 2px;
     padding: 7px 11px;
