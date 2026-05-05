@@ -10,6 +10,12 @@ import org.springframework.stereotype.Repository;
 import com.ordermgmt.railway.domain.rollingstock.model.RollingStockItem;
 import com.ordermgmt.railway.domain.rollingstock.model.VehicleCategory;
 
+/**
+ * JPA repository for {@link RollingStockItem}. Combines standard CRUD with
+ * {@link RevisionRepository} so callers can read the Envers history of a vehicle.
+ * Convenience finders return active (non-retired) items sorted by designation —
+ * what the Vehicle Planning vehicle-picker dropdown expects.
+ */
 @Repository
 public interface RollingStockRepository
         extends JpaRepository<RollingStockItem, UUID>,
