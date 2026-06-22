@@ -474,10 +474,13 @@ public class TimetableTableStep extends Div {
     private String activityTooltip(TimetableRowData row) {
         if (row.getActivityCodes() != null && !row.getActivityCodes().isEmpty()) {
             return row.getActivityCodes().stream()
-                    .map(code -> com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils
-                            .findActivityOption(code, activityOptions)
-                            .map(opt -> opt.code() + " — " + opt.label())
-                            .orElse(code))
+                    .map(
+                            code ->
+                                    com.ordermgmt.railway.ui.component.timetable
+                                            .TimetableFormatUtils.findActivityOption(
+                                                    code, activityOptions)
+                                            .map(opt -> opt.code() + " — " + opt.label())
+                                            .orElse(code))
                     .reduce((left, right) -> left + "\n" + right)
                     .orElse("—");
         }
@@ -543,6 +546,19 @@ public class TimetableTableStep extends Div {
             OperationalPoint point,
             String activityCode,
             AddStopForm.StopTimes times) {
+        // The quick-add form has no day-offset field, so a departure before the arrival is always a
+        // data-entry error (not a valid midnight crossing). Reject it instead of producing an
+        // invalid stop.
+        if (times.arrivalPrimary() != null
+                && times.departurePrimary() != null
+                && times.departurePrimary().isBefore(times.arrivalPrimary())) {
+            Notification.show(
+                            t("timetable.addstop.departureBeforeArrival"),
+                            4000,
+                            Position.BOTTOM_END)
+                    .addThemeVariants(NotificationVariant.LUMO_ERROR);
+            return;
+        }
         TimetableRowData newRow = buildStopRow(point, activityCode, times);
         // The new row brings its own anchors; the service propagates neighbours.
         editingService.insertStop(
@@ -579,8 +595,13 @@ public class TimetableTableStep extends Div {
         var arr = times.arrivalPrimary();
         var dep = times.departurePrimary();
         if (arr != null && dep != null) {
-            row.setDwellMinutes((int) java.time.Duration.between(arr, dep).toMinutes());
-            row.setUserEnteredDwell(true);
+            long dwell = java.time.Duration.between(arr, dep).toMinutes();
+            // handleAddStop already rejects departure-before-arrival; guard defensively so a stop
+            // can never receive a negative dwell.
+            if (dwell >= 0) {
+                row.setDwellMinutes((int) dwell);
+                row.setUserEnteredDwell(true);
+            }
         }
         return row;
     }

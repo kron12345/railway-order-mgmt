@@ -387,9 +387,18 @@ public class PathManagerService {
         location.setArrivalQualifier(toTttQualifier(row.getArrivalMode(), true));
         location.setDepartureQualifier(toTttQualifier(row.getDepartureMode(), false));
 
-        // Activity code → activities JSON
-        if (row.getActivityCode() != null && !row.getActivityCode().isBlank()) {
-            location.setActivities("[\"" + row.getActivityCode() + "\"]");
+        // Activity codes → activities JSON (preserve all selected codes, not just the first)
+        List<String> activityCodes =
+                row.getActivityCodes() != null && !row.getActivityCodes().isEmpty()
+                        ? row.getActivityCodes()
+                        : (row.getActivityCode() != null && !row.getActivityCode().isBlank()
+                                ? List.of(row.getActivityCode())
+                                : List.of());
+        if (!activityCodes.isEmpty()) {
+            location.setActivities(
+                    activityCodes.stream()
+                            .map(c -> "\"" + c + "\"")
+                            .collect(java.util.stream.Collectors.joining(",", "[", "]")));
         }
 
         location.setAssociatedTrainOtn(row.getAssociatedTrainOtn());
