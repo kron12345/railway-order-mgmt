@@ -234,12 +234,24 @@ TTT-nahe Zeitlogik:
 
 #### TTT TimingQualifierCode Mapping
 
-| TimeConstraintMode | Ankunft (Arrival) | Abfahrt (Departure) | Beschreibung |
-| --- | --- | --- | --- |
-| `NONE` | — (kein Code) | — (kein Code) | Keine Zeitvorgabe, nur geschaetzte Zeit |
-| `EXACT` | ALA (Actual/Latest Arrival) | ALD (Actual/Latest Departure) | Exakte Zeitvorgabe |
-| `WINDOW` | ELA + LLA (Earliest + Latest Arrival) | ELD + LLD (Earliest + Latest Departure) | Zeitfenster mit fruehester und spaetester Zeit |
-| `COMMERCIAL` | PLA (Published/Commercial Arrival) | PLD (Published/Commercial Departure) | Kommerzielle/publizierte Fahrplanzeit |
+`TimingAtLocation` darf laut TTT-XSD `Timing (0..*)` enthalten — Halbfenster (nur ELA, nur LLD usw.) sind valide. Der Editor exposed das als sechs Modi:
+
+| TimeConstraintMode | Ankunft (Arrival) | Abfahrt (Departure) | UI-Symbol | Beschreibung |
+| --- | --- | --- | --- | --- |
+| `NONE` | — | — | — | Keine Zeitvorgabe, nur Routing-Estimate, kein TTT-Export |
+| `EXACT` | ALA | ALD | – | Exakte vereinbarte Zeit |
+| `WINDOW` | ELA + LLA | ELD + LLD | – | Vollfenster mit beiden Grenzen |
+| `AFTER` | ELA only | ELD only | **≥** | Halbfenster: "frühestens X" |
+| `BEFORE` | LLA only | LLD only | **≤** | Halbfenster: "spätestens X" |
+| `COMMERCIAL` | PLA | PLD | – | Kommerzielle/publizierte Fahrplanzeit |
+
+#### TTT-Export-Gating (`userEntered*`-Flags)
+
+Pro Zeitfeld führt `TimetableRowData` ein Boolean `userEntered{ArrivalExact,...,Dwell}`. Nur Felder mit `true` werden im Path Request als TTT-`Timing` exportiert. Gespiegelte/abgeleitete Werte (Same-Mode-Mirroring, Propagation, Interpolation) bleiben lokal und werden im Grid als Estimate ohne TTT-Badge angezeigt.
+
+#### Day-Offset (TTT `Timing/Offset`)
+
+`arrivalOffset` und `departureOffset` (Integer, default 0) erlauben Tagesversätze: +1 für Mitternachts-Übertritte, -1 für Modifications die einen Tag vor dem Kalender-Reference-Datum starten. Propagation rechnet in absoluten Minuten (`offsetDays * 1440 + minute`), wodurch 23:50 + 30 min korrekt zu 00:20 mit Offset +1 führt.
 
 #### JourneyLocationType (TTT JourneyLocationTypeCode)
 
@@ -271,12 +283,19 @@ Zentraler Service fuer Fahrplan-Bearbeitungsoperationen. Liegt in `domain/timeta
 
 | Methode | Beschreibung |
 | --- | --- |
-| `insertStop(rows, index, operationalPoint, activityCode)` | Fuegt einen neuen Halt an der gegebenen Position ein. Setzt `manuallyAdded = true`, interpoliert Zeiten aus den Nachbarzeilen, weist Default-Haltezeit (2 min) zu und nummeriert die Sequenz neu. |
-| `softDeleteStop(rows, index)` | Markiert einen Halt als `deleted` (Toggle). Origin und Destination sind geschuetzt und koennen nicht geloescht werden. Soft-Delete ist umkehrbar. |
-| `purgeDeleted(rows)` | Entfernt alle soft-deleted Zeilen dauerhaft und nummeriert die Sequenz neu. |
-| `propagateTimeChange(rows, index, isArrival, newTime, mode)` | Propagiert eine Zeitaenderung gemaess dem gewaehlten `TimePropagationMode` (SHIFT oder STRETCH). Bei SHIFT werden alle folgenden Zeiten um dasselbe Delta verschoben bis zum naechsten Pin. Bei STRETCH werden die Zeiten proportional gestreckt. |
-| `resolveRelativeTime(input, baseTime)` | Loest relative Zeiteingaben wie `+5` oder `-3` gegen eine Basiszeit auf. Gibt `null` zurueck, wenn die Eingabe nicht relativ ist. |
-| `resequence(rows)` | Nummeriert die Sequenz aller Zeilen ab 1 neu durch. |
+| `insertStop(rows, idx, newRow, mode)` | Fuegt eine fully-populated `TimetableRowData` an `idx` ein und propagiert die Nachbarn (rueckwaerts vom neuen Arrival-Anchor, vorwaerts vom neuen Departure-Anchor). Die Zeiten muss der Aufrufer selbst bestimmen — keine 2-min-Default-Annahme mehr. |
+| `softDeleteStop(rows, idx)` | Markiert einen Halt als `deleted` (Toggle). Origin/Destination sind geschuetzt. |
+| `purgeDeleted(rows)` | Entfernt alle soft-deleted Zeilen dauerhaft. |
+| `snapshot(row)` | Liefert einen `TimeSnapshot(arrival, arrivalOffset, departure, departureOffset)` der aktuellen Anker — vor einer Mutation aufrufen, danach an `propagate()` uebergeben. |
+| `propagate(rows, idx, oldSnapshot, mode)` | Vergleicht den aktuellen Anker-Stand mit `oldSnapshot` und propagiert die Differenz: Arrival-Aenderungen rueckwaerts, Departure-Aenderungen vorwaerts. Mode-aware (SHIFT/STRETCH), Forward-STRETCH faellt auf SHIFT zurueck, wenn weder Pin noch user-eingegebene Destination-Arrival vorhanden ist. Day-Offset-aware. |
+| `applyHaltRules(row)` | Erzwingt Editor-Regeln 3+4+5: Halt=false strippt alle Zeitfelder; Origin/Destination sind implizite Halte ohne Dwell und nur eine Seite; Dwell + 1 Seite spiegelt zur anderen Seite (Same-Mode-Mirror); beide Seiten + Dwell loescht Dwell automatisch. |
+| `preserveOnModeSwitch(row, isArrival, oldMode, newMode)` | Beim Mode-Wechsel werden Werte aus dem alten Modus in die neuen Felder uebernommen (z.B. EXACT 08:00 → WINDOW ELA=LLA=08:00). Verhindert stillen Datenverlust. |
+| `interpolateBetweenAnchors(rows)` | Distanz-gewichtete Zeit-Interpolation zwischen User-Anker-Paaren. Speed = `Δtime / Δdistance`. Vor dem ersten und nach dem letzten Anker: Fallback 70 km/h. |
+| `validate(rows)` | Konsistenz-Pruefung: mindestens ein Halt; Pass-Throughs duerfen keine expliziten Zeiten haben; ELA ≤ LLA / ELD ≤ LLD; Arrival ≤ Departure innerhalb einer Zeile; nicht-negative Reisezeit zwischen Zeilen. |
+| `isExportedToTtt(row)` | Liefert `true`, wenn die Zeile im Path Request gesendet wird (Origin, Destination, Halt, oder manuell hinzugefuegter Pass-Through). Auto-geroutete Wegpunkte → `false`. |
+| `hasUserEnteredArrival/Departure(row)` | Liefert `true`, wenn mindestens ein `userEntered{Arrival,Departure}*`-Flag auf der jeweiligen Seite gesetzt ist. Steuert TTT-Export pro Seite und das Grid-Badge. |
+| `resolveRelativeTime(input, baseTime)` | Loest relative Eingaben wie `+5` oder `-3` gegen eine Basiszeit auf. |
+| `resequence(rows)` | Nummeriert Sequenz ab 1. |
 
 #### Persistenz von `FAHRPLAN`
 
@@ -366,15 +385,20 @@ Jede JSON-Zeile entspricht einem Betriebspunkt der berechneten Route.
 | activityCode | string? | TTT-Activity / Haltegrund |
 | dwellMinutes | int? | Haltezeit |
 | estimatedArrival / estimatedDeparture | string? | Geschaetzte Zeiten `HH:mm` |
-| arrivalMode / departureMode | enum | `NONE`, `EXACT`, `WINDOW`, `COMMERCIAL` |
-| arrivalExact / departureExact | string? | Exakte Zeit |
-| arrivalEarliest / arrivalLatest | string? | Zeitfenster Ankunft |
-| departureEarliest / departureLatest | string? | Zeitfenster Abfahrt |
-| commercialArrival | string? | Kommerzielle Ankunftszeit (PLA — Publizierter Fahrplan) |
-| commercialDeparture | string? | Kommerzielle Abfahrtszeit (PLD — Publizierter Fahrplan) |
-| pinned | boolean | Ob die Zeiten dieser Zeile bei Shift/Stretch fixiert sind |
-| manuallyAdded | boolean | Ob dieser Halt manuell hinzugefuegt wurde (nicht aus Routing) |
-| deleted | boolean | Ob dieser Halt soft-deleted ist (Durchstreichung, wiederherstellbar) |
+| arrivalMode / departureMode | enum | `NONE`, `EXACT`, `WINDOW`, `AFTER` (≥), `BEFORE` (≤), `COMMERCIAL` |
+| arrivalExact / departureExact | string? | Exakte Zeit (EXACT) |
+| arrivalEarliest / arrivalLatest | string? | Untere/obere Schranke der Ankunft (WINDOW: beide; AFTER: nur Earliest; BEFORE: nur Latest) |
+| departureEarliest / departureLatest | string? | Untere/obere Schranke der Abfahrt (WINDOW: beide; AFTER: nur Earliest; BEFORE: nur Latest) |
+| commercialArrival | string? | Kommerzielle Ankunftszeit (PLA) |
+| commercialDeparture | string? | Kommerzielle Abfahrtszeit (PLD) |
+| arrivalOffset / departureOffset | int (default 0) | TTT `Timing/Offset` — Tagesversatz (-1 = Vortag, +1 = naechster Tag, fuer Mitternachts-Uebertritte) |
+| userEnteredArrivalExact/Earliest/Latest | boolean | TTT-Export-Gate — `true` wenn User-eingegeben, dann als `Timing` exportiert |
+| userEnteredDepartureExact/Earliest/Latest | boolean | dito fuer Abfahrt |
+| userEnteredCommercialArrival/Departure | boolean | dito fuer PLA/PLD |
+| userEnteredDwell | boolean | `true` wenn User die Halt-Dauer explizit eingegeben hat — dann als `DwellTime` exportiert |
+| pinned | boolean | Ob die Zeiten bei Shift/Stretch-Propagation fixiert sind |
+| manuallyAdded | boolean | Ob dieser Halt manuell hinzugefuegt wurde (User-Via aus Schritt 1 oder "Halt einfuegen" aus Schritt 2) |
+| deleted | boolean | Ob dieser Halt soft-deleted ist |
 
 ## Bestellposition
 
@@ -937,193 +961,6 @@ Die API stellt 11 REST Endpoints bereit, dokumentiert ueber Swagger UI unter `/s
 | 10 | GET | `/api/v1/pathmanager/process/{referenceTrainId}/history` | PathProcessController | Prozesshistorie abrufen |
 | 11 | POST | `/api/v1/pathmanager/diff?referenceTrainId=` | PathManagerDiffController | Diff zwischen Order-Daten und PM-Version |
 
-## Vehicle Planning (Umlaufplanung) Domain Model
-
-Die Fahrzeugumlaufplanung ordnet Referenzzuege aus dem Path Manager konkreten Fahrzeugen zu und stellt so den physischen Fahrzeugeinsatz fuer ein Fahrplanjahr sicher. Der Bounded Context `vehicleplanning` referenziert direkt auf `PmReferenceTrain` und `PmTimetableYear` aus dem Path Manager.
-
-### Entity-Relationship-Diagramm
-
-```mermaid
-erDiagram
-    PmTimetableYear ||--o{ VpRotationSet : "scoped to"
-    VpRotationSet ||--o{ VpVehicle : "contains"
-    VpVehicle ||--o{ VpRotationEntry : "has entries"
-    VpRotationEntry }o--|| PmReferenceTrain : "assigns train"
-    VpRotationEntry ||--o{ VpVehicleOperation : "has operations"
-
-    VpRotationSet {
-        UUID id PK
-        VARCHAR name
-        VARCHAR description
-        UUID timetable_year_id FK
-        TIMESTAMP created_at
-        TIMESTAMP updated_at
-        BIGINT version
-    }
-
-    VpVehicle {
-        UUID id PK
-        UUID rotation_set_id FK
-        VARCHAR label
-        VARCHAR vehicle_type
-        VARCHAR vehicle_class
-        INTEGER sequence
-        TIMESTAMP created_at
-        TIMESTAMP updated_at
-        BIGINT version
-    }
-
-    VpRotationEntry {
-        UUID id PK
-        UUID vehicle_id FK
-        UUID reference_train_id FK
-        INTEGER day_of_week
-        INTEGER sequence_in_day
-        VARCHAR coupling_type
-        TIMESTAMP created_at
-        TIMESTAMP updated_at
-        BIGINT version
-    }
-
-    VpVehicleOperation {
-        UUID id PK
-        UUID rotation_entry_id FK
-        VARCHAR location_name
-        VARCHAR activity_code
-        VARCHAR associated_train_otn
-        VARCHAR composition_section
-        VARCHAR comment
-        TIMESTAMP created_at
-        TIMESTAMP updated_at
-        BIGINT version
-    }
-```
-
-### Detaillierte Feldtabellen
-
-#### VpRotationSet (Umlaufplan)
-
-Ein Umlaufplan gruppiert Fahrzeuge fuer ein bestimmtes Fahrplanjahr. Er ist das Top-Level-Aggregat im Vehicle Planning Context.
-
-| Feld | Typ | Nullable | Beschreibung |
-| --- | --- | --- | --- |
-| `id` | UUID | nein | Primaerschluessel |
-| `name` | VARCHAR(100) | nein | Name des Umlaufplans (z.B. "FLIRT Olten-Aarau") |
-| `description` | VARCHAR(500) | ja | Optionale Beschreibung |
-| `timetable_year_id` | UUID (FK) | nein | Zugehoeriges Fahrplanjahr (`pm_timetable_years`) |
-| `created_at` | TIMESTAMP | nein | Erstellungszeitpunkt |
-| `updated_at` | TIMESTAMP | nein | Letzter Aenderungszeitpunkt |
-| `version` | BIGINT | nein | Optimistic Locking |
-
-#### VpVehicle (Fahrzeug)
-
-Ein Fahrzeug repraesentiert eine physische Einheit (Triebzug, Lokomotive oder Wagenkomposition) innerhalb eines Umlaufplans.
-
-| Feld | Typ | Nullable | Beschreibung |
-| --- | --- | --- | --- |
-| `id` | UUID | nein | Primaerschluessel |
-| `rotation_set_id` | UUID (FK) | nein | Zugehoeriger Umlaufplan |
-| `label` | VARCHAR(100) | nein | Bezeichnung (z.B. "FLIRT RABe 526 201") |
-| `vehicle_type` | VARCHAR(30) | nein | Fahrzeugtyp: `MULTIPLE_UNIT`, `LOCOMOTIVE`, `COACH_SET` |
-| `vehicle_class` | VARCHAR(50) | ja | Fahrzeugklasse (z.B. "RABe 526", "Re 460") |
-| `sequence` | INTEGER | nein | Sortierung innerhalb des Umlaufplans (Default 0) |
-| `created_at` | TIMESTAMP | nein | Erstellungszeitpunkt |
-| `updated_at` | TIMESTAMP | nein | Letzter Aenderungszeitpunkt |
-| `version` | BIGINT | nein | Optimistic Locking |
-
-#### VpRotationEntry (Umlaufeintrag)
-
-Ein Umlaufeintrag weist einen Referenzzug einem Fahrzeug an einem bestimmten Wochentag zu. Dies ist die zentrale Zuordnungsentitaet zwischen Fahrzeug und Fahrplan.
-
-| Feld | Typ | Nullable | Beschreibung |
-| --- | --- | --- | --- |
-| `id` | UUID | nein | Primaerschluessel |
-| `vehicle_id` | UUID (FK) | nein | Zugehoeriges Fahrzeug |
-| `reference_train_id` | UUID (FK) | nein | Zugewiesener Referenzzug aus dem Path Manager |
-| `day_of_week` | INTEGER | nein | Wochentag (1=Montag bis 7=Sonntag), CHECK 1-7 |
-| `sequence_in_day` | INTEGER | nein | Reihenfolge innerhalb des Tages (Default 0) |
-| `coupling_type` | VARCHAR(20) | nein | Kupplungsposition: `FULL`, `FRONT`, `REAR` (Default `FULL`) |
-| `created_at` | TIMESTAMP | nein | Erstellungszeitpunkt |
-| `updated_at` | TIMESTAMP | nein | Letzter Aenderungszeitpunkt |
-| `version` | BIGINT | nein | Optimistic Locking |
-
-#### VpVehicleOperation (Fahrzeugoperation)
-
-Operationsdetails fuer einen Umlaufeintrag, z.B. Kupplungs-/Abkupplungsvorgaenge an bestimmten Orten.
-
-| Feld | Typ | Nullable | Beschreibung |
-| --- | --- | --- | --- |
-| `id` | UUID | nein | Primaerschluessel |
-| `rotation_entry_id` | UUID (FK) | nein | Zugehoeriger Umlaufeintrag |
-| `location_name` | VARCHAR(255) | ja | Ortsname der Operation |
-| `activity_code` | VARCHAR(50) | ja | TTT-Aktivitaetscode (z.B. "0010" Kuppeln, "0017" Abkuppeln, "0044"/"0045" Richtungswechsel) |
-| `associated_train_otn` | VARCHAR(20) | ja | OTN des verbundenen Zuges (bei Fluegelungen) |
-| `composition_section` | VARCHAR(50) | ja | Kompositionsabschnitt |
-| `comment` | VARCHAR(500) | ja | Optionaler Kommentar |
-| `created_at` | TIMESTAMP | nein | Erstellungszeitpunkt |
-| `updated_at` | TIMESTAMP | nein | Letzter Aenderungszeitpunkt |
-| `version` | BIGINT | nein | Optimistic Locking |
-
-### Enums
-
-#### VehicleType
-
-| Wert | Beschreibung |
-| --- | --- |
-| `MULTIPLE_UNIT` | Triebzug (z.B. FLIRT, Giruno, ICE) |
-| `LOCOMOTIVE` | Lokomotive (z.B. Re 460, Vectron) |
-| `COACH_SET` | Wagenkomposition / Wagen-Set |
-
-#### CouplingPosition
-
-| Wert | Beschreibung |
-| --- | --- |
-| `FULL` | Gesamter Zug wird vom Fahrzeug gefuehrt (Default) |
-| `FRONT` | Fahrzeug am vorderen Zugteil (Fluegelung) |
-| `REAR` | Fahrzeug am hinteren Zugteil (Fluegelung) |
-
-### Conflict Record
-
-Konflikte werden nicht persistiert, sondern bei jeder Anzeige durch den `ConflictDetectionService` berechnet:
-
-| Feld | Typ | Beschreibung |
-| --- | --- | --- |
-| `vehicleId` | UUID | Betroffenes Fahrzeug |
-| `vehicleLabel` | String | Fahrzeugbezeichnung |
-| `dayOfWeek` | int | Betroffener Wochentag |
-| `description` | String | Menschenlesbare Konfliktbeschreibung |
-| `severity` | Severity | `WARNING` (z.B. Standort-Mismatch) oder `ERROR` (z.B. Zeitueberlappung) |
-
-**Konflikterkennung:**
-
-Der `ConflictDetectionService` prueft fuer jedes Fahrzeug und jeden Wochentag:
-
-1. **Zeitueberlappung (ERROR):** Zwei Umlaufeintraege desselben Fahrzeugs ueberlappen zeitlich (basierend auf Abfahrt/Ankunft der PmJourneyLocations des Referenzzugs)
-2. **Standort-Mismatch (WARNING):** Der Ankunftsort des vorherigen Zuges stimmt nicht mit dem Abfahrtsort des naechsten Zuges ueberein und es bleibt keine ausreichende Wendezeit
-
-### Gantt-Chart UI-Konzept
-
-Die Visualisierung erfolgt als Div-basiertes Gantt-Diagramm:
-
-- **Y-Achse:** Fahrzeuge des aktuellen Umlaufplans, eine Zeile pro Fahrzeug
-- **X-Achse:** Zeitlineal (00:00 bis 24:00 fuer den ausgewaehlten Wochentag)
-- **Zugbloecke:** Absolut positionierte `<div>`-Elemente pro Umlaufeintrag, breite proportional zur Fahrzeit
-- **Drag & Drop:** Zuege werden aus der TrainPalette (Sidebar) per DragSource auf die Gantt-Zeilen (DropTarget) gezogen
-- **Farben:** Zugbloecke sind farbcodiert nach Fahrzeugtyp, Konflikte werden rot hervorgehoben
-- **Konfliktpanel:** Unterhalb des Gantt-Charts zeigt ein Panel alle erkannten Konflikte mit Severity-Icons
-
-### VP-Tabellen und Indexes (V11-Migration)
-
-| Tabelle | Beschreibung |
-| --- | --- |
-| `vp_rotation_sets` | Umlaufplaene mit FK auf `pm_timetable_years` |
-| `vp_vehicles` | Fahrzeuge mit FK auf `vp_rotation_sets` (CASCADE DELETE) |
-| `vp_rotation_entries` | Umlaufeintraege mit FK auf `vp_vehicles` (CASCADE DELETE) und `pm_reference_trains` |
-| `vp_vehicle_operations` | Fahrzeugoperationen mit FK auf `vp_rotation_entries` (CASCADE DELETE) |
-
-6 Indexes: `timetable_year_id`, `rotation_set_id`, `vehicle_id`, `reference_train_id`, `day_of_week`, `rotation_entry_id`.
-
-> **Hinweis:** VP-Entitaeten sind bewusst nicht mit `@Audited` versehen, da es sich um Planungsdaten handelt, nicht um verbindliche Betriebsdaten.
 
 ## TTR Phase Mapping (Timetable Redesign)
 

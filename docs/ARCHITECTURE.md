@@ -17,8 +17,8 @@ graph LR
 graph TB
     subgraph UI["UI Layer"]
         Layout["MainLayout<br/>(global shortcuts g o/g b/g h, Ctrl+K, Shift+?)"]
-        Views["Views<br/>(Dashboard, OrderOverview, BusinessOverview, Settings,<br/>Timetable Builder, Path Manager, Vehicle Planning)"]
-        Components["Reusable Components<br/>(MasterDetailLayout, BreadcrumbBar, SkipLinks, AriaLive,<br/>CommandPalette, KeyboardHelpOverlay, GridPreferenceBinder,<br/>GridSettingsButton, OrderCard, BusinessCard,<br/>BusinessLinksTree, BusinessDocsCard,<br/>StatusBadge, PositionTile, TimetableMap, ValidityCalendar,<br/>GanttChart, TrainPalette, ConflictPanel,<br/>ResourcePanel, ResourceDialog, PurchaseDialog,<br/>TttOrderDialog, CatalogTab)"]
+        Views["Views<br/>(Dashboard, OrderOverview, BusinessOverview, Settings,<br/>Timetable Builder, Path Manager)"]
+        Components["Reusable Components<br/>(MasterDetailLayout, BreadcrumbBar, SkipLinks, AriaLive,<br/>CommandPalette, KeyboardHelpOverlay, GridPreferenceBinder,<br/>GridSettingsButton, OrderCard, BusinessCard,<br/>BusinessLinksTree, BusinessDocsCard,<br/>StatusBadge, PositionTile, TimetableMap, ValidityCalendar,<br/>ResourcePanel, ResourceDialog, PurchaseDialog,<br/>TttOrderDialog, CatalogTab)"]
     end
 
     subgraph Domain["Domain Layer (DDD)"]
@@ -173,22 +173,29 @@ graph TD
 | `TimetableArchiveView` | `ui/view/order/` | Read-only timetable detail view with split layout (table + sidebar) |
 | `TimetableRouteStep` | `ui/component/timetable/` | Step 1: from/via/to selection, anchor time, route calculation |
 | `TimetableTableStep` | `ui/component/timetable/` | Step 2: editable grid of all route points with split layout |
-| `TimetableRowEditorPanel` | `ui/component/timetable/` | Right-side panel for editing a single row: times (shift/stretch), halt/activity, time modes (NONE/EXACT/WINDOW/COMMERCIAL), pinning |
+| `TimetableRowEditorPanel` | `ui/component/timetable/` | Right-side panel for editing a single row: 6 time modes (NONE/EXACT/WINDOW/AFTER/BEFORE/COMMERCIAL), halt+dwell with mutual exclusion, day-offset stepper, pinning, propagation mode (shift/stretch). Endpoint-aware (origin/destination strip irrelevant fields) |
 | `AddStopForm` | `ui/component/timetable/` | Inline form shown below the grid for adding a new stop with OP selection and activity code |
 | `TimetableArchiveTable` | `ui/component/timetable/` | Read-only Div-based timetable table with color-coded rows (origin/destination amber, halts teal, pass-through muted, deleted strikethrough) |
 | `TimetableArchiveSidebar` | `ui/component/timetable/` | Right-side sidebar for archive view: map card, validity card, metadata card |
-| `TimetableEditingService` | `domain/timetable/service/` | Backend service for insertStop, softDeleteStop, propagateTimeChange, resolveRelativeTime |
+| `TimetableEditingService` | `domain/timetable/service/` | Single source of truth for editor logic: anchor extraction (mode-aware), `propagate` (SHIFT/STRETCH with offset-aware arithmetic), `applyHaltRules` (Regeln 3+4+5), `interpolateBetweenAnchors` (segmental speed + 70 km/h fringe), `preserveOnModeSwitch`, `validate`, `isExportedToTtt` |
 | `TimetableFormatUtils` | `ui/component/timetable/` | Static formatting helpers for times, distances, roles, TTT qualifier codes |
 
 ### Time Propagation Architecture
 
-When a user edits a time in the timetable, the change can propagate to other rows via `TimetableEditingService.propagateTimeChange()`. Two modes are supported:
+When a user edits a time in the timetable, the change can propagate to other rows via `TimetableEditingService.propagate(rows, idx, snapshot, mode)`. The full editor logic — modes, anchors, propagation, dwell rules, day-offset, export gating — is documented in **ADR-010**. Quick overview:
 
-**SHIFT mode** translates all following times by the same delta (e.g., +15 minutes). Propagation stops at the next pinned row, creating a boundary. This is the default mode and is suitable when the overall schedule should move forward or backward.
+**Six time modes** map to TTT TimingQualifierCodes:
+- `NONE` (not exported), `EXACT` (ALA/ALD), `WINDOW` (ELA+LLA / ELD+LLD), `AFTER` (ELA/ELD only — "≥"), `BEFORE` (LLA/LLD only — "≤"), `COMMERCIAL` (PLA/PLD).
 
-**STRETCH mode** proportionally distributes time between the changed row and the next pinned row. If the available time between two pins changes, intermediate travel times are scaled by the same ratio. This is suitable for adjusting dwell times without shifting the entire downstream schedule.
+**Two propagation modes** — `SHIFT` (rigid translation by delta) and `STRETCH` (proportional scaling between anchors). Default is STRETCH. Forward-STRETCH falls back to SHIFT when no destination arrival or downstream pin exists (Regel 7).
 
-The **pin** concept acts as an anchor: pinned rows are never modified by propagation. Users can pin key commercial stops (e.g., border crossings, interchange points) to preserve their times while editing surrounding rows.
+**Anchors** are mode-aware: backward propagation uses ELA/LLA/ALA/PLA on the arrival side; forward propagation uses LLD/ELD/ALD/PLD on the departure side. WINDOW/BEFORE deliver the max-time semantic (LLD); AFTER uses ELD as the only available bound.
+
+**Pin concept**: a row marked `pinned = true` is never modified by propagation. Pins work on halts AND pass-through rows. Origin acts as implicit backward-pin; destination acts as forward-pin only when its arrival is user-entered.
+
+**Day offset** (`arrivalOffset` / `departureOffset` per row) supports midnight crossings — propagation does absolute-minute arithmetic so 23:50 + 30 min becomes 00:20 with offset +1.
+
+**TTT export gate**: only fields with `userEntered* = true` are exported as TTT `Timing` entries. Mirrored/derived/propagated values stay local and surface in the grid as muted estimates without the TTT badge.
 
 ```mermaid
 flowchart LR
@@ -248,12 +255,6 @@ graph LR
         PM_S["PathManagerService<br/>PathProcessEngine<br/>TtrPhaseResolver<br/>DiffService<br/>IdentifierGenerator"]
     end
 
-    subgraph VehiclePlanning["Vehicle Planning Context"]
-        VP_M["VpRotationSet<br/>VpVehicle<br/>VpRotationEntry<br/>VpVehicleOperation<br/>Conflict Record"]
-        VP_R["Repositories"]
-        VP_S["VehiclePlanningService<br/>ConflictDetectionService"]
-    end
-
     subgraph Customer["Customer Context"]
         C_M["Customer"]
     end
@@ -292,7 +293,6 @@ graph LR
   - `ResourceCatalogImportService`: transactional CSV import for the resource catalog (@PreAuthorize ADMIN/DISPATCHER)
 - `timetable/`: route search, timetable archive, TTT-like row model
 - `pathmanager/`: TTT reference trains, versions, journey locations, routes, paths, process steps, state machine, TTR phase resolver
-- `vehicleplanning/`: rotation sets, vehicles, rotation entries, vehicle operations, conflict detection
 - `infrastructure/`: operational points, sections of line, tag catalog, import logs
 - `customer/`, `business/`: supporting master/business data
 
@@ -306,7 +306,7 @@ graph LR
 
 ### Path Manager Component Architecture
 
-The Path Manager simulates TTT (Train Timetable Transfer) communication between the Responsible Applicant (RA) and an Infrastructure Manager (IM) within a single Spring Boot application. The REST API acts as the boundary between order management (RA side) and path management (IM simulation).
+The Path Manager simulates TTT (Train Timetable Transfer) communication within a single Spring Boot application. In production its counterpart is **RailOpt** (QNamic's planning & resource-management product): timetables created in this app are transferred to RailOpt's Fahrplanmanagement, where planning (rotations, resources) and the TTT / TSI TAF-TAP path ordering toward Infrastructure Manager(s) happen, while this app monitors the lifecycle and collects KPI data. The REST API at `/api/v1/pathmanager/**` is the boundary between order management (this app) and the path-management simulation that stands in for RailOpt.
 
 ```mermaid
 graph TB
@@ -378,58 +378,6 @@ This pattern avoids external state machine libraries while keeping the transitio
 | 9 | GET | `/api/v1/pathmanager/process/{referenceTrainId}/available-actions` | Query available actions |
 | 10 | GET | `/api/v1/pathmanager/process/{referenceTrainId}/history` | Get process history |
 | 11 | POST | `/api/v1/pathmanager/diff?referenceTrainId=` | Compute diff vs. order data |
-
-### Vehicle Planning Component Architecture
-
-The Vehicle Planning module provides visual rotation planning with a Gantt chart interface. It operates directly on Path Manager entities (reference trains, timetable years) without a REST API layer.
-
-```mermaid
-graph TB
-    subgraph UI["UI Layer"]
-        VPV["VehiclePlanningView<br/>(SplitLayout 20/80, @Route)"]
-        TP["TrainPalette<br/>(Draggable PM trains)"]
-        GC["GanttChart<br/>(CSS-positioned blocks, DnD)"]
-        CP["ConflictPanel<br/>(Conflict list)"]
-    end
-
-    subgraph Domain["Domain Layer — vehicleplanning/"]
-        VPS["VehiclePlanningService<br/>(CRUD, addTrain, moveEntry)"]
-        CDS["ConflictDetectionService<br/>(Overlap + location mismatch)"]
-    end
-
-    subgraph PMDomain["Domain Layer — pathmanager/"]
-        PMS2["PathManagerService<br/>(Train queries)"]
-        RT2["PmReferenceTrain"]
-    end
-
-    subgraph Data["Data Layer"]
-        DB3["PostgreSQL<br/>vp_* tables (V11)"]
-    end
-
-    VPV --> TP
-    VPV --> GC
-    VPV --> CP
-    TP -->|"drag train"| GC
-    GC --> VPS
-    CP --> CDS
-    VPS --> DB3
-    VPS --> PMS2
-    CDS --> PMS2
-
-    style UI fill:#f3e5f5
-    style Domain fill:#e1f5fe
-    style PMDomain fill:#e1f5fe
-    style Data fill:#e8f5e9
-```
-
-| Component | File | Responsibility |
-|---|---|---|
-| `VehiclePlanningView` | `ui/view/vehicleplanning/` | Full-screen view with rotation set selector, day-of-week picker, new-rotation dialog, SplitLayout |
-| `GanttChart` | `ui/component/vehicleplanning/` | Div-based Gantt with time ruler, vehicle rows, absolutely positioned train blocks, DragSource/DropTarget |
-| `TrainPalette` | `ui/component/vehicleplanning/` | Sidebar with search field and draggable PM reference trains |
-| `ConflictPanel` | `ui/component/vehicleplanning/` | Lower panel displaying detected conflicts with severity icons |
-| `VehiclePlanningService` | `domain/vehicleplanning/service/` | CRUD for rotation sets/vehicles, addTrainToVehicle, moveEntry, removeEntry |
-| `ConflictDetectionService` | `domain/vehicleplanning/service/` | Detects time overlaps and location mismatches by inspecting PmJourneyLocation data |
 
 ### TtrPhaseResolver in Path Manager Architecture
 

@@ -5,11 +5,11 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Lightweight tree node for {@link BusinessLinksTree}. Three discriminated kinds:
- * {@code ORDER} (root grouping), {@code ORDER_POSITION} (mid level), {@code PURCHASE_POSITION}
- * (leaf). Only entities directly linked to the business are flagged {@code linked = true};
- * synthetic parent nodes (e.g. an OP shown only because it groups a linked PP) carry the
- * underlying entity but cannot be unlinked.
+ * Lightweight tree node for {@link BusinessLinksTree}. Three discriminated kinds: {@code ORDER}
+ * (root grouping), {@code ORDER_POSITION} (mid level), {@code PURCHASE_POSITION} (leaf). Only
+ * entities directly linked to the business are flagged {@code linked = true}; synthetic parent
+ * nodes (e.g. an OP shown only because it groups a linked PP) carry the underlying entity but
+ * cannot be unlinked.
  */
 public class BusinessLinkNode {
 
@@ -19,8 +19,14 @@ public class BusinessLinkNode {
         PURCHASE_POSITION("BP");
 
         private final String tag;
-        Kind(String tag) { this.tag = tag; }
-        public String tag() { return tag; }
+
+        Kind(String tag) {
+            this.tag = tag;
+        }
+
+        public String tag() {
+            return tag;
+        }
     }
 
     private final Kind kind;
@@ -46,17 +52,34 @@ public class BusinessLinkNode {
         return new BusinessLinkNode(Kind.ORDER_POSITION, id, name, "", linked);
     }
 
-    public static BusinessLinkNode purchasePosition(UUID id, String name, String number,
-                                                    boolean linked) {
+    public static BusinessLinkNode purchasePosition(
+            UUID id, String name, String number, boolean linked) {
         return new BusinessLinkNode(Kind.PURCHASE_POSITION, id, name, number, linked);
     }
 
-    public Kind kind() { return kind; }
-    public UUID entityId() { return entityId; }
-    public String name() { return name; }
-    public String number() { return number; }
-    public boolean linked() { return linked; }
-    public List<BusinessLinkNode> children() { return children; }
+    public Kind kind() {
+        return kind;
+    }
+
+    public UUID entityId() {
+        return entityId;
+    }
+
+    public String name() {
+        return name;
+    }
+
+    public String number() {
+        return number;
+    }
+
+    public boolean linked() {
+        return linked;
+    }
+
+    public List<BusinessLinkNode> children() {
+        return children;
+    }
 
     /** Returns true if any field of this node contains the (lower-cased) text. */
     public boolean matches(String lowerText) {

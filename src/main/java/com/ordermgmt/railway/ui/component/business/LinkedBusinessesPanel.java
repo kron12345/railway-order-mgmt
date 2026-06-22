@@ -16,11 +16,11 @@ import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.ordermgmt.railway.domain.business.model.Business;
 
 /**
- * Reverse-link list: shows businesses linked to a given OrderPosition / Order /
- * PurchasePosition, each row jumping to {@code /businesses/{id}}.
+ * Reverse-link list: shows businesses linked to a given OrderPosition / Order / PurchasePosition,
+ * each row jumping to {@code /businesses/{id}}.
  *
- * <p>Caller supplies the already-resolved list and a translator. The component renders
- * a compact Bloomberg-style row per business with status pill and click-to-navigate.
+ * <p>Caller supplies the already-resolved list and a translator. The component renders a compact
+ * Bloomberg-style row per business with status pill and click-to-navigate.
  */
 public class LinkedBusinessesPanel extends Div {
 
@@ -57,8 +57,7 @@ public class LinkedBusinessesPanel extends Div {
         tag.addClassName("biz-tree-tag");
         tag.addClassName("biz-tree-tag--order");
 
-        Span title = new Span(b.getTitle() == null || b.getTitle().isBlank()
-                ? "—" : b.getTitle());
+        Span title = new Span(b.getTitle() == null || b.getTitle().isBlank() ? "—" : b.getTitle());
         title.addClassName("biz-link-row__name");
 
         Span status = new Span(tr.apply("business.status." + b.getStatus().name()));
@@ -69,16 +68,17 @@ public class LinkedBusinessesPanel extends Div {
         spacer.getStyle().set("flex", "1");
 
         var goBtn = new Button(VaadinIcon.ARROW_RIGHT.create());
-        goBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY,
-                ButtonVariant.LUMO_ICON);
+        goBtn.addThemeVariants(
+                ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY, ButtonVariant.LUMO_ICON);
         goBtn.getElement().setAttribute("aria-label", tr.apply("business.openBusiness"));
         goBtn.addClickListener(e -> UI.getCurrent().navigate("businesses/" + b.getId()));
 
         row.add(tag, title, status, spacer, goBtn);
         row.setFlexGrow(1, spacer);
         row.getElement().getStyle().set("cursor", "pointer");
-        row.getElement().addEventListener("click",
-                e -> UI.getCurrent().navigate("businesses/" + b.getId()));
+        row.getElement()
+                .addEventListener(
+                        "click", e -> UI.getCurrent().navigate("businesses/" + b.getId()));
         return row;
     }
 }

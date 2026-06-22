@@ -96,6 +96,13 @@ public class PmReferenceTrain {
     @Column(nullable = false, length = 30)
     private PathProcessState processState = PathProcessState.NEW;
 
+    /**
+     * Planning status from RailOpt rotation/resource planning; orthogonal to {@link #processState}.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 30)
+    private PmPlanningStatus planningStatus = PmPlanningStatus.UNPLANNED;
+
     @OneToMany(mappedBy = "referenceTrain", cascade = CascadeType.ALL)
     private List<PmTrainVersion> trainVersions = new ArrayList<>();
 

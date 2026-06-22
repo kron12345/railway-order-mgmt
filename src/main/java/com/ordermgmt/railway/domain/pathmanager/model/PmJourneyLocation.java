@@ -99,6 +99,15 @@ public class PmJourneyLocation {
     @Column(columnDefinition = "jsonb")
     private String networkSpecificParams;
 
+    /**
+     * Lossless TTT draft payload from order management. The mock keeps this JSON so downstream
+     * planning can inspect TimingAtLocation/Timing 0..* even though the legacy display columns only
+     * expose one arrival and one departure timing.
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(columnDefinition = "jsonb")
+    private String tttPayload;
+
     @CreatedDate
     @Column(nullable = false, updatable = false)
     private Instant createdAt;

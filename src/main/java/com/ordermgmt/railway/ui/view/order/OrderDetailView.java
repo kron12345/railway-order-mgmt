@@ -3,6 +3,9 @@ package com.ordermgmt.railway.ui.view.order;
 import java.time.format.DateTimeFormatter;
 import java.util.UUID;
 
+import org.springframework.beans.factory.config.ConfigurableBeanFactory;
+import org.springframework.context.annotation.Scope;
+
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
@@ -18,8 +21,6 @@ import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.spring.annotation.SpringComponent;
-import org.springframework.beans.factory.config.ConfigurableBeanFactory;
-import org.springframework.context.annotation.Scope;
 
 import com.ordermgmt.railway.domain.customer.repository.CustomerRepository;
 import com.ordermgmt.railway.domain.infrastructure.repository.PredefinedTagRepository;
@@ -32,18 +33,18 @@ import com.ordermgmt.railway.domain.order.service.OrderService;
 import com.ordermgmt.railway.domain.order.service.PurchaseOrderService;
 import com.ordermgmt.railway.domain.order.service.ResourceNeedService;
 import com.ordermgmt.railway.domain.pathmanager.service.PathManagerService;
-import com.ordermgmt.railway.domain.timetable.service.TimetableArchiveService;
 import com.ordermgmt.railway.ui.component.AuditHistoryDialog;
 import com.ordermgmt.railway.ui.component.order.OrderFormPanel;
 import com.ordermgmt.railway.ui.component.order.OrderPositionPanel;
+import com.ordermgmt.railway.ui.component.order.OrderStatusStepper;
 
 /**
- * Embeddable detail panel for a single {@link Order}. No longer a Vaadin route — it is
- * instantiated by {@link OrderOverviewView} via {@link org.springframework.beans.factory.ObjectProvider}
- * so each navigation gets a fresh instance with all 11 services auto-wired.
+ * Embeddable detail panel for a single {@link Order}. No longer a Vaadin route — it is instantiated
+ * by {@link OrderOverviewView} via {@link org.springframework.beans.factory.ObjectProvider} so each
+ * navigation gets a fresh instance with all 11 services auto-wired.
  *
- * <p>Caller drives the lifecycle: {@link #setMode(UUID, boolean)} loads the order and
- * builds the appropriate sub-tree (new-form vs edit + positions panel).
+ * <p>Caller drives the lifecycle: {@link #setMode(UUID, boolean)} loads the order and builds the
+ * appropriate sub-tree (new-form vs edit + positions panel).
  */
 @SpringComponent
 @Scope(ConfigurableBeanFactory.SCOPE_PROTOTYPE)
@@ -55,7 +56,6 @@ public class OrderDetailView extends VerticalLayout {
     private final com.ordermgmt.railway.domain.infrastructure.repository.OperationalPointRepository
             opRepo;
     private final PathManagerService pathManagerService;
-    private final TimetableArchiveService timetableArchiveService;
     private final ResourceNeedService resourceNeedService;
     private final PurchaseOrderService purchaseOrderService;
     private final ResourceCatalogItemRepository catalogItemRepository;
@@ -74,7 +74,6 @@ public class OrderDetailView extends VerticalLayout {
             com.ordermgmt.railway.domain.infrastructure.repository.OperationalPointRepository
                     opRepo,
             PathManagerService pathManagerService,
-            TimetableArchiveService timetableArchiveService,
             ResourceNeedService resourceNeedService,
             PurchaseOrderService purchaseOrderService,
             ResourceCatalogItemRepository catalogItemRepository,
@@ -86,7 +85,6 @@ public class OrderDetailView extends VerticalLayout {
         this.predefinedTagRepository = predefinedTagRepository;
         this.opRepo = opRepo;
         this.pathManagerService = pathManagerService;
-        this.timetableArchiveService = timetableArchiveService;
         this.resourceNeedService = resourceNeedService;
         this.purchaseOrderService = purchaseOrderService;
         this.catalogItemRepository = catalogItemRepository;
@@ -105,9 +103,9 @@ public class OrderDetailView extends VerticalLayout {
     }
 
     /**
-     * Configure this detail panel for the given order id. Pass {@code null} to render
-     * the new-order form. Returns {@code true} on success, {@code false} when the id was
-     * given but no order exists (caller should redirect away).
+     * Configure this detail panel for the given order id. Pass {@code null} to render the new-order
+     * form. Returns {@code true} on success, {@code false} when the id was given but no order
+     * exists (caller should redirect away).
      */
     public boolean setMode(UUID orderId, boolean newMode) {
         if (newMode || orderId == null) {
@@ -157,6 +155,9 @@ public class OrderDetailView extends VerticalLayout {
     private void buildDetailView() {
         removeAll();
         add(createCompactHeader());
+        add(
+                new OrderStatusStepper(
+                        order.getProcessStatus(), true, this::getTranslation, this::changeStatus));
 
         var positionPanel =
                 new OrderPositionPanel(
@@ -165,7 +166,6 @@ public class OrderDetailView extends VerticalLayout {
                         opRepo,
                         predefinedTagRepository,
                         pathManagerService,
-                        timetableArchiveService,
                         resourceNeedService,
                         purchaseOrderService,
                         catalogItemRepository,
@@ -174,10 +174,11 @@ public class OrderDetailView extends VerticalLayout {
                         this::getTranslation);
 
         // Tab sheet: Positionen | Verknüpfte Geschäfte
-        var tabPositions = new com.vaadin.flow.component.tabs.Tab(
-                getTranslation("order.tab.positions"));
-        var tabBusinesses = new com.vaadin.flow.component.tabs.Tab(
-                getTranslation("order.tab.linkedBusinesses"));
+        var tabPositions =
+                new com.vaadin.flow.component.tabs.Tab(getTranslation("order.tab.positions"));
+        var tabBusinesses =
+                new com.vaadin.flow.component.tabs.Tab(
+                        getTranslation("order.tab.linkedBusinesses"));
         var tabs = new com.vaadin.flow.component.tabs.Tabs(tabPositions, tabBusinesses);
         tabs.setWidthFull();
 
@@ -185,19 +186,55 @@ public class OrderDetailView extends VerticalLayout {
         tabContent.setSizeFull();
         tabContent.add(positionPanel);
 
-        tabs.addSelectedChangeListener(e -> {
-            tabContent.removeAll();
-            if (e.getSelectedTab() == tabPositions) {
-                tabContent.add(positionPanel);
-            } else if (businessService != null) {
-                tabContent.add(new com.ordermgmt.railway.ui.component.business.LinkedBusinessesPanel(
-                        businessService.findByLinkedOrder(order.getId()),
-                        this::getTranslation));
-            }
-        });
+        tabs.addSelectedChangeListener(
+                e -> {
+                    tabContent.removeAll();
+                    if (e.getSelectedTab() == tabPositions) {
+                        tabContent.add(positionPanel);
+                    } else if (businessService != null) {
+                        tabContent.add(
+                                new com.ordermgmt.railway.ui.component.business
+                                        .LinkedBusinessesPanel(
+                                        businessService.findByLinkedOrder(order.getId()),
+                                        this::getTranslation));
+                    }
+                });
 
         add(tabs);
         add(tabContent);
+    }
+
+    /**
+     * Advances (or rewinds) the order to the chosen process phase. Persistence is role-guarded by
+     * {@link OrderService#save}; on a denied call we surface a friendly notification instead of an
+     * error page. The change is audited automatically via Hibernate Envers.
+     */
+    private void changeStatus(ProcessStatus newStatus) {
+        if (newStatus == null || newStatus == order.getProcessStatus()) {
+            return;
+        }
+        ProcessStatus previous = order.getProcessStatus();
+        try {
+            order.setProcessStatus(newStatus);
+            order = orderService.save(order);
+            Notification.show(
+                            getTranslation(
+                                    "order.phase.changed",
+                                    getTranslation("process." + newStatus.name())),
+                            2000,
+                            Notification.Position.BOTTOM_END)
+                    .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+            buildDetailView();
+        } catch (RuntimeException ex) {
+            // Keep the in-memory entity consistent with what is actually persisted so a later
+            // edit-save cannot silently carry over the rejected status change.
+            order.setProcessStatus(previous);
+            Notification.show(
+                            getTranslation("order.phase.denied"),
+                            3000,
+                            Notification.Position.MIDDLE)
+                    .addThemeVariants(NotificationVariant.LUMO_ERROR);
+        }
     }
 
     private HorizontalLayout createBackRow(String titleText) {
@@ -221,9 +258,9 @@ public class OrderDetailView extends VerticalLayout {
 
     /** Compact summary header: order info in one line + action buttons. */
     /**
-     * Compact Bloomberg-style header consistent with {@code BusinessReadView}: large
-     * title (number + name), themed status pill with icon, customer + dates as a thin
-     * meta row, action buttons on the right.
+     * Compact Bloomberg-style header consistent with {@code BusinessReadView}: large title (number
+     * + name), themed status pill with icon, customer + dates as a thin meta row, action buttons on
+     * the right.
      */
     private Div createCompactHeader() {
         Div header = new Div();
@@ -260,8 +297,14 @@ public class OrderDetailView extends VerticalLayout {
         Span spacer = new Span();
         spacer.getStyle().set("flex", "1");
 
-        header.add(createCompactBackButton(), left, statusPill, spacer,
-                createHistoryButton(), createEditButton(), createDeleteButton());
+        header.add(
+                createCompactBackButton(),
+                left,
+                statusPill,
+                spacer,
+                createHistoryButton(),
+                createEditButton(),
+                createDeleteButton());
         header.getStyle().set("display", "flex").set("align-items", "center").set("gap", "12px");
         return header;
     }
@@ -273,13 +316,16 @@ public class OrderDetailView extends VerticalLayout {
         if (status != null) pill.addClassName("order-status-pill--" + status.name().toLowerCase());
         pill.setPadding(false);
         pill.setSpacing(false);
-        VaadinIcon iconSpec = status == null ? VaadinIcon.QUESTION_CIRCLE_O : switch (status) {
-            case AUFTRAG -> VaadinIcon.FILE_TEXT_O;
-            case PLANUNG -> VaadinIcon.CALENDAR;
-            case PRODUKT_LEISTUNG -> VaadinIcon.PACKAGE;
-            case PRODUKTION -> VaadinIcon.COG;
-            case ABRECHNUNG_NACHBEREITUNG -> VaadinIcon.CHECK_CIRCLE_O;
-        };
+        VaadinIcon iconSpec =
+                status == null
+                        ? VaadinIcon.QUESTION_CIRCLE_O
+                        : switch (status) {
+                            case AUFTRAG -> VaadinIcon.FILE_TEXT_O;
+                            case PLANUNG -> VaadinIcon.CALENDAR;
+                            case PRODUKT_LEISTUNG -> VaadinIcon.PACKAGE;
+                            case PRODUKTION -> VaadinIcon.COG;
+                            case ABRECHNUNG_NACHBEREITUNG -> VaadinIcon.CHECK_CIRCLE_O;
+                        };
         var icon = iconSpec.create();
         icon.addClassName("order-status-pill__icon");
         icon.getElement().setAttribute("aria-hidden", "true");
@@ -387,7 +433,6 @@ public class OrderDetailView extends VerticalLayout {
                 });
         dialog.open();
     }
-
 
     private String formatDates() {
         String from = order.getValidFrom() != null ? order.getValidFrom().format(DATE_FMT) : "—";

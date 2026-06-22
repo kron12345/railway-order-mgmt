@@ -21,8 +21,9 @@ public interface PurchasePositionRepository extends JpaRepository<PurchasePositi
 
     long countByPositionNumberStartingWith(String prefix);
 
-    @Query("SELECT DISTINCT pp FROM PurchasePosition pp "
-            + "LEFT JOIN FETCH pp.orderPosition op "
-            + "LEFT JOIN FETCH op.order")
+    @Query(
+            "SELECT DISTINCT pp FROM PurchasePosition pp "
+                    + "LEFT JOIN FETCH pp.orderPosition op "
+                    + "LEFT JOIN FETCH op.order")
     List<PurchasePosition> findAllWithOrderPosition();
 }

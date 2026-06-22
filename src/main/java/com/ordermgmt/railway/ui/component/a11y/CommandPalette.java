@@ -5,7 +5,6 @@ import java.util.List;
 import java.util.Locale;
 
 import com.vaadin.flow.component.Component;
-import com.vaadin.flow.component.Key;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.html.Div;
@@ -21,13 +20,13 @@ import com.ordermgmt.railway.domain.business.service.BusinessService;
 import com.ordermgmt.railway.domain.order.service.OrderService;
 
 /**
- * Bloomberg-Function-Code-style global command palette opened via {@code Ctrl+K}.
- * Lists all orders, businesses, and order positions with fuzzy substring matching;
- * arrow keys navigate, Enter activates the highlighted item.
+ * Bloomberg-Function-Code-style global command palette opened via {@code Ctrl+K}. Lists all orders,
+ * businesses, and order positions with fuzzy substring matching; arrow keys navigate, Enter
+ * activates the highlighted item.
  *
- * <p>Mounted as a hidden dialog on the {@link com.vaadin.flow.component.UI}; the global
- * keydown listener in {@link com.ordermgmt.railway.ui.layout.MainLayout} fires a custom
- * {@code rom-command-palette} event the Java side listens for.
+ * <p>Mounted as a hidden dialog on the {@link com.vaadin.flow.component.UI}; the global keydown
+ * listener in {@link com.ordermgmt.railway.ui.layout.MainLayout} fires a custom {@code
+ * rom-command-palette} event the Java side listens for.
  */
 public class CommandPalette extends Dialog {
 
@@ -59,8 +58,12 @@ public class CommandPalette extends Dialog {
         input.setValueChangeTimeout(120);
         input.getElement().setAttribute("aria-label", "Command Palette Suche");
         input.getElement().setAttribute("autocomplete", "off");
-        input.addValueChangeListener(e -> applyFilter(
-                e.getValue() == null ? "" : e.getValue().trim().toLowerCase(Locale.ROOT)));
+        input.addValueChangeListener(
+                e ->
+                        applyFilter(
+                                e.getValue() == null
+                                        ? ""
+                                        : e.getValue().trim().toLowerCase(Locale.ROOT)));
 
         results.addClassName("cmd-palette__results");
         results.setSpacing(false);
@@ -72,55 +75,99 @@ public class CommandPalette extends Dialog {
         add(input, results);
 
         // Keyboard handler at the dialog level.
-        getElement().addEventListener("keydown", e -> {
-            String key = e.getEventData().getString("event.key");
-            switch (key) {
-                case "ArrowDown" -> setActive(activeIndex + 1);
-                case "ArrowUp" -> setActive(activeIndex - 1);
-                case "Enter" -> activate();
-                default -> { }
-            }
-        }).addEventData("event.key").setFilter(
-                "['ArrowDown','ArrowUp','Enter'].includes(event.key)");
+        getElement()
+                .addEventListener(
+                        "keydown",
+                        e -> {
+                            String key = e.getEventData().getString("event.key");
+                            switch (key) {
+                                case "ArrowDown" -> setActive(activeIndex + 1);
+                                case "ArrowUp" -> setActive(activeIndex - 1);
+                                case "Enter" -> activate();
+                                default -> {}
+                            }
+                        })
+                .addEventData("event.key")
+                .setFilter("['ArrowDown','ArrowUp','Enter'].includes(event.key)");
 
-        addOpenedChangeListener(e -> {
-            if (e.isOpened()) {
-                input.clear();
-                input.focus();
-            }
-        });
+        addOpenedChangeListener(
+                e -> {
+                    if (e.isOpened()) {
+                        input.clear();
+                        input.focus();
+                    }
+                });
     }
 
     private void loadItems(OrderService orderService, BusinessService businessService) {
         all.clear();
         // Orders + their positions.
-        orderService.findAllWithPositions().forEach(o -> {
-            String label = (o.getOrderNumber() == null ? "—" : o.getOrderNumber())
-                    + " " + (o.getName() == null ? "" : o.getName());
-            all.add(new Item("Auftrag", label,
-                    o.getCustomer() != null && o.getCustomer().getName() != null
-                            ? o.getCustomer().getName() : "",
-                    "orders/" + o.getId(),
-                    label.toLowerCase(Locale.ROOT)));
-            if (o.getPositions() != null) {
-                o.getPositions().forEach(p -> {
-                    String pLabel = p.getName() == null ? "—" : p.getName();
-                    all.add(new Item("Position", pLabel,
-                            o.getOrderNumber() == null ? "" : o.getOrderNumber(),
-                            "orders/" + o.getId() + "/positions/" + p.getId(),
-                            (pLabel + " " + (o.getOrderNumber() == null ? "" : o.getOrderNumber()))
-                                    .toLowerCase(Locale.ROOT)));
-                });
-            }
-        });
-        businessService.listAll().forEach(b -> {
-            String label = b.getTitle() == null ? "—" : b.getTitle();
-            all.add(new Item("Geschäft", label,
-                    b.getDescription() == null ? "" : b.getDescription(),
-                    "businesses/" + b.getId(),
-                    (label + " " + (b.getDescription() == null ? "" : b.getDescription()))
-                            .toLowerCase(Locale.ROOT)));
-        });
+        orderService
+                .findAllWithPositions()
+                .forEach(
+                        o -> {
+                            String label =
+                                    (o.getOrderNumber() == null ? "—" : o.getOrderNumber())
+                                            + " "
+                                            + (o.getName() == null ? "" : o.getName());
+                            all.add(
+                                    new Item(
+                                            "Auftrag",
+                                            label,
+                                            o.getCustomer() != null
+                                                            && o.getCustomer().getName() != null
+                                                    ? o.getCustomer().getName()
+                                                    : "",
+                                            "orders/" + o.getId(),
+                                            label.toLowerCase(Locale.ROOT)));
+                            if (o.getPositions() != null) {
+                                o.getPositions()
+                                        .forEach(
+                                                p -> {
+                                                    String pLabel =
+                                                            p.getName() == null ? "—" : p.getName();
+                                                    all.add(
+                                                            new Item(
+                                                                    "Position",
+                                                                    pLabel,
+                                                                    o.getOrderNumber() == null
+                                                                            ? ""
+                                                                            : o.getOrderNumber(),
+                                                                    "orders/"
+                                                                            + o.getId()
+                                                                            + "/positions/"
+                                                                            + p.getId(),
+                                                                    (pLabel
+                                                                                    + " "
+                                                                                    + (o
+                                                                                                            .getOrderNumber()
+                                                                                                    == null
+                                                                                            ? ""
+                                                                                            : o
+                                                                                                    .getOrderNumber()))
+                                                                            .toLowerCase(
+                                                                                    Locale.ROOT)));
+                                                });
+                            }
+                        });
+        businessService
+                .listAll()
+                .forEach(
+                        b -> {
+                            String label = b.getTitle() == null ? "—" : b.getTitle();
+                            all.add(
+                                    new Item(
+                                            "Geschäft",
+                                            label,
+                                            b.getDescription() == null ? "" : b.getDescription(),
+                                            "businesses/" + b.getId(),
+                                            (label
+                                                            + " "
+                                                            + (b.getDescription() == null
+                                                                    ? ""
+                                                                    : b.getDescription()))
+                                                    .toLowerCase(Locale.ROOT)));
+                        });
     }
 
     private void applyFilter(String q) {
@@ -169,12 +216,19 @@ public class CommandPalette extends Dialog {
         spacer.getStyle().set("flex", "1");
 
         row.add(tag, lbl, spacer, detail);
-        row.addClickListener(e -> { activeIndex = index; activate(); });
+        row.addClickListener(
+                e -> {
+                    activeIndex = index;
+                    activate();
+                });
         return row;
     }
 
     private void setActive(int newIndex) {
-        if (filtered.isEmpty()) { activeIndex = -1; return; }
+        if (filtered.isEmpty()) {
+            activeIndex = -1;
+            return;
+        }
         if (newIndex < 0) newIndex = 0;
         if (newIndex >= filtered.size()) newIndex = filtered.size() - 1;
         activeIndex = newIndex;

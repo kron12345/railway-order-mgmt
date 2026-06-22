@@ -1,6 +1,5 @@
 package com.ordermgmt.railway.ui.component.order;
 
-import java.util.List;
 import java.util.function.BiFunction;
 
 import com.vaadin.flow.component.UI;
@@ -30,9 +29,6 @@ import com.ordermgmt.railway.domain.order.service.PurchaseOrderService;
 import com.ordermgmt.railway.domain.order.service.ResourceNeedService;
 import com.ordermgmt.railway.domain.pathmanager.model.PmReferenceTrain;
 import com.ordermgmt.railway.domain.pathmanager.service.PathManagerService;
-import com.ordermgmt.railway.domain.timetable.model.TimetableArchive;
-import com.ordermgmt.railway.domain.timetable.model.TimetableRowData;
-import com.ordermgmt.railway.domain.timetable.service.TimetableArchiveService;
 
 /** Displays and manages the positions that belong to an order. */
 public class OrderPositionPanel extends Div {
@@ -42,7 +38,6 @@ public class OrderPositionPanel extends Div {
     private final OperationalPointRepository opRepo;
     private final PredefinedTagRepository tagRepo;
     private final PathManagerService pathManagerService;
-    private final TimetableArchiveService timetableArchiveService;
     private final ResourceNeedService resourceNeedService;
     private final PurchaseOrderService purchaseOrderService;
     private final ResourceCatalogItemRepository catalogItemRepository;
@@ -57,7 +52,6 @@ public class OrderPositionPanel extends Div {
             OperationalPointRepository opRepo,
             PredefinedTagRepository tagRepo,
             PathManagerService pathManagerService,
-            TimetableArchiveService timetableArchiveService,
             ResourceNeedService resourceNeedService,
             PurchaseOrderService purchaseOrderService,
             ResourceCatalogItemRepository catalogItemRepository,
@@ -69,7 +63,6 @@ public class OrderPositionPanel extends Div {
         this.opRepo = opRepo;
         this.tagRepo = tagRepo;
         this.pathManagerService = pathManagerService;
-        this.timetableArchiveService = timetableArchiveService;
         this.resourceNeedService = resourceNeedService;
         this.purchaseOrderService = purchaseOrderService;
         this.catalogItemRepository = catalogItemRepository;
@@ -145,13 +138,17 @@ public class OrderPositionPanel extends Div {
         }
 
         for (OrderPosition pos : positions) {
+            PmReferenceTrain pmTrain = resolveTrain(pos);
             rowContainer.add(
                     new OrderPositionRow(
                             pos,
+                            pmTrain != null ? pmTrain.getProcessState() : null,
+                            pmTrain != null ? pmTrain.getPlanningStatus() : null,
                             translator,
                             this::openPositionForEdit,
                             this::confirmDeletePosition,
-                            this::sendToPathManager,
+                            p -> respondToAlteration(p, true),
+                            p -> respondToAlteration(p, false),
                             auditService));
 
             // Resource panel (collapsible, shown below each position row)
@@ -170,6 +167,38 @@ public class OrderPositionPanel extends Div {
                 resourcePanel.getStyle().set("margin", "0 12px 8px 12px");
                 rowContainer.add(resourcePanel);
             }
+        }
+    }
+
+    /**
+     * Resolves the linked RailOpt reference train for a transferred FAHRPLAN position so the row
+     * can show its lifecycle and planning status. Returns {@code null} when not sent or when the
+     * train can no longer be resolved (e.g. cleared mock state).
+     */
+    private PmReferenceTrain resolveTrain(OrderPosition pos) {
+        if (pos.getType() != PositionType.FAHRPLAN || pos.getPmReferenceTrainId() == null) {
+            return null;
+        }
+        try {
+            return pathManagerService.findById(pos.getPmReferenceTrainId());
+        } catch (RuntimeException ex) {
+            return null;
+        }
+    }
+
+    private void respondToAlteration(OrderPosition pos, boolean accept) {
+        try {
+            purchaseOrderService.respondToAlteration(pos.getId(), accept);
+            Notification.show(
+                            t(accept ? "order.alteration.accepted" : "order.alteration.rejected"),
+                            2500,
+                            Notification.Position.BOTTOM_END)
+                    .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+        } catch (RuntimeException ex) {
+            Notification.show(t("common.errorGeneric"), 3000, Notification.Position.BOTTOM_END)
+                    .addThemeVariants(NotificationVariant.LUMO_ERROR);
+        } finally {
+            refreshPositions();
         }
     }
 
@@ -202,29 +231,6 @@ public class OrderPositionPanel extends Div {
                     refreshPositions();
                 });
         dialog.open();
-    }
-
-    private void sendToPathManager(OrderPosition pos) {
-        if (pos.getPmReferenceTrainId() != null) {
-            return;
-        }
-        try {
-            TimetableArchive archive = timetableArchiveService.findArchive(pos).orElse(null);
-            List<TimetableRowData> rows = timetableArchiveService.readRows(pos);
-
-            PmReferenceTrain train =
-                    pathManagerService.createTrainFromOrderPosition(pos, archive, rows);
-
-            pos.setPmReferenceTrainId(train.getId());
-            orderService.savePosition(pos);
-
-            Notification.show(t("position.sentToPm"), 3000, Notification.Position.BOTTOM_END)
-                    .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
-            refreshPositions();
-        } catch (Exception ex) {
-            Notification.show(ex.getMessage(), 5000, Notification.Position.BOTTOM_END)
-                    .addThemeVariants(NotificationVariant.LUMO_ERROR);
-        }
     }
 
     private void openTimetableBuilder(OrderPosition existing) {

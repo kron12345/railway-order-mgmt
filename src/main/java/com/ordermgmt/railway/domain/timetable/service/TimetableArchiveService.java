@@ -205,12 +205,14 @@ public class TimetableArchiveService {
                     row.getArrivalMode(),
                     row.getArrivalExact(),
                     row.getArrivalEarliest(),
-                    row.getArrivalLatest());
+                    row.getArrivalLatest(),
+                    row.getCommercialArrival());
             validateTimeMode(
                     row.getDepartureMode(),
                     row.getDepartureExact(),
                     row.getDepartureEarliest(),
-                    row.getDepartureLatest());
+                    row.getDepartureLatest(),
+                    row.getCommercialDeparture());
 
             if (isOrigin
                     && row.getDepartureMode() == TimeConstraintMode.NONE
@@ -242,20 +244,47 @@ public class TimetableArchiveService {
     }
 
     private void validateTimeMode(
-            TimeConstraintMode mode, String exact, String earliest, String latest) {
+            TimeConstraintMode mode,
+            String exact,
+            String earliest,
+            String latest,
+            String commercial) {
         if (mode == null || mode == TimeConstraintMode.NONE) {
             return;
         }
-        if (mode == TimeConstraintMode.EXACT) {
-            if (parseTime(exact) == null) {
-                throw new IllegalArgumentException("Exact timetable time is missing.");
+        switch (mode) {
+            case EXACT -> {
+                if (parseTime(exact) == null) {
+                    throw new IllegalArgumentException("Exact timetable time is missing.");
+                }
             }
-            return;
-        }
-        LocalTime earliestTime = parseTime(earliest);
-        LocalTime latestTime = parseTime(latest);
-        if (earliestTime == null || latestTime == null || latestTime.isBefore(earliestTime)) {
-            throw new IllegalArgumentException("Invalid timetable time window.");
+            case WINDOW -> {
+                LocalTime earliestTime = parseTime(earliest);
+                LocalTime latestTime = parseTime(latest);
+                if (earliestTime == null
+                        || latestTime == null
+                        || latestTime.isBefore(earliestTime)) {
+                    throw new IllegalArgumentException("Invalid timetable time window.");
+                }
+            }
+            case AFTER -> {
+                if (parseTime(earliest) == null) {
+                    throw new IllegalArgumentException("Earliest timetable time is missing.");
+                }
+            }
+            case BEFORE -> {
+                if (parseTime(latest) == null) {
+                    throw new IllegalArgumentException("Latest timetable time is missing.");
+                }
+            }
+            case COMMERCIAL -> {
+                if (parseTime(commercial) == null) {
+                    throw new IllegalArgumentException("Commercial timetable time is missing.");
+                }
+            }
+            case NONE -> {
+                // handled above
+            }
         }
     }
 
@@ -302,6 +331,15 @@ public class TimetableArchiveService {
             if (row.getArrivalMode() == TimeConstraintMode.WINDOW) {
                 return parseTime(row.getArrivalLatest());
             }
+            if (row.getArrivalMode() == TimeConstraintMode.AFTER) {
+                return parseTime(row.getArrivalEarliest());
+            }
+            if (row.getArrivalMode() == TimeConstraintMode.BEFORE) {
+                return parseTime(row.getArrivalLatest());
+            }
+            if (row.getArrivalMode() == TimeConstraintMode.COMMERCIAL) {
+                return parseTime(row.getCommercialArrival());
+            }
             return parseTime(row.getEstimatedArrival());
         }
         if (row.getDepartureMode() == TimeConstraintMode.EXACT) {
@@ -309,6 +347,15 @@ public class TimetableArchiveService {
         }
         if (row.getDepartureMode() == TimeConstraintMode.WINDOW) {
             return parseTime(row.getDepartureEarliest());
+        }
+        if (row.getDepartureMode() == TimeConstraintMode.AFTER) {
+            return parseTime(row.getDepartureEarliest());
+        }
+        if (row.getDepartureMode() == TimeConstraintMode.BEFORE) {
+            return parseTime(row.getDepartureLatest());
+        }
+        if (row.getDepartureMode() == TimeConstraintMode.COMMERCIAL) {
+            return parseTime(row.getCommercialDeparture());
         }
         return parseTime(row.getEstimatedDeparture());
     }

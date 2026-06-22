@@ -14,14 +14,14 @@ import com.ordermgmt.railway.domain.business.model.AssignmentType;
 import com.ordermgmt.railway.infrastructure.keycloak.KeycloakUserService;
 
 /**
- * ComboBox that lets the user pick either a Keycloak <i>user</i> or <i>group</i> as
- * assignee. Items are uniformly modeled as {@link Item} records and rendered with a
- * leading {@code [Person] / [Team]} tag so the kind is unambiguous.
+ * ComboBox that lets the user pick either a Keycloak <i>user</i> or <i>group</i> as assignee. Items
+ * are uniformly modeled as {@link Item} records and rendered with a leading {@code [Person] /
+ * [Team]} tag so the kind is unambiguous.
  *
- * <p>Server-side filtering: typing in the input issues a paged Keycloak search; combo
- * shows the merged result list. Selection invokes the supplied callback with both the
- * type discriminator and the canonical name (preferred-username for users, group-path
- * for groups). Pass {@code (null, null)} from outside to clear.
+ * <p>Server-side filtering: typing in the input issues a paged Keycloak search; combo shows the
+ * merged result list. Selection invokes the supplied callback with both the type discriminator and
+ * the canonical name (preferred-username for users, group-path for groups). Pass {@code (null,
+ * null)} from outside to clear.
  */
 public class AssigneeComboBox extends ComboBox<AssigneeComboBox.Item> {
 
@@ -29,12 +29,15 @@ public class AssigneeComboBox extends ComboBox<AssigneeComboBox.Item> {
 
     private final KeycloakUserService keycloakUserService;
     private final BiConsumer<AssignmentType, String> onChange;
-    /** Currently selected item; surfaced from the lazy data callback so the preset
-     *  value is visible even before the dropdown queries Keycloak. */
+
+    /**
+     * Currently selected item; surfaced from the lazy data callback so the preset value is visible
+     * even before the dropdown queries Keycloak.
+     */
     private Item currentItem;
 
-    public AssigneeComboBox(KeycloakUserService keycloakUserService,
-                            BiConsumer<AssignmentType, String> onChange) {
+    public AssigneeComboBox(
+            KeycloakUserService keycloakUserService, BiConsumer<AssignmentType, String> onChange) {
         this.keycloakUserService = keycloakUserService;
         this.onChange = onChange;
 
@@ -44,27 +47,27 @@ public class AssigneeComboBox extends ComboBox<AssigneeComboBox.Item> {
         setRenderer(new com.vaadin.flow.data.renderer.ComponentRenderer<>(this::renderItem));
 
         // Keycloak does the filtering server-side; we treat the typed text as the query.
-        setItems(query -> {
-            String filter = query.getFilter().orElse("").trim();
-            return search(filter).stream()
-                    .skip(query.getOffset())
-                    .limit(query.getLimit());
-        });
+        setItems(
+                query -> {
+                    String filter = query.getFilter().orElse("").trim();
+                    return search(filter).stream().skip(query.getOffset()).limit(query.getLimit());
+                });
 
-        addValueChangeListener(e -> {
-            // Ignore programmatic changes (e.g. preset() during card render) — only act
-            // on user-initiated selections, otherwise every render would persist again.
-            if (!e.isFromClient()) return;
-            Item v = e.getValue();
-            if (v == null) onChange.accept(null, null);
-            else onChange.accept(v.type(), v.value());
-        });
+        addValueChangeListener(
+                e -> {
+                    // Ignore programmatic changes (e.g. preset() during card render) — only act
+                    // on user-initiated selections, otherwise every render would persist again.
+                    if (!e.isFromClient()) return;
+                    Item v = e.getValue();
+                    if (v == null) onChange.accept(null, null);
+                    else onChange.accept(v.type(), v.value());
+                });
     }
 
     /**
-     * Pre-select an item by type+value. Stores the {@link #currentItem} so the
-     * lazy data callback surfaces it on first dropdown open — does <em>not</em>
-     * replace the data provider, so the user can still search and reassign.
+     * Pre-select an item by type+value. Stores the {@link #currentItem} so the lazy data callback
+     * surfaces it on first dropdown open — does <em>not</em> replace the data provider, so the user
+     * can still search and reassign.
      */
     public void preset(AssignmentType type, String value) {
         if (type == null || value == null || value.isBlank()) {
@@ -94,8 +97,9 @@ public class AssigneeComboBox extends ComboBox<AssigneeComboBox.Item> {
                 String username = u.getOrDefault("username", "");
                 if (username.isBlank()) continue;
                 if (!seen.add(AssignmentType.USER + ":" + username)) continue;
-                String full = (u.getOrDefault("firstName", "") + " "
-                        + u.getOrDefault("lastName", "")).trim();
+                String full =
+                        (u.getOrDefault("firstName", "") + " " + u.getOrDefault("lastName", ""))
+                                .trim();
                 String label = "👤 " + username + (full.isBlank() ? "" : "  ·  " + full);
                 result.add(new Item(AssignmentType.USER, username, label));
             }
@@ -107,8 +111,11 @@ public class AssigneeComboBox extends ComboBox<AssigneeComboBox.Item> {
                 result.add(new Item(AssignmentType.GROUP, name, "👥 " + name));
             }
             // Sort by label, with users typically appearing first.
-            result.sort((a, b) -> a.label().toLowerCase(Locale.ROOT)
-                    .compareTo(b.label().toLowerCase(Locale.ROOT)));
+            result.sort(
+                    (a, b) ->
+                            a.label()
+                                    .toLowerCase(Locale.ROOT)
+                                    .compareTo(b.label().toLowerCase(Locale.ROOT)));
         } catch (RuntimeException ex) {
             // Keycloak unreachable in tests / dev: degrade gracefully.
         }
@@ -128,7 +135,12 @@ public class AssigneeComboBox extends ComboBox<AssigneeComboBox.Item> {
     }
 
     @Override
-    public boolean equals(Object o) { return o == this; }
+    public boolean equals(Object o) {
+        return o == this;
+    }
+
     @Override
-    public int hashCode() { return Objects.hashCode(this); }
+    public int hashCode() {
+        return Objects.hashCode(this);
+    }
 }

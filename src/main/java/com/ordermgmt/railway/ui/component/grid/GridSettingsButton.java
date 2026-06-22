@@ -19,14 +19,16 @@ import com.vaadin.flow.component.popover.PopoverPosition;
 import com.vaadin.flow.component.popover.PopoverVariant;
 
 /**
- * Small "columns" icon button that opens a popover with per-column visibility checkboxes
- * plus a reset-to-defaults action. Designed for use in the toolbar of any grid bound via
- * {@link GridPreferenceBinder}.
+ * Small "columns" icon button that opens a popover with per-column visibility checkboxes plus a
+ * reset-to-defaults action. Designed for use in the toolbar of any grid bound via {@link
+ * GridPreferenceBinder}.
  */
 public class GridSettingsButton<T> extends Span {
 
-    public GridSettingsButton(GridPreferenceBinder<T> binder, Function<String, String> tr,
-                              Function<String, String> labelForKey) {
+    public GridSettingsButton(
+            GridPreferenceBinder<T> binder,
+            Function<String, String> tr,
+            Function<String, String> labelForKey) {
         addClassName("grid-settings");
 
         var hiddenBadge = new Span();
@@ -34,8 +36,8 @@ public class GridSettingsButton<T> extends Span {
         hiddenBadge.setVisible(false);
 
         var trigger = new Button(VaadinIcon.OPTIONS.create());
-        trigger.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY,
-                ButtonVariant.LUMO_ICON);
+        trigger.addThemeVariants(
+                ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY, ButtonVariant.LUMO_ICON);
         trigger.getElement().setAttribute("aria-label", tr.apply("grid.settings.title"));
         trigger.addClassName("grid-settings__trigger");
 
@@ -50,8 +52,11 @@ public class GridSettingsButton<T> extends Span {
         add(trigger, hiddenBadge);
     }
 
-    private Popover buildPopover(GridPreferenceBinder<T> binder, Function<String, String> tr,
-                                 Function<String, String> labelForKey, Span hiddenBadge) {
+    private Popover buildPopover(
+            GridPreferenceBinder<T> binder,
+            Function<String, String> tr,
+            Function<String, String> labelForKey,
+            Span hiddenBadge) {
         Popover popover = new Popover();
         popover.setPosition(PopoverPosition.BOTTOM_END);
         popover.setWidth("260px");
@@ -75,11 +80,12 @@ public class GridSettingsButton<T> extends Span {
             if (label == null || label.isBlank()) label = key;
             var cb = new Checkbox(label, col.isVisible());
             cb.addClassName("grid-settings__cb");
-            cb.addValueChangeListener(e -> {
-                col.setVisible(Boolean.TRUE.equals(e.getValue()));
-                binder.saveNow();
-                refreshBadge(binder, hiddenBadge);
-            });
+            cb.addValueChangeListener(
+                    e -> {
+                        col.setVisible(Boolean.TRUE.equals(e.getValue()));
+                        binder.saveNow();
+                        refreshBadge(binder, hiddenBadge);
+                    });
             content.add(cb);
         }
 
@@ -90,13 +96,16 @@ public class GridSettingsButton<T> extends Span {
         var resetBtn = new Button(tr.apply("grid.settings.reset"), VaadinIcon.REFRESH.create());
         resetBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
         resetBtn.addClassName("grid-settings__reset");
-        resetBtn.addClickListener(e -> {
-            binder.reset();
-            popover.close();
-            Notification.show(tr.apply("grid.settings.resetDone"), 1500,
-                    Notification.Position.BOTTOM_END)
-                    .addThemeVariants(NotificationVariant.LUMO_CONTRAST);
-        });
+        resetBtn.addClickListener(
+                e -> {
+                    binder.reset();
+                    popover.close();
+                    Notification.show(
+                                    tr.apply("grid.settings.resetDone"),
+                                    1500,
+                                    Notification.Position.BOTTOM_END)
+                            .addThemeVariants(NotificationVariant.LUMO_CONTRAST);
+                });
 
         var footer = new HorizontalLayout(resetBtn);
         footer.setJustifyContentMode(FlexComponent.JustifyContentMode.END);
@@ -108,8 +117,7 @@ public class GridSettingsButton<T> extends Span {
     }
 
     private void refreshBadge(GridPreferenceBinder<T> binder, Span badge) {
-        long hidden = binder.columnsByKey().values().stream()
-                .filter(c -> !c.isVisible()).count();
+        long hidden = binder.columnsByKey().values().stream().filter(c -> !c.isVisible()).count();
         if (hidden == 0) {
             badge.setVisible(false);
         } else {

@@ -369,7 +369,9 @@ public class PathProcessEngine {
             copy.setDepartureQualifier(original.getDepartureQualifier());
             copy.setSubsidiaryCode(original.getSubsidiaryCode());
             copy.setActivities(original.getActivities());
+            copy.setAssociatedTrainOtn(original.getAssociatedTrainOtn());
             copy.setNetworkSpecificParams(original.getNetworkSpecificParams());
+            copy.setTttPayload(original.getTttPayload());
             copies.add(copy);
         }
         target.getJourneyLocations().addAll(copies);

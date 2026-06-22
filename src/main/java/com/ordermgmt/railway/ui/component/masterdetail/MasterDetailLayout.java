@@ -21,13 +21,12 @@ import com.vaadin.flow.data.value.ValueChangeMode;
 import com.ordermgmt.railway.ui.component.a11y.AriaLive;
 
 /**
- * Generic Bloomberg-style master-detail shell: scrollable card list on the left,
- * detail panel on the right. Selection is URL-driven (caller navigates), but the
- * layout owns keyboard navigation (↑/↓/Home/End), filter wiring, ARIA semantics,
- * and the live-region announcements.
+ * Generic Bloomberg-style master-detail shell: scrollable card list on the left, detail panel on
+ * the right. Selection is URL-driven (caller navigates), but the layout owns keyboard navigation
+ * (↑/↓/Home/End), filter wiring, ARIA semantics, and the live-region announcements.
  *
- * <p>Cards are rendered through a {@link Function} the caller provides; selection
- * state is updated by calling {@link #setSelectedId(UUID)} after navigation.
+ * <p>Cards are rendered through a {@link Function} the caller provides; selection state is updated
+ * by calling {@link #setSelectedId(UUID)} after navigation.
  */
 public class MasterDetailLayout<T> extends Div {
 
@@ -57,25 +56,31 @@ public class MasterDetailLayout<T> extends Div {
     }
 
     /**
-     * View-local shortcuts via the shared hotkeys-js wrapper in
-     * {@code frontend/rom-shortcuts.ts}. Single entry point keeps the editable-input
-     * detection consistent across master-detail views and lets us add new shortcuts
-     * by editing one TS file instead of duplicated inline JS.
+     * View-local shortcuts via the shared hotkeys-js wrapper in {@code frontend/rom-shortcuts.ts}.
+     * Single entry point keeps the editable-input detection consistent across master-detail views
+     * and lets us add new shortcuts by editing one TS file instead of duplicated inline JS.
      */
     private void registerShortcuts() {
-        getElement().executeJs(
-                "window.romShortcuts && window.romShortcuts.registerView($0, $1);",
-                spec.filterId, spec.shortcutNew != null);
+        getElement()
+                .executeJs(
+                        "window.romShortcuts && window.romShortcuts.registerView($0, $1);",
+                        spec.filterId,
+                        spec.shortcutNew != null);
 
         // The Esc-clears-filter behaviour is now scoped to the actual filter input via
         // a Vaadin keydown listener, so it only fires when the filter has focus and
         // doesn't depend on the global JS shortcut handler.
-        filter.getElement().addEventListener("keydown", e -> {
-            String key = e.getEventData().getString("event.key");
-            if ("Escape".equals(key)) {
-                filter.setValue("");
-            }
-        }).addEventData("event.key").setFilter("event.key === 'Escape'");
+        filter.getElement()
+                .addEventListener(
+                        "keydown",
+                        e -> {
+                            String key = e.getEventData().getString("event.key");
+                            if ("Escape".equals(key)) {
+                                filter.setValue("");
+                            }
+                        })
+                .addEventData("event.key")
+                .setFilter("event.key === 'Escape'");
 
         if (spec.shortcutNew != null) {
             getElement().addEventListener("md-new", e -> spec.shortcutNew.run());
@@ -100,10 +105,14 @@ public class MasterDetailLayout<T> extends Div {
         filter.setValueChangeTimeout(200);
         filter.setWidth("280px");
         filter.getElement().setAttribute("aria-label", spec.filterAriaLabel);
-        filter.addValueChangeListener(e -> {
-            filterText = e.getValue() == null ? "" : e.getValue().trim().toLowerCase(Locale.ROOT);
-            applyFilter();
-        });
+        filter.addValueChangeListener(
+                e -> {
+                    filterText =
+                            e.getValue() == null
+                                    ? ""
+                                    : e.getValue().trim().toLowerCase(Locale.ROOT);
+                    applyFilter();
+                });
         bar.add(filter);
 
         for (Component extra : spec.extraToolbar) {
@@ -124,21 +133,34 @@ public class MasterDetailLayout<T> extends Div {
         listPane.setId(spec.listId);
         listPane.getElement().setAttribute("role", "region");
         listPane.getElement().setAttribute("aria-label", spec.listAriaLabel);
-        listPane.getStyle().set("display", "flex").set("flex-direction", "column")
-                .set("height", "100%").set("min-height", "0");
+        listPane.getStyle()
+                .set("display", "flex")
+                .set("flex-direction", "column")
+                .set("height", "100%")
+                .set("min-height", "0");
 
         listScroll.addClassName("md-list");
         listScroll.getElement().setAttribute("role", "listbox");
         listScroll.getElement().setAttribute("aria-label", spec.listAriaLabel);
         listScroll.getElement().setAttribute("tabindex", "0");
-        listScroll.getStyle().set("flex", "1 1 auto").set("overflow-y", "auto")
-                .set("min-height", "0").set("outline", "none");
+        listScroll
+                .getStyle()
+                .set("flex", "1 1 auto")
+                .set("overflow-y", "auto")
+                .set("min-height", "0")
+                .set("outline", "none");
 
         // Keyboard navigation on the list itself.
-        listScroll.getElement().addEventListener("keydown", e -> {
-                    String key = e.getEventData().getString("event.key");
-                    onListKey(key);
-                }).addEventData("event.key").addEventData("event.preventDefault()")
+        listScroll
+                .getElement()
+                .addEventListener(
+                        "keydown",
+                        e -> {
+                            String key = e.getEventData().getString("event.key");
+                            onListKey(key);
+                        })
+                .addEventData("event.key")
+                .addEventData("event.preventDefault()")
                 .setFilter("['ArrowDown','ArrowUp','Home','End','Enter'].includes(event.key)");
 
         emptyState.addClassName("md-empty");
@@ -172,7 +194,8 @@ public class MasterDetailLayout<T> extends Div {
         }
         T item = findById(id);
         if (item != null) {
-            ariaLive.announce(spec.announceTemplate.apply(item, indexOf(id) + 1, visibleItems.size()));
+            ariaLive.announce(
+                    spec.announceTemplate.apply(item, indexOf(id) + 1, visibleItems.size()));
         }
     }
 
@@ -194,9 +217,8 @@ public class MasterDetailLayout<T> extends Div {
 
     private void applyFilter() {
         visibleItems.clear();
-        Predicate<T> matches = filterText.isBlank()
-                ? t -> true
-                : t -> spec.matcher.test(t, filterText);
+        Predicate<T> matches =
+                filterText.isBlank() ? t -> true : t -> spec.matcher.test(t, filterText);
         for (T t : allItems) {
             if (matches.test(t)) visibleItems.add(t);
         }
@@ -219,8 +241,7 @@ public class MasterDetailLayout<T> extends Div {
             wrapper.getElement().setAttribute("role", "option");
             wrapper.getElement().setAttribute("tabindex", idx == 0 ? "0" : "-1");
             wrapper.getElement().setAttribute("data-id", id.toString());
-            wrapper.getElement().addEventListener("click",
-                    e -> spec.onSelect.accept(id));
+            wrapper.getElement().addEventListener("click", e -> spec.onSelect.accept(id));
             MasterCardWrapper mcw = new MasterCardWrapper(id, wrapper);
             mcw.applySelection(Objects.equals(id, selectedId));
             cardWrappers.add(mcw);
@@ -234,12 +255,22 @@ public class MasterDetailLayout<T> extends Div {
         int currentIndex = selectedId != null ? indexOf(selectedId) : -1;
         int next = currentIndex;
         switch (key) {
-            case "ArrowDown" -> next = currentIndex < 0 ? 0 : Math.min(visibleItems.size() - 1, currentIndex + 1);
+            case "ArrowDown" ->
+                    next =
+                            currentIndex < 0
+                                    ? 0
+                                    : Math.min(visibleItems.size() - 1, currentIndex + 1);
             case "ArrowUp" -> next = currentIndex <= 0 ? 0 : currentIndex - 1;
             case "Home" -> next = 0;
             case "End" -> next = visibleItems.size() - 1;
-            case "Enter" -> { if (currentIndex >= 0) spec.onSelect.accept(spec.idExtractor.apply(visibleItems.get(currentIndex))); return; }
-            default -> { return; }
+            case "Enter" -> {
+                if (currentIndex >= 0)
+                    spec.onSelect.accept(spec.idExtractor.apply(visibleItems.get(currentIndex)));
+                return;
+            }
+            default -> {
+                return;
+            }
         }
         if (next == currentIndex || next < 0) return;
         T target = visibleItems.get(next);
@@ -264,12 +295,18 @@ public class MasterDetailLayout<T> extends Div {
     private static class MasterCardWrapper {
         final UUID id;
         final Div wrapper;
-        MasterCardWrapper(UUID id, Div wrapper) { this.id = id; this.wrapper = wrapper; }
+
+        MasterCardWrapper(UUID id, Div wrapper) {
+            this.id = id;
+            this.wrapper = wrapper;
+        }
+
         void applySelection(boolean sel) {
             if (sel) {
                 wrapper.addClassName("md-card-wrapper--selected");
                 wrapper.getElement().setAttribute("aria-selected", "true");
-                wrapper.getElement().executeJs("$0.scrollIntoView({block:'nearest', behavior:'auto'})");
+                wrapper.getElement()
+                        .executeJs("$0.scrollIntoView({block:'nearest', behavior:'auto'})");
             } else {
                 wrapper.removeClassName("md-card-wrapper--selected");
                 wrapper.getElement().setAttribute("aria-selected", "false");
@@ -277,8 +314,10 @@ public class MasterDetailLayout<T> extends Div {
         }
     }
 
-    /** Builder-style configuration. All fields except {@code idExtractor},
-     *  {@code cardRenderer}, {@code matcher}, {@code onSelect} have safe defaults. */
+    /**
+     * Builder-style configuration. All fields except {@code idExtractor}, {@code cardRenderer},
+     * {@code matcher}, {@code onSelect} have safe defaults.
+     */
     public static class Spec<T> {
         Function<T, UUID> idExtractor;
         Function<T, Component> cardRenderer;
@@ -300,28 +339,102 @@ public class MasterDetailLayout<T> extends Div {
                 (item, index, total) -> "Eintrag " + index + " von " + total;
         List<Component> extraToolbar = new ArrayList<>();
 
-        public Spec<T> idExtractor(Function<T, UUID> v) { this.idExtractor = v; return this; }
-        public Spec<T> cardRenderer(Function<T, Component> v) { this.cardRenderer = v; return this; }
-        public Spec<T> matcher(java.util.function.BiPredicate<T, String> v) { this.matcher = v; return this; }
-        public Spec<T> onSelect(java.util.function.Consumer<UUID> v) { this.onSelect = v; return this; }
-        public Spec<T> shortcutNew(Runnable v) { this.shortcutNew = v; return this; }
-        public Spec<T> filterPlaceholder(String v) { this.filterPlaceholder = v; return this; }
-        public Spec<T> filterAriaLabel(String v) { this.filterAriaLabel = v; return this; }
-        public Spec<T> filterId(String v) { this.filterId = v; return this; }
-        public Spec<T> listId(String v) { this.listId = v; return this; }
-        public Spec<T> detailId(String v) { this.detailId = v; return this; }
-        public Spec<T> listAriaLabel(String v) { this.listAriaLabel = v; return this; }
-        public Spec<T> detailAriaLabel(String v) { this.detailAriaLabel = v; return this; }
-        public Spec<T> toolbarAriaLabel(String v) { this.toolbarAriaLabel = v; return this; }
-        public Spec<T> emptyText(String v) { this.emptyText = v; return this; }
-        public Spec<T> detailEmptyText(String v) { this.detailEmptyText = v; return this; }
-        public Spec<T> announceTemplate(TriFunction<T, Integer, Integer, String> v) { this.announceTemplate = v; return this; }
-        public Spec<T> extraToolbar(List<Component> v) { this.extraToolbar = v; return this; }
+        public Spec<T> idExtractor(Function<T, UUID> v) {
+            this.idExtractor = v;
+            return this;
+        }
 
-        public MasterDetailLayout<T> build() { return new MasterDetailLayout<>(this); }
+        public Spec<T> cardRenderer(Function<T, Component> v) {
+            this.cardRenderer = v;
+            return this;
+        }
+
+        public Spec<T> matcher(java.util.function.BiPredicate<T, String> v) {
+            this.matcher = v;
+            return this;
+        }
+
+        public Spec<T> onSelect(java.util.function.Consumer<UUID> v) {
+            this.onSelect = v;
+            return this;
+        }
+
+        public Spec<T> shortcutNew(Runnable v) {
+            this.shortcutNew = v;
+            return this;
+        }
+
+        public Spec<T> filterPlaceholder(String v) {
+            this.filterPlaceholder = v;
+            return this;
+        }
+
+        public Spec<T> filterAriaLabel(String v) {
+            this.filterAriaLabel = v;
+            return this;
+        }
+
+        public Spec<T> filterId(String v) {
+            this.filterId = v;
+            return this;
+        }
+
+        public Spec<T> listId(String v) {
+            this.listId = v;
+            return this;
+        }
+
+        public Spec<T> detailId(String v) {
+            this.detailId = v;
+            return this;
+        }
+
+        public Spec<T> listAriaLabel(String v) {
+            this.listAriaLabel = v;
+            return this;
+        }
+
+        public Spec<T> detailAriaLabel(String v) {
+            this.detailAriaLabel = v;
+            return this;
+        }
+
+        public Spec<T> toolbarAriaLabel(String v) {
+            this.toolbarAriaLabel = v;
+            return this;
+        }
+
+        public Spec<T> emptyText(String v) {
+            this.emptyText = v;
+            return this;
+        }
+
+        public Spec<T> detailEmptyText(String v) {
+            this.detailEmptyText = v;
+            return this;
+        }
+
+        public Spec<T> announceTemplate(TriFunction<T, Integer, Integer, String> v) {
+            this.announceTemplate = v;
+            return this;
+        }
+
+        public Spec<T> extraToolbar(List<Component> v) {
+            this.extraToolbar = v;
+            return this;
+        }
+
+        public MasterDetailLayout<T> build() {
+            return new MasterDetailLayout<>(this);
+        }
     }
 
-    public static <T> Spec<T> spec() { return new Spec<>(); }
+    public static <T> Spec<T> spec() {
+        return new Spec<>();
+    }
 
-    @FunctionalInterface public interface TriFunction<A, B, C, R> { R apply(A a, B b, C c); }
+    @FunctionalInterface
+    public interface TriFunction<A, B, C, R> {
+        R apply(A a, B b, C c);
+    }
 }

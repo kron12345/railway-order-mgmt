@@ -287,6 +287,16 @@ public class PathManagerController {
             loc.setArrivalQualifier(dto.arrivalQualifier());
             loc.setDepartureQualifier(dto.departureQualifier());
             loc.setSubsidiaryCode(dto.subsidiaryCode());
+            loc.setAssociatedTrainOtn(dto.associatedTrainOtn());
+            // Persist activity codes as a JSON array (["0001","0002"]) so they round-trip through
+            // PathManagerDtoMapper.parseActivityCodes; otherwise codes submitted via the API are
+            // lost.
+            if (dto.activityCodes() != null && !dto.activityCodes().isEmpty()) {
+                loc.setActivities(
+                        dto.activityCodes().stream()
+                                .map(code -> "\"" + code + "\"")
+                                .collect(java.util.stream.Collectors.joining(",", "[", "]")));
+            }
             version.getJourneyLocations().add(loc);
         }
 

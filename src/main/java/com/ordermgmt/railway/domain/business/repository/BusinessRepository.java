@@ -25,12 +25,13 @@ public interface BusinessRepository extends JpaRepository<Business, UUID> {
     List<Business> findByLinkedPurchasePositionId(UUID ppId);
 
     /**
-     * All businesses that link to anything under the given Order — either an
-     * OrderPosition of the order, or a PurchasePosition under one of its OPs.
+     * All businesses that link to anything under the given Order — either an OrderPosition of the
+     * order, or a PurchasePosition under one of its OPs.
      */
-    @Query("SELECT DISTINCT b FROM Business b "
-            + "LEFT JOIN b.orderPositions op "
-            + "LEFT JOIN b.purchasePositions pp "
-            + "WHERE op.order.id = :orderId OR pp.orderPosition.order.id = :orderId")
+    @Query(
+            "SELECT DISTINCT b FROM Business b "
+                    + "LEFT JOIN b.orderPositions op "
+                    + "LEFT JOIN b.purchasePositions pp "
+                    + "WHERE op.order.id = :orderId OR pp.orderPosition.order.id = :orderId")
     List<Business> findByLinkedOrderId(UUID orderId);
 }

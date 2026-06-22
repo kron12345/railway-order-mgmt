@@ -58,7 +58,7 @@ The second step shows the **complete calculated route** as an editable table. Ev
 | Est. Arrival / Departure | Automatically estimated times from routing |
 | Halt | Whether the train stops at this point |
 | Activity | Mandatory when halt is set — the reason for stopping |
-| Arrival / Departure Constraint | Time mode: NONE, EXACT, WINDOW, or COMMERCIAL |
+| Arrival / Departure Constraint | Time mode: NONE, EXACT, WINDOW, AFTER (≥), BEFORE (≤), or COMMERCIAL |
 
 ### Selecting and Editing a Row
 
@@ -99,22 +99,74 @@ Origin and destination rows cannot be deleted.
 
 ### Time Modes (TimeConstraintMode)
 
-Each arrival and departure can have one of four constraint modes:
+Each arrival and departure can have one of six constraint modes:
 
-| Mode | Meaning | Fields |
-|---|---|---|
-| **NONE** | No explicit time constraint. Only the estimated time from routing is shown. | — |
-| **EXACT** | A single exact time. | One time picker |
-| **WINDOW** | A time window with earliest and latest bounds. | Two time pickers (earliest + latest) |
-| **COMMERCIAL** | A published/commercial timetable time. | One time picker |
+| Mode | Meaning | Fields | TTT export |
+|---|---|---|---|
+| **NONE** | No explicit time constraint — only routing estimate. | — | not exported |
+| **EXACT** | A single exact agreed time. | one | ALA / ALD |
+| **WINDOW** | Both earliest and latest bounds. | two | ELA+LLA / ELD+LLD |
+| **AFTER** ≥ | Half-window: "no earlier than X". | one | ELA / ELD |
+| **BEFORE** ≤ | Half-window: "no later than X". | one | LLA / LLD |
+| **COMMERCIAL** | Published timetable time. | one | PLA / PLD |
+
+**AFTER and BEFORE are single-value modes** like EXACT — the math treats them with one anchor each. Difference: forward propagation respects the bound direction (BEFORE → max-time using LLD, AFTER → uses ELD because no upper bound exists).
+
+### Editing Rules (enforced by the editor)
+
+The editor follows seven rules that map to the TTT spec without forcing the user into over-constrained combinations:
+
+| Rule | Behavior |
+|---|---|
+| 1 | At minimum **one halt** must exist on the route — origin and destination count. Times themselves are optional; missing times are interpolated. |
+| 2 | A pass-through (no halt) can still be exported if the user added it manually (`JourneyLocationTypeCode` 04). Auto-routed waypoints are not exported. |
+| 3 | **Halt off → no time inputs.** All time fields are hidden; existing user-entered times get cleared. |
+| 4 | A halt may have **either dwell + one side** *or* **both sides without dwell**. All three together is forbidden — typing both sides automatically clears dwell. |
+| 5 | When **dwell + one side** is set, the opposite side is auto-derived in the same mode (Same-Mode-Mirroring). E.g. WINDOW arrival ELA=08:00, LLA=08:05, dwell=5 → WINDOW departure ELD=08:05, LLD=08:10. |
+| 6 | **Backward propagation** triggers on arrival edits. Anchors used: ELA (WINDOW/AFTER), LLA (BEFORE), ALA (EXACT), PLA (COMMERCIAL). |
+| 7 | **Forward propagation** triggers on departure edits. Anchors used: LLD (WINDOW/BEFORE = max-time), ELD (AFTER = only available), ALD (EXACT), PLD (COMMERCIAL). Forward STRETCH falls back to SHIFT when no destination arrival/pin exists. |
+
+### Origin and Destination special cases
+
+Origin and destination are **implicit halts** (the train stops there by definition). The editor enforces:
+
+- No halt-checkbox (always halt = true).
+- No dwell input (no preceding arrival at origin / no following departure at destination).
+- Origin: only **departure-side** time constraints. The arrival cell in the grid is empty.
+- Destination: only **arrival-side** constraints. The departure cell in the grid is empty.
+
+### TTT Export Markers in the Grid
+
+Cells whose value will be sent in the TTT Path Request are visually distinguished with a small **TTT** badge in accent color and bold text:
+
+- **Point name**: badged on origin, destination, halt rows, and manually-added pass-throughs.
+- **Time cells (An / Ab)**: badged when the user has explicitly entered the value (`userEntered*` flag).
+- **Halt-Dauer**: badged when the user explicitly entered a dwell value.
+- **Day offset suffix**: appended to the cell value as `+1d` / `-1d` when non-zero.
+
+Estimated/derived/auto-routed values appear in muted text without a badge — they exist only for the user's reference and are never exported.
+
+### Speed Interpolation Between Anchors
+
+When the user enters one or more explicit times, the system computes intermediate row times by **distance-weighted segmental speed**:
+
+- For each pair of consecutive user-entered anchors, segment speed = `Δtime / Δdistance`.
+- Intermediate rows get `estimatedArrival = anchor.time + offsetDistance × segmentSpeed`.
+- Outside the anchor range (rows before the first anchor or after the last), the default 70 km/h is used.
+
+This means: a single arrival anchor on the route is enough to back-compute the origin departure (and vice versa).
 
 ### Shift and Stretch Propagation
 
 When you change a time, you can control how that change affects downstream stops:
 
-**Shift Mode** (default): All following stops are moved by the same amount. If you add 10 minutes to a departure, all subsequent arrivals and departures also gain 10 minutes — until a pinned stop is reached.
+**Shift Mode**: All following stops are moved by the same amount. If you add 10 minutes to a departure, all subsequent arrivals and departures also gain 10 minutes — until a pinned stop is reached.
 
-**Stretch Mode**: Times between the changed stop and the next pinned stop are proportionally redistributed. The overall time span changes, but the relative proportions of travel segments are preserved.
+**Stretch Mode** (default): Times between the changed stop and the next pinned stop are proportionally redistributed. The overall time span changes, but the relative proportions of travel segments are preserved.
+
+**Forward fallback**: Forward stretch needs a real anchor ahead — either a pinned downstream row or a user-entered arrival on the destination. Without one, the system falls back to SHIFT (the schedule can't be stretched against an undefined endpoint). Backward stretch always works because origin acts as an implicit anchor.
+
+**Day offset**: Each side has a "Tag"-stepper for day offset (-1, 0, +1, +2). Used for midnight crossings (`Abfahrt 23:50, Folge-Ankunft 00:15 +1d`) and modifications that begin a day before the calendar reference (Tag −1). Propagation does day-aware arithmetic, so a +30-minute shift past midnight correctly increments the offset.
 
 ### Pinning Times
 
@@ -161,14 +213,21 @@ The full catalog contains 35+ codes including Swiss-specific extensions (CH08-CH
 
 ## TTT TimingQualifier Codes
 
-The system maps its internal `TimeConstraintMode` to TTT TimingQualifierCodes for future export:
+The system maps its internal `TimeConstraintMode` to TTT TimingQualifierCodes. Per TTT spec (Anlage 1 §5.7), `TimingAtLocation` has `Timing (0..*)` so any combination — including a single half-window entry — is valid:
 
-| Internal Mode | Arrival Codes | Departure Codes | Meaning |
-|---|---|---|---|
-| NONE | — | — | No timing qualifier exported |
-| EXACT | **ALA** | **ALD** | Actual/Agreed Latest Arrival/Departure |
-| WINDOW | **ELA** + **LLA** | **ELD** + **LLD** | Earliest + Latest Arrival/Departure |
-| COMMERCIAL | **PLA** | **PLD** | Published (commercial) Arrival/Departure |
+| Internal Mode | Arrival Codes | Departure Codes | Meaning | UI marker |
+|---|---|---|---|---|
+| NONE | — | — | No timing exported | — |
+| EXACT | **ALA** | **ALD** | Single exact agreed time | – |
+| WINDOW | **ELA** + **LLA** | **ELD** + **LLD** | Both bounds | – |
+| AFTER | **ELA** | **ELD** | Half-window: "frühestens" | **≥** |
+| BEFORE | **LLA** | **LLD** | Half-window: "spätestens" | **≤** |
+| COMMERCIAL | **PLA** | **PLD** | Published commercial time | – |
+
+**Half-windows (AFTER / BEFORE)** are single-bound constraints. AFTER 10:00 means "no earlier than 10:00, but no upper bound". BEFORE 11:00 means "no later than 11:00, but no lower bound". They behave mathematically like EXACT (single value), with the difference that propagation acknowledges their direction:
+
+- BEFORE has an upper bound → forward propagation uses LLD (max-time anchor) ✓
+- AFTER has only a lower bound → forward propagation uses ELD; following times are computed as "no earlier than X + travel". No upper bound implied.
 
 **ALA / ALD** — The effective agreed time. Used for stops where the exact time is contractually fixed.
 

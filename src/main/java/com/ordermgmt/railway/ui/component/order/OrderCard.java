@@ -12,9 +12,8 @@ import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.domain.order.model.ProcessStatus;
 
 /**
- * Bloomberg-style master-list card for an {@link Order}. Status gutter on the left,
- * status pill (icon + text — never colour alone), order number, customer name,
- * position count, validity range.
+ * Bloomberg-style master-list card for an {@link Order}. Status gutter on the left, status pill
+ * (icon + text — never colour alone), order number, customer name, position count, validity range.
  */
 public class OrderCard extends Div {
 
@@ -26,12 +25,18 @@ public class OrderCard extends Div {
             addClassName("order-card-tile--" + order.getProcessStatus().name().toLowerCase());
         }
 
-        getElement().setAttribute("aria-label",
-                tr.apply("order.aria.cardLabel.prefix") + " "
-                        + safe(order.getOrderNumber()) + ", "
-                        + tr.apply("order.processStatus") + " "
-                        + (order.getProcessStatus() == null ? ""
-                                : tr.apply("process." + order.getProcessStatus().name())));
+        getElement()
+                .setAttribute(
+                        "aria-label",
+                        tr.apply("order.aria.cardLabel.prefix")
+                                + " "
+                                + safe(order.getOrderNumber())
+                                + ", "
+                                + tr.apply("order.processStatus")
+                                + " "
+                                + (order.getProcessStatus() == null
+                                        ? ""
+                                        : tr.apply("process." + order.getProcessStatus().name())));
 
         Div gutter = new Div();
         gutter.addClassName("order-card-tile__gutter");
@@ -43,8 +48,11 @@ public class OrderCard extends Div {
 
         body.add(buildStatusPill(order.getProcessStatus(), tr));
 
-        Span title = new Span(safe(order.getOrderNumber()).isEmpty() ? "—"
-                : safe(order.getOrderNumber()));
+        Span title =
+                new Span(
+                        safe(order.getOrderNumber()).isEmpty()
+                                ? "—"
+                                : safe(order.getOrderNumber()));
         title.addClassName("order-card-tile__number");
         body.add(title);
 
@@ -68,13 +76,16 @@ public class OrderCard extends Div {
         pill.setPadding(false);
         pill.setSpacing(false);
 
-        VaadinIcon iconSpec = status == null ? VaadinIcon.QUESTION_CIRCLE_O : switch (status) {
-            case AUFTRAG -> VaadinIcon.FILE_TEXT_O;
-            case PLANUNG -> VaadinIcon.CALENDAR;
-            case PRODUKT_LEISTUNG -> VaadinIcon.PACKAGE;
-            case PRODUKTION -> VaadinIcon.COG;
-            case ABRECHNUNG_NACHBEREITUNG -> VaadinIcon.CHECK_CIRCLE_O;
-        };
+        VaadinIcon iconSpec =
+                status == null
+                        ? VaadinIcon.QUESTION_CIRCLE_O
+                        : switch (status) {
+                            case AUFTRAG -> VaadinIcon.FILE_TEXT_O;
+                            case PLANUNG -> VaadinIcon.CALENDAR;
+                            case PRODUKT_LEISTUNG -> VaadinIcon.PACKAGE;
+                            case PRODUKTION -> VaadinIcon.COG;
+                            case ABRECHNUNG_NACHBEREITUNG -> VaadinIcon.CHECK_CIRCLE_O;
+                        };
         var icon = iconSpec.create();
         icon.addClassName("order-status-pill__icon");
         icon.getElement().setAttribute("aria-hidden", "true");
@@ -102,12 +113,15 @@ public class OrderCard extends Div {
         Span validity = new Span();
         validity.addClassName("order-card-tile__validity");
         if (order.getValidFrom() != null && order.getValidTo() != null) {
-            validity.setText(order.getValidFrom().format(DATE_FMT) + " → "
-                    + order.getValidTo().format(DATE_FMT));
+            validity.setText(
+                    order.getValidFrom().format(DATE_FMT)
+                            + " → "
+                            + order.getValidTo().format(DATE_FMT));
         } else if (order.getValidTo() != null) {
             validity.setText(tr.apply("order.validTo") + " " + order.getValidTo().format(DATE_FMT));
         } else if (order.getValidFrom() != null) {
-            validity.setText(tr.apply("order.validFrom") + " " + order.getValidFrom().format(DATE_FMT));
+            validity.setText(
+                    tr.apply("order.validFrom") + " " + order.getValidFrom().format(DATE_FMT));
         } else {
             validity.setText("—");
         }

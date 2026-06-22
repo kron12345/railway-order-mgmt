@@ -19,14 +19,17 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * Generic per-user persistence record for any view's UI state — grid column layouts,
- * splitter positions, filter selections, etc. The {@code viewKey} namespaces the entry
- * (e.g. {@code "grid.business.list"}); {@code payload} holds the view-specific JSON.
+ * Generic per-user persistence record for any view's UI state — grid column layouts, splitter
+ * positions, filter selections, etc. The {@code viewKey} namespaces the entry (e.g. {@code
+ * "grid.business.list"}); {@code payload} holds the view-specific JSON.
  */
 @Entity
-@Table(name = "user_view_preferences",
-        uniqueConstraints = @UniqueConstraint(name = "uq_user_view",
-                columnNames = {"user_id", "view_key"}))
+@Table(
+        name = "user_view_preferences",
+        uniqueConstraints =
+                @UniqueConstraint(
+                        name = "uq_user_view",
+                        columnNames = {"user_id", "view_key"}))
 @Getter
 @Setter
 @NoArgsConstructor

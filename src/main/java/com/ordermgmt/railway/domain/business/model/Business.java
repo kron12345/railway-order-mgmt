@@ -8,9 +8,7 @@ import java.util.UUID;
 
 import jakarta.persistence.*;
 
-import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.envers.Audited;
-import org.hibernate.type.SqlTypes;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -63,19 +61,19 @@ public class Business {
 
     @ManyToMany
     @JoinTable(
-        name = "business_order_positions",
-        joinColumns = @JoinColumn(name = "business_id"),
-        inverseJoinColumns = @JoinColumn(name = "order_position_id")
-    )
-    private List<com.ordermgmt.railway.domain.order.model.OrderPosition> orderPositions = new ArrayList<>();
+            name = "business_order_positions",
+            joinColumns = @JoinColumn(name = "business_id"),
+            inverseJoinColumns = @JoinColumn(name = "order_position_id"))
+    private List<com.ordermgmt.railway.domain.order.model.OrderPosition> orderPositions =
+            new ArrayList<>();
 
     @ManyToMany
     @JoinTable(
-        name = "business_purchase_positions",
-        joinColumns = @JoinColumn(name = "business_id"),
-        inverseJoinColumns = @JoinColumn(name = "purchase_position_id")
-    )
-    private List<com.ordermgmt.railway.domain.order.model.PurchasePosition> purchasePositions = new ArrayList<>();
+            name = "business_purchase_positions",
+            joinColumns = @JoinColumn(name = "business_id"),
+            inverseJoinColumns = @JoinColumn(name = "purchase_position_id"))
+    private List<com.ordermgmt.railway.domain.order.model.PurchasePosition> purchasePositions =
+            new ArrayList<>();
 
     @CreatedDate
     @Column(nullable = false, updatable = false)

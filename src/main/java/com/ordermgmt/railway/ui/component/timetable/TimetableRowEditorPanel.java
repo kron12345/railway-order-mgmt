@@ -14,13 +14,17 @@ import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.
 
 import java.time.Duration;
 import java.time.LocalTime;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.checkbox.Checkbox;
 import com.vaadin.flow.component.combobox.ComboBox;
+import com.vaadin.flow.component.combobox.MultiSelectComboBox;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.icon.VaadinIcon;
@@ -30,9 +34,11 @@ import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.select.Select;
+import com.vaadin.flow.component.textfield.TextArea;
 import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.component.timepicker.TimePicker;
 
+import com.ordermgmt.railway.domain.timetable.model.JourneyLocationType;
 import com.ordermgmt.railway.domain.timetable.model.TimeConstraintMode;
 import com.ordermgmt.railway.domain.timetable.model.TimePropagationMode;
 import com.ordermgmt.railway.domain.timetable.model.TimetableActivityOption;
@@ -57,11 +63,16 @@ class TimetableRowEditorPanel extends Div {
     private final Span contextLabel = new Span();
     private final Span arrivalEstimateLabel = new Span();
     private final Span departureEstimateLabel = new Span();
+    private final Select<JourneyLocationType> journeyLocationTypeField = new Select<>();
+    private final Checkbox tttRelevantField = new Checkbox();
     private final Checkbox haltField = new Checkbox();
     private final com.vaadin.flow.component.textfield.IntegerField dwellMinutesField =
             new com.vaadin.flow.component.textfield.IntegerField();
-    private final ComboBox<TimetableActivityOption> activityField = new ComboBox<>();
+    private final MultiSelectComboBox<TimetableActivityOption> activityField =
+            new MultiSelectComboBox<>();
     private final TextField associatedTrainField = new TextField();
+    private final TextField locationSubsidiaryField = new TextField();
+    private final TextArea networkSpecificParametersField = new TextArea();
 
     // ── Arrival Section ──────────────────────────────────────────────────
 
@@ -74,6 +85,8 @@ class TimetableRowEditorPanel extends Div {
     private final Div arrivalWindowWrapper = new Div();
     private final Div arrivalCommercialWrapper = new Div();
     private final Div arrivalSection = new Div();
+    private final com.vaadin.flow.component.textfield.IntegerField arrivalOffsetField =
+            new com.vaadin.flow.component.textfield.IntegerField();
 
     // ── Departure Section ────────────────────────────────────────────────
 
@@ -86,6 +99,8 @@ class TimetableRowEditorPanel extends Div {
     private final Div departureWindowWrapper = new Div();
     private final Div departureCommercialWrapper = new Div();
     private final Div departureSection = new Div();
+    private final com.vaadin.flow.component.textfield.IntegerField departureOffsetField =
+            new com.vaadin.flow.component.textfield.IntegerField();
 
     // ── Propagation ──────────────────────────────────────────────────────
 
@@ -123,12 +138,21 @@ class TimetableRowEditorPanel extends Div {
                         + ")");
         contextLabel.setText(
                 t("timetable.editor.context", nvl(row.getFromName()), nvl(row.getToName())));
+        journeyLocationTypeField.setValue(
+                JourneyLocationType.fromString(row.getJourneyLocationType()));
+        journeyLocationTypeField.setEnabled(!isOrigin && !isDestination);
+        tttRelevantField.setValue(Boolean.TRUE.equals(row.getTttRelevant()));
         haltField.setValue(Boolean.TRUE.equals(row.getHalt()));
         dwellMinutesField.setValue(row.getDwellMinutes());
-        activityField.setValue(
-                findActivityOption(row.getActivityCode(), activityOptions).orElse(null));
+        activityField.setValue(activityOptionsForRow(row));
         associatedTrainField.setValue(
                 row.getAssociatedTrainOtn() != null ? row.getAssociatedTrainOtn() : "");
+        locationSubsidiaryField.setValue(
+                row.getLocationSubsidiaryCode() != null ? row.getLocationSubsidiaryCode() : "");
+        networkSpecificParametersField.setValue(
+                row.getNetworkSpecificParametersText() != null
+                        ? row.getNetworkSpecificParametersText()
+                        : "");
         updateAssociatedTrainVisibility();
 
         populateEstimateLabel(arrivalEstimateLabel, row, true);
@@ -144,12 +168,37 @@ class TimetableRowEditorPanel extends Div {
         departureEarliestField.setValue(parseTime(row.getDepartureEarliest()));
         departureLatestField.setValue(parseTime(row.getDepartureLatest()));
         departureCommercialField.setValue(parseTime(row.getCommercialDeparture()));
+        arrivalOffsetField.setValue(row.getArrivalOffset() == null ? 0 : row.getArrivalOffset());
+        departureOffsetField.setValue(
+                row.getDepartureOffset() == null ? 0 : row.getDepartureOffset());
         pinnedField.setValue(Boolean.TRUE.equals(row.getPinned()));
 
-        arrivalSection.setVisible(!isOrigin);
-        departureSection.setVisible(!isDestination);
-        activityField.setVisible(Boolean.TRUE.equals(row.getHalt()));
-        if (Boolean.TRUE.equals(row.getHalt()) && activityField.getValue() == null) {
+        // Clear any leftover invalid states from a previously selected row.
+        clearInvalid(
+                arrivalExactField,
+                arrivalEarliestField,
+                arrivalLatestField,
+                arrivalCommercialField,
+                departureExactField,
+                departureEarliestField,
+                departureLatestField,
+                departureCommercialField);
+
+        // Origin and destination are implicit halts (the train stops there by definition) —
+        // they have no halt-checkbox or dwell-input. Origin only allows departure-side
+        // constraints, destination only arrival-side. Per TTT spec: §3.6 + §5.7.
+        boolean isEndpoint = isOrigin || isDestination;
+        haltField.setVisible(!isEndpoint);
+        boolean halt = isEndpoint || Boolean.TRUE.equals(row.getHalt());
+        if (isEndpoint) {
+            haltField.setValue(true);
+        }
+        arrivalSection.setVisible(!isOrigin && halt);
+        departureSection.setVisible(!isDestination && halt);
+        // No dwell at origin (no arrival to compute from) or destination (no departure).
+        dwellMinutesField.setVisible(halt && !isEndpoint);
+        activityField.setVisible(halt);
+        if (halt && activityField.getSelectedItems().isEmpty()) {
             activityField.getStyle().set("background", "rgba(250,204,21,0.15)");
             activityField.setRequiredIndicatorVisible(true);
         } else {
@@ -171,10 +220,28 @@ class TimetableRowEditorPanel extends Div {
         if (row == null) {
             return true;
         }
-        row.setHalt(Boolean.TRUE.equals(haltField.getValue()));
-        row.setDwellMinutes(
-                Boolean.TRUE.equals(haltField.getValue()) ? dwellMinutesField.getValue() : null);
+        // Origin and destination are implicit halts with no dwell — UI hides both controls,
+        // so we lock the data here regardless of whatever the (hidden) checkbox holds.
+        boolean endpoint = isOrigin || isDestination;
+        boolean halt = endpoint || Boolean.TRUE.equals(haltField.getValue());
+        row.setHalt(halt);
+        Integer dwellValue = (halt && !endpoint) ? dwellMinutesField.getValue() : null;
+        row.setDwellMinutes(dwellValue);
+        // userEnteredDwell mirrors whether the field has a non-null value on a non-endpoint halt.
+        row.setUserEnteredDwell(dwellValue != null);
         row.setPinned(Boolean.TRUE.equals(pinnedField.getValue()));
+        row.setTttRelevant(Boolean.TRUE.equals(tttRelevantField.getValue()));
+        JourneyLocationType locationType = journeyLocationTypeField.getValue();
+        if (locationType != null) {
+            row.setJourneyLocationType(locationType.name());
+        }
+        row.setLocationSubsidiaryCode(blankToNull(locationSubsidiaryField.getValue()));
+        row.setNetworkSpecificParametersText(
+                blankToNull(networkSpecificParametersField.getValue()));
+        row.setArrivalOffset(
+                arrivalOffsetField.getValue() == null ? 0 : arrivalOffsetField.getValue());
+        row.setDepartureOffset(
+                departureOffsetField.getValue() == null ? 0 : departureOffsetField.getValue());
 
         if (!writeTimeMode(
                 row,
@@ -200,7 +267,7 @@ class TimetableRowEditorPanel extends Div {
         }
 
         if (Boolean.TRUE.equals(row.getHalt())) {
-            if (activityField.getValue() == null) {
+            if (activityField.getSelectedItems().isEmpty()) {
                 if (showNotifications) {
                     Notification.show(
                                     t("timetable.stop.activityRequired"), 3000, Position.BOTTOM_END)
@@ -208,12 +275,15 @@ class TimetableRowEditorPanel extends Div {
                 }
                 return false;
             }
-            row.setActivityCode(activityField.getValue().code());
+            List<String> activityCodes = selectedActivityCodes();
+            row.setActivityCodes(activityCodes);
+            row.setActivityCode(activityCodes.isEmpty() ? null : activityCodes.getFirst());
             String otnVal = associatedTrainField.getValue();
             row.setAssociatedTrainOtn(otnVal != null && !otnVal.isBlank() ? otnVal.trim() : null);
             ensureStopTimes(row, isOrigin, isDestination);
         } else {
             row.setActivityCode(null);
+            row.setActivityCodes(List.of());
             row.setAssociatedTrainOtn(null);
         }
         return true;
@@ -244,8 +314,11 @@ class TimetableRowEditorPanel extends Div {
                 .set("color", "var(--rom-text-muted)");
 
         configureHaltField();
+        configureTttLocationFields();
         configureActivityField();
         configureAssociatedTrainField();
+        configureLocationSubsidiaryField();
+        configureNetworkSpecificParametersField();
         configureDwellField();
         configureConstraintMode(arrivalModeField, "timetable.editor.arrivalMode");
         configureConstraintMode(departureModeField, "timetable.editor.departureMode");
@@ -266,6 +339,7 @@ class TimetableRowEditorPanel extends Div {
                 arrivalEstimateLabel,
                 arrivalModeField,
                 "timetable.editor.arrival");
+        arrivalSection.add(arrivalOffsetField);
         buildTimeSection(
                 departureSection,
                 departureExactWrapper,
@@ -278,10 +352,12 @@ class TimetableRowEditorPanel extends Div {
                 departureEstimateLabel,
                 departureModeField,
                 "timetable.editor.departure");
+        departureSection.add(departureOffsetField);
 
         Div propagationSection = buildPropagationSection();
 
-        HorizontalLayout rowFlags = new HorizontalLayout(haltField, dwellMinutesField);
+        HorizontalLayout rowFlags =
+                new HorizontalLayout(tttRelevantField, haltField, dwellMinutesField);
         rowFlags.setWidthFull();
         rowFlags.expand(dwellMinutesField);
         rowFlags.setAlignItems(FlexComponent.Alignment.END);
@@ -296,9 +372,12 @@ class TimetableRowEditorPanel extends Div {
         add(
                 titleLabel,
                 contextLabel,
+                journeyLocationTypeField,
                 rowFlags,
                 activityField,
                 associatedTrainField,
+                locationSubsidiaryField,
+                networkSpecificParametersField,
                 arrivalSection,
                 departureSection,
                 propagationSection,
@@ -311,15 +390,47 @@ class TimetableRowEditorPanel extends Div {
                 e -> {
                     boolean halt = Boolean.TRUE.equals(e.getValue());
                     activityField.setVisible(halt);
+                    applyHaltVisibility(halt);
                     if (halt) {
                         activityField.getStyle().set("background", "rgba(250,204,21,0.15)");
                         activityField.setRequiredIndicatorVisible(true);
                         // Auto-select first activity if none selected
-                        if (activityField.getValue() == null && !activityOptions.isEmpty()) {
-                            activityField.setValue(activityOptions.getFirst());
+                        if (activityField.getSelectedItems().isEmpty()
+                                && !activityOptions.isEmpty()) {
+                            activityField.setValue(Set.of(activityOptions.getFirst()));
                         }
+                    } else {
+                        // Pass-through: clear any half-typed times so they aren't accidentally
+                        // exported
+                        clearAllTimeFields();
                     }
                 });
+    }
+
+    /**
+     * Halt=false (Durchfahrt) → arrival/departure constraint sections + dwell field hidden, per
+     * Regel 3 (no time inputs allowed without halt). Pin and propagation stay visible because
+     * pinning a pass-through is allowed (Edge-Case #5).
+     */
+    private void applyHaltVisibility(boolean halt) {
+        arrivalSection.setVisible(halt);
+        departureSection.setVisible(halt);
+        dwellMinutesField.setVisible(halt);
+    }
+
+    /** Clear all editor time inputs and their displays — used when halt is unchecked. */
+    private void clearAllTimeFields() {
+        arrivalModeField.setValue(TimeConstraintMode.NONE);
+        departureModeField.setValue(TimeConstraintMode.NONE);
+        arrivalExactField.clear();
+        arrivalEarliestField.clear();
+        arrivalLatestField.clear();
+        arrivalCommercialField.clear();
+        departureExactField.clear();
+        departureEarliestField.clear();
+        departureLatestField.clear();
+        departureCommercialField.clear();
+        dwellMinutesField.clear();
     }
 
     private static final java.util.Set<String> VEHICLE_LINK_ACTIVITIES =
@@ -331,9 +442,10 @@ class TimetableRowEditorPanel extends Div {
         activityField.setItems(activityOptions);
         activityField.setItemLabelGenerator(opt -> activityOptionLabel(opt));
         activityField.setWidthFull();
+        activityField.setClearButtonVisible(true);
         activityField.addValueChangeListener(
                 e -> {
-                    if (e.getValue() != null) {
+                    if (!e.getValue().isEmpty()) {
                         activityField.getStyle().remove("background");
                     } else if (Boolean.TRUE.equals(haltField.getValue())) {
                         activityField.getStyle().set("background", "rgba(250,204,21,0.15)");
@@ -351,9 +463,36 @@ class TimetableRowEditorPanel extends Div {
     }
 
     private void updateAssociatedTrainVisibility() {
-        TimetableActivityOption selected = activityField.getValue();
-        boolean show = selected != null && VEHICLE_LINK_ACTIVITIES.contains(selected.code());
+        boolean show =
+                activityField.getSelectedItems().stream()
+                        .anyMatch(selected -> VEHICLE_LINK_ACTIVITIES.contains(selected.code()));
         associatedTrainField.setVisible(show);
+    }
+
+    private void configureTttLocationFields() {
+        journeyLocationTypeField.setLabel(t("timetable.editor.journeyLocationType"));
+        journeyLocationTypeField.setItems(JourneyLocationType.values());
+        journeyLocationTypeField.setItemLabelGenerator(type -> type.code() + " · " + type.label());
+        journeyLocationTypeField.setValue(JourneyLocationType.INTERMEDIATE);
+        journeyLocationTypeField.setWidthFull();
+
+        tttRelevantField.setLabel(t("timetable.editor.tttRelevant"));
+        tttRelevantField.setHelperText(t("timetable.editor.tttRelevant.help"));
+    }
+
+    private void configureLocationSubsidiaryField() {
+        locationSubsidiaryField.setLabel(t("timetable.editor.locationSubsidiary"));
+        locationSubsidiaryField.setHelperText(t("timetable.editor.locationSubsidiary.help"));
+        locationSubsidiaryField.setMaxLength(50);
+        locationSubsidiaryField.setWidthFull();
+    }
+
+    private void configureNetworkSpecificParametersField() {
+        networkSpecificParametersField.setLabel(t("timetable.editor.networkSpecificParameters"));
+        networkSpecificParametersField.setHelperText(
+                t("timetable.editor.networkSpecificParameters.help"));
+        networkSpecificParametersField.setWidthFull();
+        networkSpecificParametersField.setMinHeight("88px");
     }
 
     private void configureDwellField() {
@@ -373,9 +512,22 @@ class TimetableRowEditorPanel extends Div {
         configureNamedTimePicker(departureLatestField, t("timetable.editor.latestDeparture"));
         configureNamedTimePicker(departureCommercialField, t("timetable.editor.commercial"));
 
+        configureOffsetField(arrivalOffsetField);
+        configureOffsetField(departureOffsetField);
+
         String relativeHelp = t("timetable.time.relative.help");
         arrivalExactField.setHelperText(relativeHelp);
         departureExactField.setHelperText(relativeHelp);
+    }
+
+    private void configureOffsetField(com.vaadin.flow.component.textfield.IntegerField field) {
+        field.setLabel(t("timetable.editor.dayOffset"));
+        field.setHelperText(t("timetable.editor.dayOffset.help"));
+        field.setMin(-1);
+        field.setMax(2);
+        field.setStepButtonsVisible(true);
+        field.setValue(0);
+        field.setWidthFull();
     }
 
     private void configureConstraintMode(Select<TimeConstraintMode> field, String labelKey) {
@@ -383,7 +535,85 @@ class TimetableRowEditorPanel extends Div {
         field.setItems(TimeConstraintMode.values());
         field.setItemLabelGenerator(mode -> timeModeLabel(mode, this));
         field.setValue(TimeConstraintMode.NONE);
-        field.addValueChangeListener(e -> updateModeVisibility());
+        boolean isArrival = (field == arrivalModeField);
+        field.addValueChangeListener(
+                e -> {
+                    if (e.isFromClient()) {
+                        // Mode-switch preservation (Edge-Case #3 / option a): copy any current
+                        // value from the old mode's picker(s) into the new mode's picker(s) so
+                        // the user doesn't silently lose what they typed.
+                        preserveValueAcrossMode(isArrival, e.getOldValue(), e.getValue());
+                    }
+                    updateModeVisibility();
+                });
+    }
+
+    /** Move whatever single value the user had under the old mode into the new-mode pickers. */
+    private void preserveValueAcrossMode(
+            boolean isArrival, TimeConstraintMode oldMode, TimeConstraintMode newMode) {
+        if (oldMode == null || newMode == null || oldMode == newMode) return;
+        java.time.LocalTime source = sourceForMode(isArrival, oldMode);
+        if (source == null) return;
+        switch (newMode) {
+            case EXACT -> {
+                if (isArrival) arrivalExactField.setValue(source);
+                else departureExactField.setValue(source);
+            }
+            case WINDOW -> {
+                if (isArrival) {
+                    arrivalEarliestField.setValue(source);
+                    arrivalLatestField.setValue(source);
+                } else {
+                    departureEarliestField.setValue(source);
+                    departureLatestField.setValue(source);
+                }
+            }
+            case AFTER -> {
+                // Half-window "≥ X": only earliest is meaningful
+                if (isArrival) arrivalEarliestField.setValue(source);
+                else departureEarliestField.setValue(source);
+            }
+            case BEFORE -> {
+                // Half-window "≤ X": only latest is meaningful
+                if (isArrival) arrivalLatestField.setValue(source);
+                else departureLatestField.setValue(source);
+            }
+            case COMMERCIAL -> {
+                if (isArrival) arrivalCommercialField.setValue(source);
+                else departureCommercialField.setValue(source);
+            }
+            case NONE -> {
+                /* user explicitly cleared */
+            }
+        }
+    }
+
+    private java.time.LocalTime sourceForMode(boolean isArrival, TimeConstraintMode mode) {
+        if (mode == null) return null;
+        return switch (mode) {
+            case EXACT -> isArrival ? arrivalExactField.getValue() : departureExactField.getValue();
+            case WINDOW -> {
+                if (isArrival) {
+                    yield firstNonNullTime(
+                            arrivalEarliestField.getValue(), arrivalLatestField.getValue());
+                }
+                yield firstNonNullTime(
+                        departureLatestField.getValue(), departureEarliestField.getValue());
+            }
+            case AFTER ->
+                    isArrival ? arrivalEarliestField.getValue() : departureEarliestField.getValue();
+            case BEFORE ->
+                    isArrival ? arrivalLatestField.getValue() : departureLatestField.getValue();
+            case COMMERCIAL ->
+                    isArrival
+                            ? arrivalCommercialField.getValue()
+                            : departureCommercialField.getValue();
+            case NONE -> null;
+        };
+    }
+
+    private java.time.LocalTime firstNonNullTime(java.time.LocalTime a, java.time.LocalTime b) {
+        return a != null ? a : b;
     }
 
     private Div buildPropagationSection() {
@@ -402,7 +632,7 @@ class TimetableRowEditorPanel extends Div {
                         mode == TimePropagationMode.SHIFT
                                 ? t("timetable.time.shift")
                                 : t("timetable.time.stretch"));
-        propagationModeField.setValue(TimePropagationMode.SHIFT);
+        propagationModeField.setValue(TimePropagationMode.STRETCH);
         propagationModeField.setWidthFull();
 
         pinnedField.setLabel(t("timetable.time.pinned"));
@@ -460,6 +690,9 @@ class TimetableRowEditorPanel extends Div {
             TimePicker commercialField,
             boolean showNotifications) {
 
+        // Reset any prior invalid markers on this side; we only re-mark on the actual offender.
+        clearInvalid(exactField, earliestField, latestField, commercialField);
+
         TimeConstraintMode resolvedMode = defaultMode(mode);
         if (arrival) {
             row.setArrivalMode(resolvedMode);
@@ -467,12 +700,22 @@ class TimetableRowEditorPanel extends Div {
             row.setArrivalEarliest(null);
             row.setArrivalLatest(null);
             row.setCommercialArrival(null);
+            // Reset user-entered flags; we set them back to true only for fields the user
+            // actually filled in this sync pass.
+            row.setUserEnteredArrivalExact(false);
+            row.setUserEnteredArrivalEarliest(false);
+            row.setUserEnteredArrivalLatest(false);
+            row.setUserEnteredCommercialArrival(false);
         } else {
             row.setDepartureMode(resolvedMode);
             row.setDepartureExact(null);
             row.setDepartureEarliest(null);
             row.setDepartureLatest(null);
             row.setCommercialDeparture(null);
+            row.setUserEnteredDepartureExact(false);
+            row.setUserEnteredDepartureEarliest(false);
+            row.setUserEnteredDepartureLatest(false);
+            row.setUserEnteredCommercialDeparture(false);
         }
 
         if (resolvedMode == TimeConstraintMode.NONE) {
@@ -480,43 +723,122 @@ class TimetableRowEditorPanel extends Div {
         }
         if (resolvedMode == TimeConstraintMode.EXACT) {
             if (exactField.getValue() == null) {
-                return notifyIfNeeded(showNotifications, "timetable.editor.time.required");
+                return invalidate(
+                        exactField, arrival, showNotifications, "timetable.editor.time.required");
             }
             String formatted = formatTime(exactField.getValue());
             if (arrival) {
                 row.setArrivalExact(formatted);
+                row.setUserEnteredArrivalExact(true);
             } else {
                 row.setDepartureExact(formatted);
+                row.setUserEnteredDepartureExact(true);
             }
             return true;
         }
         if (resolvedMode == TimeConstraintMode.COMMERCIAL) {
             if (commercialField.getValue() == null) {
-                return notifyIfNeeded(showNotifications, "timetable.editor.time.required");
+                return invalidate(
+                        commercialField,
+                        arrival,
+                        showNotifications,
+                        "timetable.editor.time.required");
             }
             String formatted = formatTime(commercialField.getValue());
             if (arrival) {
                 row.setCommercialArrival(formatted);
+                row.setUserEnteredCommercialArrival(true);
             } else {
                 row.setCommercialDeparture(formatted);
+                row.setUserEnteredCommercialDeparture(true);
             }
             return true;
         }
 
-        /* WINDOW mode */
-        if (earliestField.getValue() == null
-                || latestField.getValue() == null
-                || latestField.getValue().isBefore(earliestField.getValue())) {
-            return notifyIfNeeded(showNotifications, "timetable.editor.window.invalid");
+        /* AFTER (≥) — only earliest needed */
+        if (resolvedMode == TimeConstraintMode.AFTER) {
+            if (earliestField.getValue() == null) {
+                return invalidate(
+                        earliestField,
+                        arrival,
+                        showNotifications,
+                        "timetable.editor.time.required");
+            }
+            String formatted = formatTime(earliestField.getValue());
+            if (arrival) {
+                row.setArrivalEarliest(formatted);
+                row.setUserEnteredArrivalEarliest(true);
+            } else {
+                row.setDepartureEarliest(formatted);
+                row.setUserEnteredDepartureEarliest(true);
+            }
+            return true;
+        }
+
+        /* BEFORE (≤) — only latest needed */
+        if (resolvedMode == TimeConstraintMode.BEFORE) {
+            if (latestField.getValue() == null) {
+                return invalidate(
+                        latestField, arrival, showNotifications, "timetable.editor.time.required");
+            }
+            String formatted = formatTime(latestField.getValue());
+            if (arrival) {
+                row.setArrivalLatest(formatted);
+                row.setUserEnteredArrivalLatest(true);
+            } else {
+                row.setDepartureLatest(formatted);
+                row.setUserEnteredDepartureLatest(true);
+            }
+            return true;
+        }
+
+        /* WINDOW mode — both bounds required */
+        if (earliestField.getValue() == null) {
+            return invalidate(
+                    earliestField, arrival, showNotifications, "timetable.editor.time.required");
+        }
+        if (latestField.getValue() == null) {
+            return invalidate(
+                    latestField, arrival, showNotifications, "timetable.editor.time.required");
+        }
+        if (latestField.getValue().isBefore(earliestField.getValue())) {
+            return invalidate(
+                    latestField, arrival, showNotifications, "timetable.editor.window.invalid");
         }
         if (arrival) {
             row.setArrivalEarliest(formatTime(earliestField.getValue()));
             row.setArrivalLatest(formatTime(latestField.getValue()));
+            row.setUserEnteredArrivalEarliest(true);
+            row.setUserEnteredArrivalLatest(true);
         } else {
             row.setDepartureEarliest(formatTime(earliestField.getValue()));
             row.setDepartureLatest(formatTime(latestField.getValue()));
+            row.setUserEnteredDepartureEarliest(true);
+            row.setUserEnteredDepartureLatest(true);
         }
         return true;
+    }
+
+    private void clearInvalid(TimePicker... pickers) {
+        for (TimePicker p : pickers) {
+            p.setInvalid(false);
+            p.setErrorMessage(null);
+        }
+    }
+
+    private boolean invalidate(
+            TimePicker field, boolean arrival, boolean showNotifications, String key) {
+        field.setInvalid(true);
+        field.setErrorMessage(t(key));
+        if (showNotifications) {
+            String sideLabel =
+                    t(arrival ? "timetable.editor.arrival" : "timetable.editor.departure");
+            Notification.show(sideLabel + ": " + t(key), 3000, Position.BOTTOM_END)
+                    .addThemeVariants(NotificationVariant.LUMO_ERROR);
+        }
+        // Bring the offending field into view and focus it so the user sees what's missing.
+        field.focus();
+        return false;
     }
 
     private void ensureStopTimes(TimetableRowData row, boolean isOrigin, boolean isDestination) {
@@ -542,12 +864,27 @@ class TimetableRowEditorPanel extends Div {
     private void updateModeVisibility() {
         TimeConstraintMode arrMode = arrivalModeField.getValue();
         arrivalExactWrapper.setVisible(arrMode == TimeConstraintMode.EXACT);
-        arrivalWindowWrapper.setVisible(arrMode == TimeConstraintMode.WINDOW);
+        // Window wrapper holds both earliest+latest; AFTER and BEFORE reuse it but only show one.
+        arrivalWindowWrapper.setVisible(
+                arrMode == TimeConstraintMode.WINDOW
+                        || arrMode == TimeConstraintMode.AFTER
+                        || arrMode == TimeConstraintMode.BEFORE);
+        arrivalEarliestField.setVisible(
+                arrMode == TimeConstraintMode.WINDOW || arrMode == TimeConstraintMode.AFTER);
+        arrivalLatestField.setVisible(
+                arrMode == TimeConstraintMode.WINDOW || arrMode == TimeConstraintMode.BEFORE);
         arrivalCommercialWrapper.setVisible(arrMode == TimeConstraintMode.COMMERCIAL);
 
         TimeConstraintMode depMode = departureModeField.getValue();
         departureExactWrapper.setVisible(depMode == TimeConstraintMode.EXACT);
-        departureWindowWrapper.setVisible(depMode == TimeConstraintMode.WINDOW);
+        departureWindowWrapper.setVisible(
+                depMode == TimeConstraintMode.WINDOW
+                        || depMode == TimeConstraintMode.AFTER
+                        || depMode == TimeConstraintMode.BEFORE);
+        departureEarliestField.setVisible(
+                depMode == TimeConstraintMode.WINDOW || depMode == TimeConstraintMode.AFTER);
+        departureLatestField.setVisible(
+                depMode == TimeConstraintMode.WINDOW || depMode == TimeConstraintMode.BEFORE);
         departureCommercialWrapper.setVisible(depMode == TimeConstraintMode.COMMERCIAL);
     }
 
@@ -564,16 +901,6 @@ class TimetableRowEditorPanel extends Div {
             txt += "  [" + qualifier + "]";
         }
         label.setText(txt);
-    }
-
-    // ── Micro-helpers ─────────────────────────────────────────────────
-
-    private boolean notifyIfNeeded(boolean show, String key) {
-        if (show) {
-            Notification.show(t(key), 3000, Position.BOTTOM_END)
-                    .addThemeVariants(NotificationVariant.LUMO_ERROR);
-        }
-        return false;
     }
 
     private Span sectionHeader(String text) {
@@ -593,6 +920,30 @@ class TimetableRowEditorPanel extends Div {
     private void configureNamedTimePicker(TimePicker picker, String label) {
         picker.setLabel(label);
         picker.setClearButtonVisible(true);
+    }
+
+    private Set<TimetableActivityOption> activityOptionsForRow(TimetableRowData row) {
+        Set<TimetableActivityOption> selected = new LinkedHashSet<>();
+        if (row.getActivityCodes() != null) {
+            for (String code : row.getActivityCodes()) {
+                findActivityOption(code, activityOptions).ifPresent(selected::add);
+            }
+        }
+        if (selected.isEmpty()) {
+            findActivityOption(row.getActivityCode(), activityOptions).ifPresent(selected::add);
+        }
+        return selected;
+    }
+
+    private List<String> selectedActivityCodes() {
+        return activityField.getSelectedItems().stream()
+                .map(TimetableActivityOption::code)
+                .distinct()
+                .collect(Collectors.toList());
+    }
+
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     private TimePicker createTimePicker() {

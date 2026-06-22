@@ -14,40 +14,41 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
 /**
- * Asserts that every Spring service and JPA entity carries a class-level JavaDoc
- * header. ArchUnit cannot help here because comments are stripped at compile time,
- * so we walk {@code src/main/java} directly and look for a {@code /** ... *}{@code /}
- * block immediately preceding the {@code class} / {@code interface} / {@code enum}
- * declaration.
+ * Asserts that every Spring service and JPA entity carries a class-level JavaDoc header. ArchUnit
+ * cannot help here because comments are stripped at compile time, so we walk {@code src/main/java}
+ * directly and look for a {@code /** ... *}{@code /} block immediately preceding the {@code class}
+ * / {@code interface} / {@code enum} declaration.
  *
- * <p>Why class-level only: the project explicitly avoids method-level boilerplate
- * (see {@code CLAUDE.md}). The header is the high-leverage spot where a reader
- * learns what a class is for without reading every method.
+ * <p>Why class-level only: the project explicitly avoids method-level boilerplate (see {@code
+ * CLAUDE.md}). The header is the high-leverage spot where a reader learns what a class is for
+ * without reading every method.
  */
 class JavaDocCoverageTest {
 
     private static final Path SRC_MAIN_JAVA = Path.of("src/main/java");
 
     /** Pattern looking for one of the relevant Spring/JPA stereotype annotations. */
-    private static final Pattern STEREOTYPE = Pattern.compile(
-            "^\\s*@(Service|Entity|Repository|RestController|Component"
-                    + "|Configuration|SpringComponent)\\b",
-            Pattern.MULTILINE);
+    private static final Pattern STEREOTYPE =
+            Pattern.compile(
+                    "^\\s*@(Service|Entity|Repository|RestController|Component"
+                            + "|Configuration|SpringComponent)\\b",
+                    Pattern.MULTILINE);
 
     /**
-     * Pattern that matches a class declaration. We capture the kind so the
-     * failure message can be specific.
+     * Pattern that matches a class declaration. We capture the kind so the failure message can be
+     * specific.
      */
-    private static final Pattern CLASS_DECL = Pattern.compile(
-            "(?m)^\\s*(?:public\\s+|abstract\\s+|final\\s+|sealed\\s+|non-sealed\\s+)*"
-                    + "(class|interface|enum|record)\\s+(\\w+)");
+    private static final Pattern CLASS_DECL =
+            Pattern.compile(
+                    "(?m)^\\s*(?:public\\s+|abstract\\s+|final\\s+|sealed\\s+|non-sealed\\s+)*"
+                            + "(class|interface|enum|record)\\s+(\\w+)");
 
     /**
-     * Pattern that matches a JavaDoc block.  We search for the closest one
-     * <em>preceding</em> a stereotype annotation.
+     * Pattern that matches a JavaDoc block. We search for the closest one <em>preceding</em> a
+     * stereotype annotation.
      */
-    private static final Pattern JAVADOC_BLOCK = Pattern.compile(
-            "/\\*\\*[\\s\\S]*?\\*/", Pattern.MULTILINE);
+    private static final Pattern JAVADOC_BLOCK =
+            Pattern.compile("/\\*\\*[\\s\\S]*?\\*/", Pattern.MULTILINE);
 
     @Test
     void everyServiceAndEntityHasClassLevelJavaDoc() throws IOException {
@@ -58,9 +59,10 @@ class JavaDocCoverageTest {
                     .forEach(p -> checkFile(p, violations));
         }
         assertThat(violations)
-                .as("Every @Service / @Entity / @Repository / @RestController / "
-                        + "@Component / @Configuration / @SpringComponent class must "
-                        + "have a class-level JavaDoc header explaining what it does.")
+                .as(
+                        "Every @Service / @Entity / @Repository / @RestController / "
+                                + "@Component / @Configuration / @SpringComponent class must "
+                                + "have a class-level JavaDoc header explaining what it does.")
                 .isEmpty();
     }
 
@@ -92,17 +94,21 @@ class JavaDocCoverageTest {
                 lastDocEnd = doc.end();
             }
             if (lastDocEnd < 0) {
-                violations.add(file + ": " + kind + " " + name
-                        + " has no class-level JavaDoc");
+                violations.add(file + ": " + kind + " " + name + " has no class-level JavaDoc");
                 continue;
             }
             // Reject the case where the JavaDoc is followed by another non-annotation
             // declaration (i.e. it belongs to an earlier class in the file).
             String betweenDocAndAnnotation = src.substring(lastDocEnd, annotationStart);
             if (CLASS_DECL.matcher(betweenDocAndAnnotation).find()) {
-                violations.add(file + ": " + kind + " " + name
-                        + " has no class-level JavaDoc (found JavaDoc only on an "
-                        + "earlier sibling declaration)");
+                violations.add(
+                        file
+                                + ": "
+                                + kind
+                                + " "
+                                + name
+                                + " has no class-level JavaDoc (found JavaDoc only on an "
+                                + "earlier sibling declaration)");
             }
         }
     }

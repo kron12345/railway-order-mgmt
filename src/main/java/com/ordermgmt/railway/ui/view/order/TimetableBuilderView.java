@@ -443,6 +443,7 @@ public class TimetableBuilderView extends VerticalLayout
                     }
                 });
         saveButton.setText(t("common.save"));
+        saveButton.setTooltipText(t("timetable.save.railoptHint"));
         saveButton.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_PRIMARY);
         saveButton.getStyle().set("background", "var(--rom-status-info)").set("color", "white");
         saveButton.addClickListener(e -> savePosition());

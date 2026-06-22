@@ -12,9 +12,8 @@ import com.ordermgmt.railway.domain.rollingstock.model.VehicleCategory;
 import com.ordermgmt.railway.domain.rollingstock.repository.RollingStockRepository;
 
 /**
- * CRUD facade for {@link RollingStockItem} master data. Wraps
- * {@link RollingStockRepository} with active/category filters used by the Vehicle
- * Planning vehicle picker and the rolling-stock admin view.
+ * CRUD facade for {@link RollingStockItem} master data. Wraps {@link RollingStockRepository} with
+ * active/category filters used by the rolling-stock admin view.
  */
 @Service
 @Transactional

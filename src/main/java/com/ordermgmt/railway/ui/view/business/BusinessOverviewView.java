@@ -9,11 +9,11 @@ import java.util.function.Function;
 import jakarta.annotation.security.PermitAll;
 
 import com.vaadin.flow.component.Component;
+import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
-import com.vaadin.flow.component.UI;
 import com.vaadin.flow.router.BeforeEnterEvent;
 import com.vaadin.flow.router.BeforeEnterObserver;
 import com.vaadin.flow.router.PageTitle;
@@ -31,12 +31,12 @@ import com.ordermgmt.railway.ui.component.masterdetail.MasterDetailLayout;
 import com.ordermgmt.railway.ui.layout.MainLayout;
 
 /**
- * Master-detail overview for businesses. Serves both <code>/businesses</code> (list with
- * empty detail) and <code>/businesses/{id}</code> (list + selected business detail).
+ * Master-detail overview for businesses. Serves both <code>/businesses</code> (list with empty
+ * detail) and <code>/businesses/{id}</code> (list + selected business detail).
  *
- * <p>Keyboard navigation, ARIA listbox semantics, type-ahead filter, and skip-links are
- * provided by {@link MasterDetailLayout} and {@link SkipLinks}; URL drives selection so
- * deep links and browser back/forward keep working.
+ * <p>Keyboard navigation, ARIA listbox semantics, type-ahead filter, and skip-links are provided by
+ * {@link MasterDetailLayout} and {@link SkipLinks}; URL drives selection so deep links and browser
+ * back/forward keep working.
  */
 @Route(value = "businesses/:businessId/:mode", layout = MainLayout.class)
 @RouteAlias(value = "businesses/:businessId", layout = MainLayout.class)
@@ -52,10 +52,11 @@ public class BusinessOverviewView extends VerticalLayout implements BeforeEnterO
     private final MasterDetailLayout<Business> shell;
     private final Map<UUID, int[]> linkCountsCache = new HashMap<>();
 
-    public BusinessOverviewView(BusinessService businessService,
-                                UserViewPreferenceService prefsService,
-                                KeycloakUserService keycloakUserService,
-                                AuditService auditService) {
+    public BusinessOverviewView(
+            BusinessService businessService,
+            UserViewPreferenceService prefsService,
+            KeycloakUserService keycloakUserService,
+            AuditService auditService) {
         this.businessService = businessService;
         this.prefsService = prefsService;
         this.keycloakUserService = keycloakUserService;
@@ -70,35 +71,56 @@ public class BusinessOverviewView extends VerticalLayout implements BeforeEnterO
         add(buildSkipLinks());
 
         Function<String, String> tr = this::getTranslation;
-        shell = MasterDetailLayout.<Business>spec()
-                .idExtractor(Business::getId)
-                .cardRenderer(b -> {
-                    int[] counts = countsFor(b);
-                    return new BusinessCard(b, tr, counts[0], counts[1],
-                            businessService, keycloakUserService, this::loadBusinesses);
-                })
-                .matcher((b, q) -> {
-                    String title = b.getTitle() == null ? "" : b.getTitle().toLowerCase();
-                    String desc = b.getDescription() == null ? "" : b.getDescription().toLowerCase();
-                    String tags = b.getTags() == null ? "" : b.getTags().toLowerCase();
-                    return title.contains(q) || desc.contains(q) || tags.contains(q);
-                })
-                .filterPlaceholder(getTranslation("business.filterPlaceholder"))
-                .filterAriaLabel(getTranslation("business.search"))
-                .filterId("biz-filter")
-                .listId("biz-list")
-                .detailId("biz-detail")
-                .listAriaLabel(getTranslation("business.list.aria"))
-                .detailAriaLabel(getTranslation("business.detail.aria"))
-                .toolbarAriaLabel(getTranslation("business.toolbar.aria"))
-                .emptyText(getTranslation("business.empty"))
-                .detailEmptyText(getTranslation("business.detail.empty"))
-                .announceTemplate((b, idx, total) -> getTranslation("business.announce.selected",
-                        idx, total, b.getTitle() == null ? "—" : b.getTitle()))
-                .extraToolbar(List.of(buildNewButton()))
-                .shortcutNew(() -> UI.getCurrent().navigate("businesses/new"))
-                .onSelect(id -> UI.getCurrent().navigate("businesses/" + id))
-                .build();
+        shell =
+                MasterDetailLayout.<Business>spec()
+                        .idExtractor(Business::getId)
+                        .cardRenderer(
+                                b -> {
+                                    int[] counts = countsFor(b);
+                                    return new BusinessCard(
+                                            b,
+                                            tr,
+                                            counts[0],
+                                            counts[1],
+                                            businessService,
+                                            keycloakUserService,
+                                            this::loadBusinesses);
+                                })
+                        .matcher(
+                                (b, q) -> {
+                                    String title =
+                                            b.getTitle() == null ? "" : b.getTitle().toLowerCase();
+                                    String desc =
+                                            b.getDescription() == null
+                                                    ? ""
+                                                    : b.getDescription().toLowerCase();
+                                    String tags =
+                                            b.getTags() == null ? "" : b.getTags().toLowerCase();
+                                    return title.contains(q)
+                                            || desc.contains(q)
+                                            || tags.contains(q);
+                                })
+                        .filterPlaceholder(getTranslation("business.filterPlaceholder"))
+                        .filterAriaLabel(getTranslation("business.search"))
+                        .filterId("biz-filter")
+                        .listId("biz-list")
+                        .detailId("biz-detail")
+                        .listAriaLabel(getTranslation("business.list.aria"))
+                        .detailAriaLabel(getTranslation("business.detail.aria"))
+                        .toolbarAriaLabel(getTranslation("business.toolbar.aria"))
+                        .emptyText(getTranslation("business.empty"))
+                        .detailEmptyText(getTranslation("business.detail.empty"))
+                        .announceTemplate(
+                                (b, idx, total) ->
+                                        getTranslation(
+                                                "business.announce.selected",
+                                                idx,
+                                                total,
+                                                b.getTitle() == null ? "—" : b.getTitle()))
+                        .extraToolbar(List.of(buildNewButton()))
+                        .shortcutNew(() -> UI.getCurrent().navigate("businesses/new"))
+                        .onSelect(id -> UI.getCurrent().navigate("businesses/" + id))
+                        .build();
         shell.setSizeFull();
         add(shell);
         setFlexGrow(1, shell);
@@ -132,7 +154,9 @@ public class BusinessOverviewView extends VerticalLayout implements BeforeEnterO
             if ("edit".equals(mode)) {
                 shell.setDetail(new BusinessDetailView(businessService, prefsService, id));
             } else {
-                shell.setDetail(new BusinessReadView(businessService, auditService, id, this::getTranslation));
+                shell.setDetail(
+                        new BusinessReadView(
+                                businessService, auditService, id, this::getTranslation));
             }
         } catch (IllegalArgumentException ex) {
             UI.getCurrent().navigate("businesses");
@@ -140,10 +164,12 @@ public class BusinessOverviewView extends VerticalLayout implements BeforeEnterO
     }
 
     private Component buildSkipLinks() {
-        return new SkipLinks(List.of(
-                new SkipLinks.SkipTarget("biz-filter", getTranslation("a11y.skip.filter")),
-                new SkipLinks.SkipTarget("biz-list", getTranslation("a11y.skip.list")),
-                new SkipLinks.SkipTarget("biz-detail", getTranslation("a11y.skip.detail"))));
+        return new SkipLinks(
+                List.of(
+                        new SkipLinks.SkipTarget("biz-filter", getTranslation("a11y.skip.filter")),
+                        new SkipLinks.SkipTarget("biz-list", getTranslation("a11y.skip.list")),
+                        new SkipLinks.SkipTarget(
+                                "biz-detail", getTranslation("a11y.skip.detail"))));
     }
 
     private Component buildNewButton() {
@@ -153,7 +179,6 @@ public class BusinessOverviewView extends VerticalLayout implements BeforeEnterO
         btn.addClickListener(e -> UI.getCurrent().navigate("businesses/new"));
         return btn;
     }
-
 
     private void loadBusinesses() {
         linkCountsCache.clear();

@@ -11,11 +11,11 @@ import com.vaadin.flow.component.formlayout.FormLayout;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.icon.VaadinIcon;
+import com.vaadin.flow.component.notification.Notification;
+import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
-import com.vaadin.flow.component.notification.Notification;
-import com.vaadin.flow.component.notification.NotificationVariant;
 
 import com.ordermgmt.railway.domain.business.service.BusinessService;
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
@@ -23,20 +23,22 @@ import com.ordermgmt.railway.domain.order.repository.OrderPositionRepository;
 import com.ordermgmt.railway.ui.component.business.LinkedBusinessesPanel;
 
 /**
- * Read-only detail panel for a single {@link OrderPosition}, embedded by
- * {@link OrderOverviewView} when the URL is {@code /orders/{orderId}/positions/{posId}}.
+ * Read-only detail panel for a single {@link OrderPosition}, embedded by {@link OrderOverviewView}
+ * when the URL is {@code /orders/{orderId}/positions/{posId}}.
  *
- * <p>Top: pinned action bar with the primary "← Zum Auftrag" button (Alt+U) so users
- * always have a one-key route back to the order aggregate. Below: read-only fields.
+ * <p>Top: pinned action bar with the primary "← Zum Auftrag" button (Alt+U) so users always have a
+ * one-key route back to the order aggregate. Below: read-only fields.
  */
 public class OrderPositionDetailView extends VerticalLayout {
 
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("dd.MM.yy HH:mm");
 
-    public OrderPositionDetailView(OrderPositionRepository positionRepo,
-                                   BusinessService businessService,
-                                   UUID orderId, UUID positionId,
-                                   Function<String, String> tr) {
+    public OrderPositionDetailView(
+            OrderPositionRepository positionRepo,
+            BusinessService businessService,
+            UUID orderId,
+            UUID positionId,
+            Function<String, String> tr) {
         addClassName("order-pos-detail");
         setSizeFull();
         setPadding(false);
@@ -45,10 +47,11 @@ public class OrderPositionDetailView extends VerticalLayout {
 
         OrderPosition pos = positionRepo.findById(positionId).orElse(null);
         // Reject cross-order deep links: the position must actually belong to the URL's order.
-        if (pos == null || pos.getOrder() == null
-                || !orderId.equals(pos.getOrder().getId())) {
-            Notification.show(tr.apply("order.position.notFound"), 2500,
-                    Notification.Position.BOTTOM_END)
+        if (pos == null || pos.getOrder() == null || !orderId.equals(pos.getOrder().getId())) {
+            Notification.show(
+                            tr.apply("order.position.notFound"),
+                            2500,
+                            Notification.Position.BOTTOM_END)
                     .addThemeVariants(NotificationVariant.LUMO_ERROR);
             UI.getCurrent().navigate("orders/" + orderId);
             return;
@@ -56,8 +59,7 @@ public class OrderPositionDetailView extends VerticalLayout {
 
         add(buildActionBar(orderId, tr));
         add(buildBody(pos, tr));
-        add(new LinkedBusinessesPanel(
-                businessService.findByLinkedOrderPosition(positionId), tr));
+        add(new LinkedBusinessesPanel(businessService.findByLinkedOrderPosition(positionId), tr));
     }
 
     private HorizontalLayout buildActionBar(UUID orderId, Function<String, String> tr) {
@@ -74,10 +76,11 @@ public class OrderPositionDetailView extends VerticalLayout {
         back.getElement().setAttribute("aria-keyshortcuts", "Alt+U");
         back.addClickListener(e -> UI.getCurrent().navigate("orders/" + orderId));
         // Alt+U → back to order
-        com.vaadin.flow.component.Shortcuts.addShortcutListener(this,
-                () -> UI.getCurrent().navigate("orders/" + orderId),
-                com.vaadin.flow.component.Key.KEY_U,
-                com.vaadin.flow.component.KeyModifier.ALT)
+        com.vaadin.flow.component.Shortcuts.addShortcutListener(
+                        this,
+                        () -> UI.getCurrent().navigate("orders/" + orderId),
+                        com.vaadin.flow.component.Key.KEY_U,
+                        com.vaadin.flow.component.KeyModifier.ALT)
                 .listenOn(this);
 
         bar.add(back);
@@ -95,28 +98,26 @@ public class OrderPositionDetailView extends VerticalLayout {
 
         var form = new FormLayout();
         form.setResponsiveSteps(
-                new FormLayout.ResponsiveStep("0", 1),
-                new FormLayout.ResponsiveStep("520px", 2));
+                new FormLayout.ResponsiveStep("0", 1), new FormLayout.ResponsiveStep("520px", 2));
         form.addClassName("biz-form");
 
-        form.addFormItem(label(pos.getType() == null ? "—" : pos.getType().name()),
+        form.addFormItem(
+                label(pos.getType() == null ? "—" : pos.getType().name()),
                 tr.apply("position.type"));
-        form.addFormItem(label(safe(pos.getServiceType())),
-                tr.apply("position.serviceType"));
-        form.addFormItem(label(safe(pos.getOperationalTrainNumber())),
+        form.addFormItem(label(safe(pos.getServiceType())), tr.apply("position.serviceType"));
+        form.addFormItem(
+                label(safe(pos.getOperationalTrainNumber())),
                 tr.apply("position.operationalTrainNumber"));
-        form.addFormItem(label(safe(pos.getFromLocation())),
-                tr.apply("position.from"));
-        form.addFormItem(label(safe(pos.getToLocation())),
-                tr.apply("position.to"));
-        form.addFormItem(label(pos.getStart() == null ? "—" : pos.getStart().format(TIME_FMT)),
+        form.addFormItem(label(safe(pos.getFromLocation())), tr.apply("position.from"));
+        form.addFormItem(label(safe(pos.getToLocation())), tr.apply("position.to"));
+        form.addFormItem(
+                label(pos.getStart() == null ? "—" : pos.getStart().format(TIME_FMT)),
                 tr.apply("position.start"));
-        form.addFormItem(label(pos.getEnd() == null ? "—" : pos.getEnd().format(TIME_FMT)),
+        form.addFormItem(
+                label(pos.getEnd() == null ? "—" : pos.getEnd().format(TIME_FMT)),
                 tr.apply("position.end"));
-        form.addFormItem(label(safe(pos.getTags())),
-                tr.apply("position.tags"));
-        form.addFormItem(label(safe(pos.getComment())),
-                tr.apply("position.comment"));
+        form.addFormItem(label(safe(pos.getTags())), tr.apply("position.tags"));
+        form.addFormItem(label(safe(pos.getComment())), tr.apply("position.comment"));
 
         card.add(form);
         return card;

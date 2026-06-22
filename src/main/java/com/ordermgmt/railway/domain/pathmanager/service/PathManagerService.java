@@ -7,18 +7,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.pathmanager.model.PathProcessState;
 import com.ordermgmt.railway.domain.pathmanager.model.PmJourneyLocation;
+import com.ordermgmt.railway.domain.pathmanager.model.PmPlanningStatus;
 import com.ordermgmt.railway.domain.pathmanager.model.PmReferenceTrain;
 import com.ordermgmt.railway.domain.pathmanager.model.PmRoute;
 import com.ordermgmt.railway.domain.pathmanager.model.PmTimetableYear;
@@ -34,6 +35,9 @@ import com.ordermgmt.railway.domain.timetable.model.JourneyLocationType;
 import com.ordermgmt.railway.domain.timetable.model.TimeConstraintMode;
 import com.ordermgmt.railway.domain.timetable.model.TimetableArchive;
 import com.ordermgmt.railway.domain.timetable.model.TimetableRowData;
+import com.ordermgmt.railway.domain.timetable.model.TttJourneyLocationDraft;
+import com.ordermgmt.railway.domain.timetable.model.TttPathRequestDraft;
+import com.ordermgmt.railway.domain.timetable.service.TttDraftBuilder;
 
 import lombok.RequiredArgsConstructor;
 
@@ -54,19 +58,18 @@ public class PathManagerService {
     private final PmRouteRepository routeRepository;
     private final PmTimetableYearRepository timetableYearRepository;
     private final IdentifierGenerator identifierGenerator;
+    private final TttDraftBuilder tttDraftBuilder;
 
-    @PersistenceContext
-    private EntityManager entityManager;
+    @PersistenceContext private EntityManager entityManager;
 
     /**
-     * Wipes <em>all</em> Path Manager state (trains, versions, journey locations, paths,
-     * routes, process steps), the depending Vehicle Planning rotations, and the
-     * timetable archive entries linked to FAHRPLAN positions. Intended as a "reset"
-     * shortcut while the path manager is still a mock — the upstream system would not
+     * Wipes <em>all</em> Path Manager state (trains, versions, journey locations, paths, routes,
+     * process steps) and the timetable archive entries linked to FAHRPLAN positions. Intended as a
+     * "reset" shortcut while the path manager is still a mock — the upstream system would not
      * permit this in production.
      *
-     * <p>Will fail if any current OrderPosition still references a timetable archive
-     * (FAHRPLAN positions); in that case the user should delete those positions first.
+     * <p>Will fail if any current OrderPosition still references a timetable archive (FAHRPLAN
+     * positions); in that case the user should delete those positions first.
      */
     @PreAuthorize("hasRole('ADMIN')")
     public void clearAllMockData() {
@@ -124,8 +127,8 @@ public class PathManagerService {
     }
 
     /**
-     * Syncs timetable data to the path manager. Creates a new reference train if none exists for the
-     * position, or updates the existing one's journey locations.
+     * Syncs timetable data to the path manager. Creates a new reference train if none exists for
+     * the position, or updates the existing one's journey locations.
      */
     public PmReferenceTrain syncFromTimetable(
             OrderPosition position, TimetableArchive archive, List<TimetableRowData> rows) {
@@ -166,8 +169,12 @@ public class PathManagerService {
             PmTrainVersion version = versions.getLast();
             journeyLocationRepository.deleteAll(version.getJourneyLocations());
             version.getJourneyLocations().clear();
+            Map<Integer, TttJourneyLocationDraft> draftBySequence =
+                    tttDraftBuilder.indexBySequence(tttDraftBuilder.fromRows(rows));
             for (TimetableRowData row : rows) {
-                PmJourneyLocation location = mapRowToJourneyLocation(row, version);
+                PmJourneyLocation location =
+                        mapRowToJourneyLocation(
+                                row, version, draftBySequence.get(row.getSequence()));
                 version.getJourneyLocations().add(location);
             }
             trainVersionRepository.save(version);
@@ -182,6 +189,17 @@ public class PathManagerService {
                 .findById(id)
                 .orElseThrow(
                         () -> new IllegalArgumentException("Reference train not found: " + id));
+    }
+
+    /**
+     * Updates the planning status of a reference train, mirroring what RailOpt's rotation/resource
+     * planning reports back. Orthogonal to the TTT path-process state.
+     */
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
+    public PmReferenceTrain updatePlanningStatus(UUID trainId, PmPlanningStatus status) {
+        PmReferenceTrain train = findById(trainId);
+        train.setPlanningStatus(status);
+        return referenceTrainRepository.save(train);
     }
 
     @Transactional(readOnly = true)
@@ -334,8 +352,12 @@ public class PathManagerService {
         version.setCalendarEnd(train.getCalendarEnd());
         version.setCalendarBitmap(train.getCalendarBitmap());
 
+        TttPathRequestDraft draft = tttDraftBuilder.fromRows(rows);
+        Map<Integer, TttJourneyLocationDraft> draftBySequence =
+                tttDraftBuilder.indexBySequence(draft);
         for (TimetableRowData row : rows) {
-            PmJourneyLocation location = mapRowToJourneyLocation(row, version);
+            TttJourneyLocationDraft locationDraft = draftBySequence.get(row.getSequence());
+            PmJourneyLocation location = mapRowToJourneyLocation(row, version, locationDraft);
             version.getJourneyLocations().add(location);
         }
 
@@ -343,7 +365,7 @@ public class PathManagerService {
     }
 
     private PmJourneyLocation mapRowToJourneyLocation(
-            TimetableRowData row, PmTrainVersion version) {
+            TimetableRowData row, PmTrainVersion version, TttJourneyLocationDraft draft) {
         PmJourneyLocation location = new PmJourneyLocation();
         location.setTrainVersion(version);
         location.setSequence(row.getSequence());
@@ -356,6 +378,9 @@ public class PathManagerService {
         // Times: prefer constraint times, fall back to estimated
         location.setArrivalTime(resolveTime(row, true));
         location.setDepartureTime(resolveTime(row, false));
+        location.setArrivalOffset(row.getArrivalOffset() == null ? 0 : row.getArrivalOffset());
+        location.setDepartureOffset(
+                row.getDepartureOffset() == null ? 0 : row.getDepartureOffset());
         location.setDwellTime(row.getDwellMinutes());
 
         // Timing qualifiers from constraint mode
@@ -368,20 +393,52 @@ public class PathManagerService {
         }
 
         location.setAssociatedTrainOtn(row.getAssociatedTrainOtn());
+        location.setTttPayload(writeTttPayload(draft));
         return location;
+    }
+
+    private String writeTttPayload(TttJourneyLocationDraft draft) {
+        if (draft == null) {
+            return null;
+        }
+        try {
+            return OBJECT_MAPPER.writeValueAsString(draft);
+        } catch (Exception exception) {
+            throw new IllegalStateException("Could not serialize TTT draft payload.", exception);
+        }
     }
 
     private String resolveTime(TimetableRowData row, boolean arrival) {
         if (arrival) {
-            if (row.getArrivalMode() == TimeConstraintMode.EXACT
-                    && row.getArrivalExact() != null) {
+            TimeConstraintMode mode =
+                    row.getArrivalMode() == null ? TimeConstraintMode.NONE : row.getArrivalMode();
+            if (mode == TimeConstraintMode.EXACT) {
                 return row.getArrivalExact();
+            }
+            if (mode == TimeConstraintMode.WINDOW || mode == TimeConstraintMode.AFTER) {
+                return row.getArrivalEarliest();
+            }
+            if (mode == TimeConstraintMode.BEFORE) {
+                return row.getArrivalLatest();
+            }
+            if (mode == TimeConstraintMode.COMMERCIAL) {
+                return row.getCommercialArrival();
             }
             return row.getEstimatedArrival();
         }
-        if (row.getDepartureMode() == TimeConstraintMode.EXACT
-                && row.getDepartureExact() != null) {
+        TimeConstraintMode mode =
+                row.getDepartureMode() == null ? TimeConstraintMode.NONE : row.getDepartureMode();
+        if (mode == TimeConstraintMode.EXACT) {
             return row.getDepartureExact();
+        }
+        if (mode == TimeConstraintMode.WINDOW || mode == TimeConstraintMode.AFTER) {
+            return row.getDepartureEarliest();
+        }
+        if (mode == TimeConstraintMode.BEFORE) {
+            return row.getDepartureLatest();
+        }
+        if (mode == TimeConstraintMode.COMMERCIAL) {
+            return row.getCommercialDeparture();
         }
         return row.getEstimatedDeparture();
     }
@@ -394,8 +451,10 @@ public class PathManagerService {
         return switch (mode) {
             case EXACT -> arrival ? "ALA" : "ALD";
             case WINDOW -> arrival ? "ELA" : "ELD";
+            case AFTER -> arrival ? "ELA" : "ELD";
+            case BEFORE -> arrival ? "LLA" : "LLD";
             case COMMERCIAL -> arrival ? "PLA" : "PLD";
-            default -> null;
+            case NONE -> null;
         };
     }
 }

@@ -18,9 +18,9 @@ import com.vaadin.flow.component.grid.Grid;
 import com.ordermgmt.railway.domain.userprefs.service.UserViewPreferenceService;
 
 /**
- * Binds a {@link Grid}'s column layout (order, width, visibility) to a per-user
- * persistence backend, identified by a stable {@code viewKey}. Snapshots the default
- * column setup at install time so {@link #reset()} can restore it.
+ * Binds a {@link Grid}'s column layout (order, width, visibility) to a per-user persistence
+ * backend, identified by a stable {@code viewKey}. Snapshots the default column setup at install
+ * time so {@link #reset()} can restore it.
  *
  * <p>Save is debounced (1500ms) on UI thread to coalesce repeated resize/reorder events.
  */
@@ -112,11 +112,12 @@ public class GridPreferenceBinder<T> {
         Optional<String> json = prefs.loadJson(viewKey);
         if (json.isEmpty()) return;
         try {
-            List<ColumnState> saved = MAPPER.readValue(json.get(),
-                    new TypeReference<List<ColumnState>>() {});
+            List<ColumnState> saved =
+                    MAPPER.readValue(json.get(), new TypeReference<List<ColumnState>>() {});
             applyState(saved);
         } catch (Exception ex) {
-            log.warn("Failed to load grid preferences for viewKey={}, payload ignored", viewKey, ex);
+            log.warn(
+                    "Failed to load grid preferences for viewKey={}, payload ignored", viewKey, ex);
         }
     }
 
@@ -141,7 +142,9 @@ public class GridPreferenceBinder<T> {
             if (col != null) ordered.add(col);
         }
         for (Grid.Column<T> col : grid.getColumns()) {
-            if (col.getKey() != null && !byKeyState.containsKey(col.getKey()) && !ordered.contains(col)) {
+            if (col.getKey() != null
+                    && !byKeyState.containsKey(col.getKey())
+                    && !ordered.contains(col)) {
                 ordered.add(col);
             }
         }
@@ -160,13 +163,15 @@ public class GridPreferenceBinder<T> {
         pendingSaveScheduledAt = now;
         UI ui = UI.getCurrent();
         if (ui == null) return;
-        ui.getPage().executeJs(
-                "return new Promise(r => setTimeout(r, $0))", DEBOUNCE_MS)
-                .then(ignored -> {
-                    if (System.currentTimeMillis() - pendingSaveScheduledAt >= DEBOUNCE_MS - 50) {
-                        saveNow();
-                    }
-                });
+        ui.getPage()
+                .executeJs("return new Promise(r => setTimeout(r, $0))", DEBOUNCE_MS)
+                .then(
+                        ignored -> {
+                            if (System.currentTimeMillis() - pendingSaveScheduledAt
+                                    >= DEBOUNCE_MS - 50) {
+                                saveNow();
+                            }
+                        });
     }
 
     /** Serializable per-column state. Width is a CSS string ("120px") or null for flex-only. */

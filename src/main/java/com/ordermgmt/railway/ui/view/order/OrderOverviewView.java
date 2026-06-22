@@ -11,11 +11,11 @@ import jakarta.annotation.security.PermitAll;
 import org.springframework.beans.factory.ObjectProvider;
 
 import com.vaadin.flow.component.Component;
+import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
-import com.vaadin.flow.component.UI;
 import com.vaadin.flow.router.BeforeEnterEvent;
 import com.vaadin.flow.router.BeforeEnterObserver;
 import com.vaadin.flow.router.PageTitle;
@@ -33,14 +33,15 @@ import com.ordermgmt.railway.ui.layout.MainLayout;
 
 /**
  * Master-detail overview for orders. Serves three URL shapes:
+ *
  * <ul>
- *   <li>{@code /orders} — list with empty detail</li>
- *   <li>{@code /orders/{orderId}} — list + selected order aggregate detail</li>
- *   <li>{@code /orders/{orderId}/positions/{posId}} — list + single position detail</li>
+ *   <li>{@code /orders} — list with empty detail
+ *   <li>{@code /orders/{orderId}} — list + selected order aggregate detail
+ *   <li>{@code /orders/{orderId}/positions/{posId}} — list + single position detail
  * </ul>
  *
- * <p>{@link OrderDetailView} (the right pane for an order) has 11 service deps; we
- * obtain instances via {@link ObjectProvider} so Spring autowires them.
+ * <p>{@link OrderDetailView} (the right pane for an order) has 11 service deps; we obtain instances
+ * via {@link ObjectProvider} so Spring autowires them.
  */
 @Route(value = "orders/:orderId/positions/:posId", layout = MainLayout.class)
 @RouteAlias(value = "orders/:orderId", layout = MainLayout.class)
@@ -56,10 +57,11 @@ public class OrderOverviewView extends VerticalLayout implements BeforeEnterObse
     private final MasterDetailLayout<Order> shell;
     private final Map<UUID, Integer> positionCounts = new HashMap<>();
 
-    public OrderOverviewView(OrderService orderService,
-                             OrderPositionRepository positionRepository,
-                             BusinessService businessService,
-                             ObjectProvider<OrderDetailView> detailFactory) {
+    public OrderOverviewView(
+            OrderService orderService,
+            OrderPositionRepository positionRepository,
+            BusinessService businessService,
+            ObjectProvider<OrderDetailView> detailFactory) {
         this.orderService = orderService;
         this.positionRepository = positionRepository;
         this.businessService = businessService;
@@ -74,35 +76,56 @@ public class OrderOverviewView extends VerticalLayout implements BeforeEnterObse
         add(buildSkipLinks());
 
         Function<String, String> tr = this::getTranslation;
-        shell = MasterDetailLayout.<Order>spec()
-                .idExtractor(Order::getId)
-                .cardRenderer(o -> new OrderCard(o, tr,
-                        positionCounts.getOrDefault(o.getId(), 0)))
-                .matcher((o, q) -> {
-                    String num = o.getOrderNumber() == null ? "" : o.getOrderNumber().toLowerCase();
-                    String name = o.getName() == null ? "" : o.getName().toLowerCase();
-                    String tags = o.getTags() == null ? "" : o.getTags().toLowerCase();
-                    String customer = o.getCustomer() != null && o.getCustomer().getName() != null
-                            ? o.getCustomer().getName().toLowerCase() : "";
-                    return num.contains(q) || name.contains(q) || tags.contains(q)
-                            || customer.contains(q);
-                })
-                .filterPlaceholder(getTranslation("order.filterPlaceholder"))
-                .filterAriaLabel(getTranslation("order.search"))
-                .filterId("order-filter")
-                .listId("order-list")
-                .detailId("order-detail")
-                .listAriaLabel(getTranslation("order.list.aria"))
-                .detailAriaLabel(getTranslation("order.detail.aria"))
-                .toolbarAriaLabel(getTranslation("order.toolbar.aria"))
-                .emptyText(getTranslation("order.empty"))
-                .detailEmptyText(getTranslation("order.detail.empty"))
-                .announceTemplate((o, idx, total) -> getTranslation("order.announce.selected",
-                        idx, total, o.getOrderNumber() == null ? "—" : o.getOrderNumber()))
-                .extraToolbar(List.of(buildNewButton()))
-                .shortcutNew(() -> UI.getCurrent().navigate("orders/new"))
-                .onSelect(id -> UI.getCurrent().navigate("orders/" + id))
-                .build();
+        shell =
+                MasterDetailLayout.<Order>spec()
+                        .idExtractor(Order::getId)
+                        .cardRenderer(
+                                o ->
+                                        new OrderCard(
+                                                o, tr, positionCounts.getOrDefault(o.getId(), 0)))
+                        .matcher(
+                                (o, q) -> {
+                                    String num =
+                                            o.getOrderNumber() == null
+                                                    ? ""
+                                                    : o.getOrderNumber().toLowerCase();
+                                    String name =
+                                            o.getName() == null ? "" : o.getName().toLowerCase();
+                                    String tags =
+                                            o.getTags() == null ? "" : o.getTags().toLowerCase();
+                                    String customer =
+                                            o.getCustomer() != null
+                                                            && o.getCustomer().getName() != null
+                                                    ? o.getCustomer().getName().toLowerCase()
+                                                    : "";
+                                    return num.contains(q)
+                                            || name.contains(q)
+                                            || tags.contains(q)
+                                            || customer.contains(q);
+                                })
+                        .filterPlaceholder(getTranslation("order.filterPlaceholder"))
+                        .filterAriaLabel(getTranslation("order.search"))
+                        .filterId("order-filter")
+                        .listId("order-list")
+                        .detailId("order-detail")
+                        .listAriaLabel(getTranslation("order.list.aria"))
+                        .detailAriaLabel(getTranslation("order.detail.aria"))
+                        .toolbarAriaLabel(getTranslation("order.toolbar.aria"))
+                        .emptyText(getTranslation("order.empty"))
+                        .detailEmptyText(getTranslation("order.detail.empty"))
+                        .announceTemplate(
+                                (o, idx, total) ->
+                                        getTranslation(
+                                                "order.announce.selected",
+                                                idx,
+                                                total,
+                                                o.getOrderNumber() == null
+                                                        ? "—"
+                                                        : o.getOrderNumber()))
+                        .extraToolbar(List.of(buildNewButton()))
+                        .shortcutNew(() -> UI.getCurrent().navigate("orders/new"))
+                        .onSelect(id -> UI.getCurrent().navigate("orders/" + id))
+                        .build();
         shell.setSizeFull();
         add(shell);
         setFlexGrow(1, shell);
@@ -151,8 +174,13 @@ public class OrderOverviewView extends VerticalLayout implements BeforeEnterObse
         if (posParam != null) {
             try {
                 UUID posId = UUID.fromString(posParam);
-                shell.setDetail(new OrderPositionDetailView(positionRepository, businessService,
-                        orderId, posId, this::getTranslation));
+                shell.setDetail(
+                        new OrderPositionDetailView(
+                                positionRepository,
+                                businessService,
+                                orderId,
+                                posId,
+                                this::getTranslation));
             } catch (IllegalArgumentException ex) {
                 UI.getCurrent().navigate("orders/" + orderId);
             }
@@ -169,10 +197,13 @@ public class OrderOverviewView extends VerticalLayout implements BeforeEnterObse
     }
 
     private Component buildSkipLinks() {
-        return new SkipLinks(List.of(
-                new SkipLinks.SkipTarget("order-filter", getTranslation("a11y.skip.filter")),
-                new SkipLinks.SkipTarget("order-list", getTranslation("a11y.skip.list")),
-                new SkipLinks.SkipTarget("order-detail", getTranslation("a11y.skip.detail"))));
+        return new SkipLinks(
+                List.of(
+                        new SkipLinks.SkipTarget(
+                                "order-filter", getTranslation("a11y.skip.filter")),
+                        new SkipLinks.SkipTarget("order-list", getTranslation("a11y.skip.list")),
+                        new SkipLinks.SkipTarget(
+                                "order-detail", getTranslation("a11y.skip.detail"))));
     }
 
     private Component buildNewButton() {
@@ -182,7 +213,6 @@ public class OrderOverviewView extends VerticalLayout implements BeforeEnterObse
         btn.addClickListener(e -> UI.getCurrent().navigate("orders/new"));
         return btn;
     }
-
 
     private void loadOrders() {
         List<Order> orders = orderService.findAllWithPositions();

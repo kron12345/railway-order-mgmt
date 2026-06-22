@@ -3,6 +3,21 @@
 ## Status
 Accepted
 
+## Update (2026-06-22) — The external system is RailOpt (QNamic)
+
+The "Infrastructure Manager (IM)" abstraction below is realised in production by **RailOpt**, QNamic's
+railway planning & resource-management product. This order-management app integrates with RailOpt,
+not directly with an IM. End-to-end flow: a FAHRPLAN created here is **transferred to RailOpt's
+Fahrplanmanagement**; a planner schedules resources/rotations (Umläufe) in RailOpt; the purchase
+position and the TTT order are then triggered from this app (sending any attributes RailOpt lacks),
+and **RailOpt performs the actual TTT / TSI TAF-TAP path ordering toward the Infrastructure
+Manager(s)**. This app's role is timetable pre-planning plus **monitoring and KPI data collection**
+of the order/path lifecycle (returned data: TTT status, actual-run data, the von/nach train/activity
+sequence from rotation planning, and the planning status). The in-app "Path Manager" (`pm_*`)
+therefore stands in for **RailOpt**; the REST boundary at `/api/v1/pathmanager/**` is where the real
+RailOpt integration will attach. The decision and architecture below remain valid — only the name of
+the simulated counterparty is clarified.
+
 ## Context
 
 The order management system needs to interact with an Infrastructure Manager (IM) for path (Trasse) ordering via the TTT (Train Timetable Transfer / TSI TAF/TAP) process. In the real production scenario, this communication happens between the Responsible Applicant (RA) and one or more IMs via standardized XML messages over a message broker.

@@ -5,6 +5,7 @@ import java.util.function.Consumer;
 
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
+import com.vaadin.flow.component.combobox.ComboBox;
 import com.vaadin.flow.component.datepicker.DatePicker;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.Span;
@@ -17,6 +18,7 @@ import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.textfield.IntegerField;
 import com.vaadin.flow.component.textfield.TextField;
 
+import com.ordermgmt.railway.domain.pathmanager.model.PmPlanningStatus;
 import com.ordermgmt.railway.domain.pathmanager.model.PmReferenceTrain;
 import com.ordermgmt.railway.domain.pathmanager.model.TrainHeaderUpdate;
 import com.ordermgmt.railway.domain.pathmanager.service.PathManagerService;
@@ -67,6 +69,7 @@ public class TrainHeaderPanel extends VerticalLayout {
                 .set("color", "var(--rom-text-primary)")
                 .set("margin-bottom", "var(--lumo-space-s)");
         card.add(title);
+        card.add(createPlanningStatusRow());
 
         card.add(createFormFields());
         card.add(createSaveButton());
@@ -126,6 +129,40 @@ public class TrainHeaderPanel extends VerticalLayout {
                 calendarStartField,
                 calendarEndField);
         return formContainer;
+    }
+
+    /**
+     * RailOpt-side planner control: setting the planning status saves immediately (it is orthogonal
+     * to the path-process lifecycle) and refreshes the dependent badges via {@code onSaved}.
+     */
+    private HorizontalLayout createPlanningStatusRow() {
+        ComboBox<PmPlanningStatus> combo = new ComboBox<>(t("pm.planning.label"));
+        combo.setItems(PmPlanningStatus.values());
+        combo.setItemLabelGenerator(s -> t("pm.planning." + s.name()));
+        combo.setValue(
+                train.getPlanningStatus() != null
+                        ? train.getPlanningStatus()
+                        : PmPlanningStatus.UNPLANNED);
+        combo.setWidthFull();
+        combo.addValueChangeListener(
+                e -> {
+                    if (!e.isFromClient() || e.getValue() == null) {
+                        return;
+                    }
+                    pathManagerService.updatePlanningStatus(train.getId(), e.getValue());
+                    train.setPlanningStatus(e.getValue());
+                    Notification.show(
+                                    t("pm.planning.saved"), 2000, Notification.Position.BOTTOM_END)
+                            .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+                    if (onSaved != null) {
+                        onSaved.accept(train);
+                    }
+                });
+
+        HorizontalLayout row = new HorizontalLayout(combo);
+        row.setWidthFull();
+        row.getStyle().set("margin-bottom", "var(--lumo-space-s)");
+        return row;
     }
 
     private HorizontalLayout createSaveButton() {

@@ -1,7 +1,7 @@
 # ADR-012: Vehicle Planning with Gantt Chart and Vaadin DnD
 
 ## Status
-Accepted
+Withdrawn on 2026-05-22: the active Vehicle Planning / Fahrzeugumlauf feature was removed from the application because the Von/Fuer workflow proved too heavy for order-position planning. This ADR is kept only as historical context.
 
 ## Context
 

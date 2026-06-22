@@ -51,6 +51,8 @@ public final class TimetableFormatUtils {
             case NONE -> ctx.getTranslation("timetable.mode.none");
             case EXACT -> ctx.getTranslation("timetable.mode.exact");
             case WINDOW -> ctx.getTranslation("timetable.mode.window");
+            case AFTER -> ctx.getTranslation("timetable.mode.after");
+            case BEFORE -> ctx.getTranslation("timetable.mode.before");
             case COMMERCIAL -> ctx.getTranslation("timetable.mode.commercial");
         };
     }
@@ -61,6 +63,16 @@ public final class TimetableFormatUtils {
 
     public static String activityLabel(
             TimetableRowData row, List<TimetableActivityOption> options) {
+        if (row.getActivityCodes() != null && !row.getActivityCodes().isEmpty()) {
+            String label =
+                    row.getActivityCodes().stream()
+                            .map(code -> findActivityOption(code, options)
+                                    .map(TimetableFormatUtils::activityOptionLabel)
+                                    .orElse(code))
+                            .reduce((left, right) -> left + ", " + right)
+                            .orElse("—");
+            return label.isBlank() ? "—" : label;
+        }
         return findActivityOption(row.getActivityCode(), options)
                 .map(TimetableFormatUtils::activityOptionLabel)
                 .orElse("—");
@@ -105,6 +117,8 @@ public final class TimetableFormatUtils {
             case NONE -> "—";
             case EXACT -> timeOrDash(exact);
             case WINDOW -> timeOrDash(earliest) + "–" + timeOrDash(latest);
+            case AFTER -> "≥ " + timeOrDash(earliest);
+            case BEFORE -> "≤ " + timeOrDash(latest);
             case COMMERCIAL -> timeOrDash(commercial);
         };
     }
@@ -225,6 +239,8 @@ public final class TimetableFormatUtils {
             case NONE -> null;
             case EXACT -> isArrival ? "ALA" : "ALD";
             case WINDOW -> isArrival ? "ELA/LLA" : "ELD/LLD";
+            case AFTER -> isArrival ? "ELA" : "ELD";
+            case BEFORE -> isArrival ? "LLA" : "LLD";
             case COMMERCIAL -> isArrival ? "PLA" : "PLD";
         };
     }

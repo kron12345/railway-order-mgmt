@@ -2,13 +2,19 @@ package com.ordermgmt.railway.ui.view.pathmanager;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Stream;
 
 import jakarta.annotation.security.RolesAllowed;
 
+import com.vaadin.flow.component.AttachEvent;
+import com.vaadin.flow.component.UI;
+import com.vaadin.flow.component.button.Button;
+import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.Span;
+import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
@@ -16,9 +22,12 @@ import com.vaadin.flow.component.splitlayout.SplitLayout;
 import com.vaadin.flow.component.treegrid.TreeGrid;
 import com.vaadin.flow.data.provider.hierarchy.AbstractBackEndHierarchicalDataProvider;
 import com.vaadin.flow.data.provider.hierarchy.HierarchicalQuery;
+import com.vaadin.flow.router.BeforeEnterEvent;
+import com.vaadin.flow.router.BeforeEnterObserver;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 
+import com.ordermgmt.railway.domain.order.repository.OrderPositionRepository;
 import com.ordermgmt.railway.domain.pathmanager.model.PathProcessState;
 import com.ordermgmt.railway.domain.pathmanager.model.PathProcessType;
 import com.ordermgmt.railway.domain.pathmanager.model.PmJourneyLocation;
@@ -43,9 +52,9 @@ import com.ordermgmt.railway.ui.layout.MainLayout;
 
 /** Main view for the Path Manager module with tree hierarchy and detail panels. */
 @Route(value = "pathmanager", layout = MainLayout.class)
-@PageTitle("Path Manager")
+@PageTitle("RailOpt")
 @RolesAllowed({"ADMIN", "DISPATCHER"})
-public class PathManagerView extends VerticalLayout {
+public class PathManagerView extends VerticalLayout implements BeforeEnterObserver {
 
     private final PmTimetableYearRepository timetableYearRepository;
     private final PmReferenceTrainRepository referenceTrainRepository;
@@ -55,9 +64,11 @@ public class PathManagerView extends VerticalLayout {
     private final PathProcessEngine processEngine;
     private final PmProcessStepRepository processStepRepository;
     private final TtrPhaseResolver ttrPhaseResolver;
+    private final OrderPositionRepository orderPositionRepository;
 
     private TreeGrid<TreeNode> treeGrid;
     private Div detailContainer;
+    private UUID pendingTrainId;
 
     public PathManagerView(
             PmTimetableYearRepository timetableYearRepository,
@@ -67,7 +78,8 @@ public class PathManagerView extends VerticalLayout {
             PathManagerService pathManagerService,
             PathProcessEngine processEngine,
             PmProcessStepRepository processStepRepository,
-            TtrPhaseResolver ttrPhaseResolver) {
+            TtrPhaseResolver ttrPhaseResolver,
+            OrderPositionRepository orderPositionRepository) {
         this.timetableYearRepository = timetableYearRepository;
         this.referenceTrainRepository = referenceTrainRepository;
         this.trainVersionRepository = trainVersionRepository;
@@ -76,6 +88,7 @@ public class PathManagerView extends VerticalLayout {
         this.processEngine = processEngine;
         this.processStepRepository = processStepRepository;
         this.ttrPhaseResolver = ttrPhaseResolver;
+        this.orderPositionRepository = orderPositionRepository;
 
         setPadding(false);
         setSpacing(false);
@@ -87,6 +100,44 @@ public class PathManagerView extends VerticalLayout {
                 .set("box-sizing", "border-box");
 
         buildLayout();
+    }
+
+    @Override
+    public void beforeEnter(BeforeEnterEvent event) {
+        var values = event.getLocation().getQueryParameters().getParameters().get("train");
+        pendingTrainId = null;
+        if (values != null && !values.isEmpty()) {
+            try {
+                pendingTrainId = UUID.fromString(values.get(0));
+            } catch (IllegalArgumentException ignored) {
+                pendingTrainId = null;
+            }
+        }
+    }
+
+    @Override
+    protected void onAttach(AttachEvent attachEvent) {
+        super.onAttach(attachEvent);
+        if (pendingTrainId != null) {
+            selectTrain(pendingTrainId);
+            pendingTrainId = null;
+        }
+    }
+
+    /** Deep-link target: expands and selects the given reference train and shows its detail. */
+    private void selectTrain(UUID trainId) {
+        referenceTrainRepository
+                .findById(trainId)
+                .ifPresent(
+                        train -> {
+                            PmTimetableYear year = train.getTimetableYear();
+                            if (year != null) {
+                                treeGrid.expand(new TreeNode.YearNode(year));
+                            }
+                            TreeNode.TrainNode node = new TreeNode.TrainNode(train);
+                            treeGrid.select(node);
+                            onNodeSelected(node);
+                        });
     }
 
     private void buildLayout() {
@@ -104,10 +155,10 @@ public class PathManagerView extends VerticalLayout {
     }
 
     /**
-     * Toolbar with the mock-only "Reset" button. The path manager is a stand-in for an
-     * upstream system; this lets a developer wipe the local state without going through
-     * the database directly. The button is admin-only client-side <em>and</em>
-     * server-side (via {@code @PreAuthorize}).
+     * Toolbar with the mock-only "Reset" button. The path manager is a stand-in for an upstream
+     * system; this lets a developer wipe the local state without going through the database
+     * directly. The button is admin-only client-side <em>and</em> server-side (via
+     * {@code @PreAuthorize}).
      */
     private com.vaadin.flow.component.Component buildToolbar() {
         var bar = new com.vaadin.flow.component.orderedlayout.HorizontalLayout();
@@ -115,20 +166,22 @@ public class PathManagerView extends VerticalLayout {
         bar.setPadding(false);
         bar.setSpacing(true);
         bar.setAlignItems(com.vaadin.flow.component.orderedlayout.FlexComponent.Alignment.CENTER);
-        bar.getStyle().set("padding", "8px 12px")
+        bar.getStyle()
+                .set("padding", "8px 12px")
                 .set("border-bottom", "1px solid var(--rom-border-subtle)");
 
-        var label = new com.vaadin.flow.component.html.Span("PATH MANAGER (MOCK)");
+        var label = new com.vaadin.flow.component.html.Span(getTranslation("pm.view.badge"));
         label.addClassName("biz-section-title");
         label.getStyle().set("margin", "0");
 
         var spacer = new com.vaadin.flow.component.html.Div();
         spacer.getStyle().set("flex", "1");
 
-        var resetBtn = new com.vaadin.flow.component.button.Button(
-                getTranslation("pm.reset"),
-                com.vaadin.flow.component.icon.VaadinIcon.TRASH.create(),
-                e -> confirmReset());
+        var resetBtn =
+                new com.vaadin.flow.component.button.Button(
+                        getTranslation("pm.reset"),
+                        com.vaadin.flow.component.icon.VaadinIcon.TRASH.create(),
+                        e -> confirmReset());
         resetBtn.addThemeVariants(
                 com.vaadin.flow.component.button.ButtonVariant.LUMO_SMALL,
                 com.vaadin.flow.component.button.ButtonVariant.LUMO_TERTIARY);
@@ -147,23 +200,30 @@ public class PathManagerView extends VerticalLayout {
         dialog.setCancelText(getTranslation("common.cancel"));
         dialog.setConfirmText(getTranslation("common.delete"));
         dialog.setConfirmButtonTheme("error primary");
-        dialog.addConfirmListener(e -> {
-            try {
-                pathManagerService.clearAllMockData();
-                com.vaadin.flow.component.notification.Notification.show(
-                        getTranslation("pm.reset.done"), 1500,
-                        com.vaadin.flow.component.notification.Notification.Position.BOTTOM_END)
-                        .addThemeVariants(
-                                com.vaadin.flow.component.notification.NotificationVariant.LUMO_SUCCESS);
-                com.vaadin.flow.component.UI.getCurrent().getPage().reload();
-            } catch (RuntimeException ex) {
-                com.vaadin.flow.component.notification.Notification.show(
-                        getTranslation("common.errorGeneric"), 3000,
-                        com.vaadin.flow.component.notification.Notification.Position.BOTTOM_END)
-                        .addThemeVariants(
-                                com.vaadin.flow.component.notification.NotificationVariant.LUMO_ERROR);
-            }
-        });
+        dialog.addConfirmListener(
+                e -> {
+                    try {
+                        pathManagerService.clearAllMockData();
+                        com.vaadin.flow.component.notification.Notification.show(
+                                        getTranslation("pm.reset.done"),
+                                        1500,
+                                        com.vaadin.flow.component.notification.Notification.Position
+                                                .BOTTOM_END)
+                                .addThemeVariants(
+                                        com.vaadin.flow.component.notification.NotificationVariant
+                                                .LUMO_SUCCESS);
+                        com.vaadin.flow.component.UI.getCurrent().getPage().reload();
+                    } catch (RuntimeException ex) {
+                        com.vaadin.flow.component.notification.Notification.show(
+                                        getTranslation("common.errorGeneric"),
+                                        3000,
+                                        com.vaadin.flow.component.notification.Notification.Position
+                                                .BOTTOM_END)
+                                .addThemeVariants(
+                                        com.vaadin.flow.component.notification.NotificationVariant
+                                                .LUMO_ERROR);
+                    }
+                });
         dialog.open();
     }
 
@@ -348,6 +408,10 @@ public class PathManagerView extends VerticalLayout {
     private void showTrainDetail(TreeNode.TrainNode node) {
         PmReferenceTrain train = node.train();
 
+        if (train.getSourcePositionId() != null) {
+            detailContainer.add(createBackToOrderLink(train.getSourcePositionId()));
+        }
+
         TrainHeaderPanel headerPanel =
                 new TrainHeaderPanel(
                         train,
@@ -365,6 +429,24 @@ public class PathManagerView extends VerticalLayout {
                         updatedTrain -> refreshTree());
 
         detailContainer.add(headerPanel, processPanel);
+    }
+
+    /**
+     * Back-link from a RailOpt train to the originating order (uses the train's sourcePositionId).
+     */
+    private Button createBackToOrderLink(UUID sourcePositionId) {
+        Button back = new Button(getTranslation("pm.backToOrder"), VaadinIcon.ARROW_LEFT.create());
+        back.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
+        back.getStyle()
+                .set("color", "var(--rom-accent)")
+                .set("margin-bottom", "var(--lumo-space-s)");
+        back.addClickListener(
+                e ->
+                        orderPositionRepository
+                                .findOrderIdById(sourcePositionId)
+                                .ifPresent(
+                                        orderId -> UI.getCurrent().navigate("orders/" + orderId)));
+        return back;
     }
 
     private void showVersionDetail(TreeNode.VersionNode node) {
@@ -466,6 +548,11 @@ public class PathManagerView extends VerticalLayout {
             }
 
             @Override
+            public Object getId(TreeNode item) {
+                return item.id();
+            }
+
+            @Override
             public boolean hasChildren(TreeNode item) {
                 return !(item instanceof TreeNode.LocationNode);
             }
@@ -541,7 +628,7 @@ public class PathManagerView extends VerticalLayout {
     }
 
     private StatusBadge stateToStatusBadge(PathProcessState state) {
-        String label = state.name();
+        String label = getTranslation("pm.state." + state.name());
         return switch (state) {
             case NEW -> new StatusBadge(label, StatusBadge.StatusType.NEUTRAL);
             case CREATED, MODIFIED, RECEIPT_CONFIRMED ->

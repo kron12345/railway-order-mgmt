@@ -81,12 +81,13 @@ public class IntervalTimetablePanel extends Div {
         namePrefix.setPlaceholder("IC 717");
         namePrefix.setRequired(true);
         namePrefix.setWidthFull();
-        namePrefix.addValueChangeListener(e -> {
-            if (!e.getValue().isBlank()) {
-                namePrefix.setInvalid(false);
-            }
-            updatePreview();
-        });
+        namePrefix.addValueChangeListener(
+                e -> {
+                    if (!e.getValue().isBlank()) {
+                        namePrefix.setInvalid(false);
+                    }
+                    updatePreview();
+                });
 
         otnStart.setLabel(t("timetable.interval.otnStart"));
         otnStart.setPlaceholder("95001");

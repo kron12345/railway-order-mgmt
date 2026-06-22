@@ -13,9 +13,9 @@ import com.ordermgmt.railway.domain.userprefs.model.UserViewPreference;
 import com.ordermgmt.railway.domain.userprefs.repository.UserViewPreferenceRepository;
 
 /**
- * Loads and stores per-user JSON payloads keyed by a {@code viewKey}. Resolves the
- * current user from the Spring Security context (Keycloak {@code preferred_username}),
- * falling back to {@code Authentication.getName()}.
+ * Loads and stores per-user JSON payloads keyed by a {@code viewKey}. Resolves the current user
+ * from the Spring Security context (Keycloak {@code preferred_username}), falling back to {@code
+ * Authentication.getName()}.
  */
 @Service
 public class UserViewPreferenceService {
@@ -28,24 +28,31 @@ public class UserViewPreferenceService {
 
     @Transactional(readOnly = true)
     public Optional<String> loadJson(String viewKey) {
-        return currentUserId().flatMap(uid -> repository.findByUserIdAndViewKey(uid, viewKey))
+        return currentUserId()
+                .flatMap(uid -> repository.findByUserIdAndViewKey(uid, viewKey))
                 .map(UserViewPreference::getPayload);
     }
 
     @Transactional
     public void saveJson(String viewKey, String payloadJson) {
-        currentUserId().ifPresent(uid -> {
-            UserViewPreference pref = repository.findByUserIdAndViewKey(uid, viewKey)
-                    .orElseGet(() -> {
-                        UserViewPreference fresh = new UserViewPreference();
-                        fresh.setUserId(uid);
-                        fresh.setViewKey(viewKey);
-                        return fresh;
-                    });
-            pref.setPayload(payloadJson);
-            pref.setUpdatedAt(Instant.now());
-            repository.save(pref);
-        });
+        currentUserId()
+                .ifPresent(
+                        uid -> {
+                            UserViewPreference pref =
+                                    repository
+                                            .findByUserIdAndViewKey(uid, viewKey)
+                                            .orElseGet(
+                                                    () -> {
+                                                        UserViewPreference fresh =
+                                                                new UserViewPreference();
+                                                        fresh.setUserId(uid);
+                                                        fresh.setViewKey(viewKey);
+                                                        return fresh;
+                                                    });
+                            pref.setPayload(payloadJson);
+                            pref.setUpdatedAt(Instant.now());
+                            repository.save(pref);
+                        });
     }
 
     @Transactional

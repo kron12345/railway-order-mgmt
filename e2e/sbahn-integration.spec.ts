@@ -263,6 +263,240 @@ async function getComboBoxValue(page: Page, label: RegExp): Promise<string> {
   return (await input.inputValue()) || "";
 }
 
+// ── Editor / Grid helpers for timetable-builder rule tests ──────────
+
+/**
+ * Picks an arrival or departure constraint mode from the side's vaadin-select.
+ * The select label is the language-aware "Arrival mode" / "Ankunftsart" etc.
+ * Mode options are matched against the localized labels in the overlay.
+ */
+async function selectConstraintMode(
+  page: Page,
+  side: "arrival" | "departure",
+  mode: "NONE" | "EXACT" | "WINDOW" | "AFTER" | "BEFORE" | "COMMERCIAL",
+) {
+  const labelPattern = side === "arrival"
+    ? /Arrival mode|Ankunftsart/i
+    : /Departure mode|Abfahrtsart/i;
+  const optionPatterns: Record<string, RegExp> = {
+    NONE: /^(none|frei|libre|libero)$/i,
+    EXACT: /^(exact|exakt|esatto)$/i,
+    WINDOW: /^(window|fenster|finestra|fen[êe]tre)$/i,
+    AFTER: /(after|fr[üu]hest|no earlier|au plus t[ôo]t|non prima)/i,
+    BEFORE: /(before|sp[äa]test|no later|au plus tard|non oltre)/i,
+    COMMERCIAL: /(commercial|kommerziell|commerciale)/i,
+  };
+  const select = page.locator("vaadin-select").filter({ hasText: labelPattern }).first();
+  await expect(select).toBeVisible({ timeout: 5_000 });
+  await select.click();
+  await page.waitForTimeout(400);
+
+  const optPattern = optionPatterns[mode].source;
+  const optFlags = optionPatterns[mode].flags;
+  const clicked = await page.evaluate(
+    ({ p, f }) => {
+      const re = new RegExp(p, f);
+      const items = document.querySelectorAll("vaadin-select-item, vaadin-item");
+      for (const item of items) {
+        const text = ((item as any).label || item.textContent || "");
+        if (re.test(text)) {
+          (item as HTMLElement).click();
+          return true;
+        }
+      }
+      return false;
+    },
+    { p: optPattern, f: optFlags },
+  );
+  if (!clicked) {
+    throw new Error(`Mode ${mode} (${optPattern}) not found in select overlay`);
+  }
+  await page.waitForTimeout(600);
+}
+
+/** Returns whether the editor's halt checkbox is currently visible. */
+async function isHaltCheckboxVisible(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    const cbs = document.querySelectorAll("vaadin-checkbox");
+    for (const cb of cbs) {
+      if (/zwischenhalt|intermediate stop|^\s*halt\s*$/i.test(cb.textContent || "")) {
+        return (cb as HTMLElement).offsetParent !== null;
+      }
+    }
+    return false;
+  });
+}
+
+/** Returns whether the editor's dwell field is visible. */
+async function isDwellFieldVisible(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    const fields = document.querySelectorAll("vaadin-integer-field");
+    for (const f of fields) {
+      const label = ((f as any).label || "");
+      if (/aufenthalt|halt.?dauer|^dwell$|sosta|attente/i.test(label)) {
+        return (f as HTMLElement).offsetParent !== null;
+      }
+    }
+    return false;
+  });
+}
+
+/** Whether the given side's mode select is rendered (= section visible). */
+async function isModeSelectVisible(
+  page: Page,
+  side: "arrival" | "departure",
+): Promise<boolean> {
+  const labelPattern = side === "arrival"
+    ? /Arrival mode|Ankunftsart/i
+    : /Departure mode|Abfahrtsart/i;
+  const pattern = labelPattern.source;
+  const flags = labelPattern.flags;
+  return page.evaluate(
+    ({ p, f }) => {
+      const re = new RegExp(p, f);
+      const selects = document.querySelectorAll("vaadin-select");
+      for (const s of selects) {
+        const label = ((s as any).label || "");
+        if (re.test(label)) {
+          return (s as HTMLElement).offsetParent !== null;
+        }
+      }
+      return false;
+    },
+    { p: pattern, f: flags },
+  );
+}
+
+/** Whether a vaadin-time-picker matching the label pattern is currently rendered. */
+async function isTimePickerVisible(page: Page, labelPattern: RegExp): Promise<boolean> {
+  const pattern = labelPattern.source;
+  const flags = labelPattern.flags;
+  return page.evaluate(
+    ({ p, f }) => {
+      const re = new RegExp(p, f);
+      const pickers = document.querySelectorAll("vaadin-time-picker");
+      for (const tp of pickers) {
+        const label = ((tp as any).label || "");
+        if (re.test(label)) {
+          return (tp as HTMLElement).offsetParent !== null;
+        }
+      }
+      return false;
+    },
+    { p: pattern, f: flags },
+  );
+}
+
+/** Reads a vaadin-time-picker's value by label pattern, returns "" if not present/visible. */
+async function readTimePickerValue(page: Page, labelPattern: RegExp): Promise<string> {
+  const pattern = labelPattern.source;
+  const flags = labelPattern.flags;
+  return page.evaluate(
+    ({ p, f }) => {
+      const re = new RegExp(p, f);
+      const pickers = document.querySelectorAll("vaadin-time-picker");
+      for (const tp of pickers) {
+        const label = ((tp as any).label || "");
+        if (re.test(label) && (tp as HTMLElement).offsetParent !== null) {
+          return (tp as any).value || "";
+        }
+      }
+      return "";
+    },
+    { p: pattern, f: flags },
+  );
+}
+
+/** Sets a side's day-offset stepper. For origin only departure offset is visible; same for destination's arrival. */
+async function setDayOffset(page: Page, side: "arrival" | "departure", value: number) {
+  await page.evaluate(
+    ({ sd, val }) => {
+      const fields: HTMLElement[] = [];
+      document.querySelectorAll("vaadin-integer-field").forEach((f: any) => {
+        const label = (f.label || "").toLowerCase();
+        if (
+          /tag|day.?offset|d[ée]calage|offset.?giorno/.test(label) &&
+          f.offsetParent !== null
+        ) {
+          fields.push(f);
+        }
+      });
+      // Arrival section is laid out before departure → first visible offset = arrival,
+      // last visible = departure. For endpoints only one visible, fall through gracefully.
+      const idx = sd === "arrival" ? 0 : fields.length - 1;
+      if (!fields[idx]) {
+        throw new Error(
+          `No day-offset field visible for side=${sd} (found ${fields.length})`,
+        );
+      }
+      (fields[idx] as any).value = val;
+      fields[idx].dispatchEvent(new Event("change", { bubbles: true }));
+    },
+    { sd: side, val: value },
+  );
+}
+
+/** Reads the current row's data via the Vaadin grid items API. */
+async function readRowData(page: Page, rowIdx: number): Promise<any | null> {
+  return page.evaluate((idx) => {
+    const grid = document.querySelector("vaadin-grid") as any;
+    const items = grid?.items || [];
+    return items[idx] ? JSON.parse(JSON.stringify(items[idx])) : null;
+  }, rowIdx);
+}
+
+/** Counts visible grid cells that contain a "TTT" badge (span with literal text "TTT"). */
+async function countTttBadgesInGrid(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const cells = document.querySelectorAll("vaadin-grid-cell-content");
+    let count = 0;
+    for (const cell of cells) {
+      if ((cell as HTMLElement).offsetParent === null) continue;
+      const spans = cell.querySelectorAll("span");
+      for (const s of spans) {
+        if ((s.textContent || "").trim() === "TTT") {
+          count++;
+          break; // one badge per cell
+        }
+      }
+    }
+    return count;
+  });
+}
+
+/** Whether any visible grid cell contains the given offset suffix (e.g. " +1d" / " -1d"). */
+async function gridCellHasOffsetSuffix(page: Page, suffix: string): Promise<boolean> {
+  return page.evaluate((suf) => {
+    const cells = document.querySelectorAll("vaadin-grid-cell-content");
+    for (const cell of cells) {
+      if ((cell as HTMLElement).offsetParent === null) continue;
+      if ((cell.textContent || "").includes(suf)) return true;
+    }
+    return false;
+  }, suffix);
+}
+
+/** Toggles the editor's halt checkbox on or off. Returns the resulting state. */
+async function setHaltChecked(page: Page, checked: boolean): Promise<boolean> {
+  return page.evaluate((target) => {
+    const cbs = document.querySelectorAll("vaadin-checkbox");
+    for (const cb of cbs) {
+      if (
+        /zwischenhalt|intermediate stop|^\s*halt\s*$/i.test(cb.textContent || "") &&
+        (cb as HTMLElement).offsetParent !== null
+      ) {
+        const current = (cb as any).checked;
+        if (current !== target) {
+          (cb as any).checked = target;
+          cb.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+        return target;
+      }
+    }
+    throw new Error("Halt checkbox not visible");
+  }, checked);
+}
+
 // ── Test Data ───────────────────────────────────────────────────────
 const TS = Date.now();
 const ORDER_NR = `S-E2E-${TS}`;
@@ -558,6 +792,68 @@ test.describe("S-Bahn Olten-Aarau: Full Integration Test", () => {
     await screenshot(page, "04-halts-configured");
   });
 
+  // ── Editor rule tests (sequential — each test inherits state from prior) ──
+
+  test("04a. origin row hides halt-checkbox + arrival section + dwell", async () => {
+    // ADR-010: origin is an implicit halt. Editor must hide:
+    //  - halt checkbox (always implicit halt)
+    //  - dwell field (no preceding arrival to compute from)
+    //  - arrival section (no arrival at origin)
+    // Only the departure section should be visible.
+    await selectGridRow(page, 0);
+    await page.waitForTimeout(800);
+
+    expect(await isHaltCheckboxVisible(page)).toBe(false);
+    expect(await isDwellFieldVisible(page)).toBe(false);
+    expect(await isModeSelectVisible(page, "arrival")).toBe(false);
+    expect(await isModeSelectVisible(page, "departure")).toBe(true);
+
+    await screenshot(page, "04a-origin-editor");
+  });
+
+  test("04b. destination row hides halt-checkbox + departure section + dwell", async () => {
+    // Mirror of 04a: destination has no departure to set.
+    const rowCount = await getGridSize(page);
+    await selectGridRow(page, rowCount - 1);
+    await page.waitForTimeout(800);
+
+    expect(await isHaltCheckboxVisible(page)).toBe(false);
+    expect(await isDwellFieldVisible(page)).toBe(false);
+    expect(await isModeSelectVisible(page, "arrival")).toBe(true);
+    expect(await isModeSelectVisible(page, "departure")).toBe(false);
+
+    await screenshot(page, "04b-destination-editor");
+  });
+
+  test("04c. halt off on intermediate hides all time sections", async () => {
+    // ADR-010 Regel 3: pass-through (halt=false) shows no time inputs.
+    // We toggle halt off on row 2 (a configured halt from test 04), verify all
+    // time UI is gone, then restore halt=true so downstream tests still find it.
+    await selectGridRow(page, 2);
+    await page.waitForTimeout(800);
+
+    // Sanity: halt-checkbox is visible on intermediate
+    expect(await isHaltCheckboxVisible(page)).toBe(true);
+
+    // Toggle halt off
+    await setHaltChecked(page, false);
+    await page.waitForTimeout(500);
+
+    expect(await isModeSelectVisible(page, "arrival")).toBe(false);
+    expect(await isModeSelectVisible(page, "departure")).toBe(false);
+    expect(await isDwellFieldVisible(page)).toBe(false);
+
+    // Restore halt=true so test 05c can use this row again
+    await setHaltChecked(page, true);
+    await page.waitForTimeout(300);
+    await setIntegerFieldByLabel(page, /Aufenthalt|Dwell/i, 3);
+    await dismissDevBanner(page);
+    await clickVaadinButton(page, APPLY_BTN);
+    await page.waitForTimeout(500);
+
+    await screenshot(page, "04c-halt-off-restored");
+  });
+
   test("05. set time window mode on a halt", async () => {
     // Select the first intermediate halt (row 1) to configure WINDOW timing
     await selectGridRow(page, 1);
@@ -658,6 +954,104 @@ test.describe("S-Bahn Olten-Aarau: Full Integration Test", () => {
     console.log("Time window mode configured: ELA=05:05, LLA=05:10");
   });
 
+  test("05a. switch arrival WINDOW → AFTER preserves earliest value", async () => {
+    // Mode-switch preservation (ADR-010 §7): switching from WINDOW to AFTER must
+    // copy the earliest value into the AFTER picker; the latest picker disappears.
+    await selectGridRow(page, 1);
+    await page.waitForTimeout(800);
+
+    await selectConstraintMode(page, "arrival", "AFTER");
+    await page.waitForTimeout(600);
+
+    // Earliest picker stays visible, latest is gone
+    expect(await isTimePickerVisible(page, /Earliest arrival|Fr[üu]heste Ankunft|ELA/i)).toBe(true);
+    expect(await isTimePickerVisible(page, /Latest arrival|Sp[äa]teste Ankunft|LLA/i)).toBe(false);
+    // Preserved value
+    const ela = await readTimePickerValue(page, /Earliest arrival|Fr[üu]heste Ankunft|ELA/i);
+    expect(ela).toBe("05:05");
+
+    await dismissDevBanner(page);
+    await clickVaadinButton(page, APPLY_BTN);
+    await page.waitForTimeout(500);
+
+    const row = await readRowData(page, 1);
+    expect(row?.arrivalMode).toBe("AFTER");
+    expect(row?.arrivalEarliest).toBe("05:05");
+    expect(row?.userEnteredArrivalEarliest).toBe(true);
+    // LLA value cleared and flag false (was true after test 05)
+    expect(row?.userEnteredArrivalLatest).toBeFalsy();
+
+    await screenshot(page, "05a-after-mode");
+  });
+
+  test("05b. switch arrival AFTER → BEFORE preserves the value as latest", async () => {
+    // Switching AFTER → BEFORE must move the lone value (was ELA) into LLA.
+    await selectGridRow(page, 1);
+    await page.waitForTimeout(800);
+
+    await selectConstraintMode(page, "arrival", "BEFORE");
+    await page.waitForTimeout(600);
+
+    expect(await isTimePickerVisible(page, /Earliest arrival|Fr[üu]heste Ankunft|ELA/i)).toBe(false);
+    expect(await isTimePickerVisible(page, /Latest arrival|Sp[äa]teste Ankunft|LLA/i)).toBe(true);
+
+    const lla = await readTimePickerValue(page, /Latest arrival|Sp[äa]teste Ankunft|LLA/i);
+    expect(lla).toBe("05:05");
+
+    await dismissDevBanner(page);
+    await clickVaadinButton(page, APPLY_BTN);
+    await page.waitForTimeout(500);
+
+    const row = await readRowData(page, 1);
+    expect(row?.arrivalMode).toBe("BEFORE");
+    expect(row?.arrivalLatest).toBe("05:05");
+    expect(row?.userEnteredArrivalLatest).toBe(true);
+    expect(row?.userEnteredArrivalEarliest).toBeFalsy();
+
+    await screenshot(page, "05b-before-mode");
+  });
+
+  test("05c. dwell + EXACT arrival mirrors to EXACT departure without TTT badge", async () => {
+    // ADR-010 Regel 5 (same-mode mirroring): dwell + 1 user-entered side derives the
+    // other side in the SAME mode. The mirrored side stays NOT user-entered, so the
+    // grid shows the TTT badge only on the side the user actually typed.
+    await selectGridRow(page, 2);
+    await page.waitForTimeout(800);
+
+    const beforeBadges = await countTttBadgesInGrid(page);
+
+    // Set arrival mode = EXACT, time 05:30 (mode switch from prior state too)
+    await selectConstraintMode(page, "arrival", "EXACT");
+    await page.waitForTimeout(500);
+    await setTimePickerByLabel(page, /^Ankunft$|^Arrival$|exact|exakt/i, "05:30");
+    await page.waitForTimeout(300);
+
+    // Make sure dwell is set (3 min, restored in test 04c)
+    await setIntegerFieldByLabel(page, /Aufenthalt|Dwell/i, 3);
+    await page.waitForTimeout(300);
+
+    await dismissDevBanner(page);
+    await clickVaadinButton(page, APPLY_BTN);
+    await page.waitForTimeout(800);
+
+    const row = await readRowData(page, 2);
+    expect(row?.arrivalMode).toBe("EXACT");
+    expect(row?.arrivalExact).toBe("05:30");
+    expect(row?.userEnteredArrivalExact).toBe(true);
+
+    // Mirror: departure side EXACT 05:33 (= 05:30 + 3 min dwell), NOT user-entered
+    expect(row?.departureMode).toBe("EXACT");
+    expect(row?.departureExact).toBe("05:33");
+    expect(row?.userEnteredDepartureExact).toBeFalsy();
+
+    // Grid badge count: arrival cell of row 2 picked up a new TTT badge,
+    // mirrored departure cell did NOT. Net change = +1 badge.
+    const afterBadges = await countTttBadgesInGrid(page);
+    expect(afterBadges).toBe(beforeBadges + 1);
+
+    await screenshot(page, "05c-dwell-mirror-no-mirror-badge");
+  });
+
   test("06. verify auto time recalculation after departure set", async () => {
     // Select origin row (row 0) and verify estimates propagated
     await selectGridRow(page, 0);
@@ -706,6 +1100,37 @@ test.describe("S-Bahn Olten-Aarau: Full Integration Test", () => {
     expect(timeCellCount).toBeGreaterThanOrEqual(1);
 
     await screenshot(page, "06-auto-times");
+  });
+
+  test("06a. day-offset stepper writes to row and grid renders +1d suffix", async () => {
+    // ADR-010 Day-Offset: setting the per-side offset stepper persists to row.departureOffset
+    // and the grid combinedDepartureLabel appends " +1d" to the value. We use origin's
+    // departure (only side visible) for an unambiguous test, then reset to 0 so downstream
+    // tests don't see a +1 suffix everywhere.
+    await selectGridRow(page, 0);
+    await page.waitForTimeout(800);
+
+    await setDayOffset(page, "departure", 1);
+    await page.waitForTimeout(300);
+
+    await dismissDevBanner(page);
+    await clickVaadinButton(page, APPLY_BTN);
+    await page.waitForTimeout(800);
+
+    const rowAfter = await readRowData(page, 0);
+    expect(rowAfter?.departureOffset).toBe(1);
+
+    // Grid: at least one cell shows " +1d" suffix
+    const hasSuffix = await gridCellHasOffsetSuffix(page, "+1d");
+    expect(hasSuffix).toBe(true);
+
+    await screenshot(page, "06a-day-offset-suffix");
+
+    // Reset to 0 to keep state clean for subsequent tests
+    await setDayOffset(page, "departure", 0);
+    await page.waitForTimeout(300);
+    await clickVaadinButton(page, APPLY_BTN);
+    await page.waitForTimeout(500);
   });
 
   test("07. soft-delete a stop and undo it", async () => {
@@ -981,712 +1406,6 @@ test.describe("S-Bahn Olten-Aarau: Full Integration Test", () => {
   });
 
   // ══════════════════════════════════════════════════════════════════
-  // ── PHASE 5b: VEHICLE PLANNING — Add Vehicle & Von/Für ─────────
-  // ══════════════════════════════════════════════════════════════════
-
-  test("09b. add vehicle to rotation", async () => {
-    await page.goto("/vehicleplanning");
-    await page.waitForTimeout(2_000);
-
-    // Select the S-Bahn FLIRT Umlauf rotation set
-    const rotationCombo = page.locator("vaadin-combo-box").first();
-    await expect(rotationCombo).toBeVisible({ timeout: 10_000 });
-    await rotationCombo.click();
-    await rotationCombo.locator("input").fill("S-Bahn FLIRT");
-    const rotOption = page
-      .locator("vaadin-combo-box-item")
-      .filter({ hasText: /S-Bahn FLIRT Umlauf/ })
-      .first();
-    const rotVisible = await rotOption.isVisible().catch(() => false);
-    if (rotVisible) {
-      await rotOption.click();
-    } else {
-      await page.keyboard.press("Escape");
-      console.log("S-Bahn FLIRT Umlauf not found in rotation list — skipping vehicle add");
-      await screenshot(page, "09b-rotation-not-found");
-      return;
-    }
-    await page.waitForTimeout(1_000);
-
-    // Look for an "Add Vehicle" / "Fahrzeug hinzufügen" / "+ Fahrzeug" button
-    const addVehicleBtn = page.locator("vaadin-button").filter({
-      hasText: /Fahrzeug.*hinzuf|Add Vehicle|\+ Fahrzeug|New Vehicle|Neues Fahrzeug/i,
-    });
-    const addBtnVisible = await addVehicleBtn.first().isVisible().catch(() => false);
-
-    if (addBtnVisible) {
-      await addVehicleBtn.first().click({ force: true });
-      await page.waitForTimeout(1_500);
-
-      // If a dialog opens, fill vehicle details
-      const dialog = page.locator("vaadin-dialog-overlay");
-      const dialogVisible = await dialog.isVisible().catch(() => false);
-      if (dialogVisible) {
-        // Fill label field
-        const labelInput = dialog.locator("vaadin-text-field input").first();
-        await labelInput.click();
-        await labelInput.fill("FLIRT 01");
-        await page.keyboard.press("Tab");
-        await page.waitForTimeout(500);
-
-        // Try to set vehicle type via a Select
-        const typeSelect = dialog.locator("vaadin-select, vaadin-combo-box").first();
-        const typeVisible = await typeSelect.isVisible().catch(() => false);
-        if (typeVisible) {
-          await typeSelect.click();
-          await page.waitForTimeout(500);
-          // Try to pick MULTIPLE_UNIT / Triebzug
-          const typeItem = page.locator(
-            "vaadin-select-item, vaadin-combo-box-item, vaadin-item",
-          ).filter({ hasText: /Multiple Unit|Triebzug|MULTIPLE_UNIT/i }).first();
-          const typeItemVisible = await typeItem.isVisible().catch(() => false);
-          if (typeItemVisible) {
-            await typeItem.click();
-          } else {
-            await page.keyboard.press("Escape");
-          }
-          await page.waitForTimeout(500);
-        }
-
-        // Save the dialog
-        const saveBtn = dialog.locator("vaadin-button").filter({
-          hasText: /Save|Speichern|Create|Erstellen|OK/i,
-        });
-        const saveBtnVisible = await saveBtn.first().isVisible().catch(() => false);
-        if (saveBtnVisible) {
-          await saveBtn.first().click({ force: true });
-          await page.waitForTimeout(1_500);
-        }
-      }
-      console.log("Add Vehicle button found and clicked");
-    } else {
-      console.log("Add Vehicle button not found — feature may not yet have a UI button");
-    }
-
-    await screenshot(page, "09b-vehicle-added");
-  });
-
-  test("09c. verify Von/Für button exists", async () => {
-    // Ensure we are on vehicle planning page
-    if (!page.url().includes("vehicleplanning")) {
-      await page.goto("/vehicleplanning");
-      await page.waitForTimeout(2_000);
-    }
-
-    // Look for the "Von/Für aktualisieren" / "Update vehicle links" button
-    const writeLinkBtn = page.locator("vaadin-button").filter({
-      hasText: /Von\/F.r aktualisieren|Update vehicle links|writeLinks|Von\/F.r/i,
-    });
-    const btnVisible = await writeLinkBtn.first().isVisible().catch(() => false);
-
-    if (btnVisible) {
-      console.log("Von/Für button found and visible");
-      await expect(writeLinkBtn.first()).toBeVisible();
-    } else {
-      // Fallback: search for the CONNECT icon button (writeLinkBtn uses VaadinIcon.CONNECT)
-      const connectBtn = page.locator(
-        'vaadin-button:has(vaadin-icon[icon*="connect"])',
-      );
-      const connectVisible = await connectBtn.first().isVisible().catch(() => false);
-      if (connectVisible) {
-        console.log("Von/Für button found via CONNECT icon");
-        await expect(connectBtn.first()).toBeVisible();
-      } else {
-        console.log("Von/Für button not found — checking via JS");
-        // Last resort: find any button whose text contains the key phrases
-        const found = await page.evaluate(() => {
-          const buttons = document.querySelectorAll("vaadin-button");
-          for (const btn of buttons) {
-            const text = btn.textContent || "";
-            if (/Von.*F.r|vehicle links|writeLinks/i.test(text)) {
-              return text.trim();
-            }
-          }
-          return null;
-        });
-        if (found) {
-          console.log(`Von/Für button found via JS: "${found}"`);
-        } else {
-          console.log("WARN: Von/Für button not found at all on this page");
-        }
-        // Don't fail — the button may only appear when a rotation is selected
-        expect(found || btnVisible || connectVisible).toBeTruthy();
-      }
-    }
-
-    await screenshot(page, "09c-vonbis-button");
-  });
-
-  test("09d2. add duty weeks to rotation", async () => {
-    // Navigate to Vehicle Planning
-    if (!page.url().includes("vehicleplanning")) {
-      await page.goto("/vehicleplanning");
-      await page.waitForTimeout(2_000);
-    }
-
-    // Select the S-Bahn FLIRT Umlauf rotation set if not already selected
-    const rotationCombo = page.locator("vaadin-combo-box").first();
-    await expect(rotationCombo).toBeVisible({ timeout: 10_000 });
-    await rotationCombo.click();
-    await rotationCombo.locator("input").fill("S-Bahn FLIRT");
-    const rotOption = page
-      .locator("vaadin-combo-box-item")
-      .filter({ hasText: /S-Bahn FLIRT Umlauf/ })
-      .first();
-    const rotVisible = await rotOption.isVisible().catch(() => false);
-    if (rotVisible) {
-      await rotOption.click();
-    } else {
-      await page.keyboard.press("Escape");
-      console.log("S-Bahn FLIRT Umlauf not found — skipping duty week creation");
-      await screenshot(page, "09d2-rotation-not-found");
-      return;
-    }
-    await page.waitForTimeout(1_000);
-
-    // Click "+ Dienst" / "Add Duty" button to create FLIRT Woche 1
-    const addDutyBtn = page.locator("vaadin-button").filter({
-      hasText: /Dienst hinzuf|Add Duty|\+ Dienst/i,
-    });
-    const addDutyVisible = await addDutyBtn.first().isVisible().catch(() => false);
-    if (!addDutyVisible) {
-      console.log("Add Duty button not found — skipping duty creation");
-      await screenshot(page, "09d2-no-add-duty-btn");
-      return;
-    }
-
-    // Create "FLIRT Woche 1"
-    await addDutyBtn.first().click({ force: true });
-    await page.waitForTimeout(1_500);
-    const dialog1 = page.locator("vaadin-dialog-overlay").first();
-    const dialog1Visible = await dialog1.isVisible().catch(() => false);
-    if (dialog1Visible) {
-      const labelInput1 = dialog1.locator("vaadin-text-field input").first();
-      await labelInput1.click();
-      await labelInput1.fill("FLIRT Woche 1");
-      await page.keyboard.press("Tab");
-      await page.waitForTimeout(500);
-
-      const saveBtn1 = dialog1.locator("vaadin-button").filter({
-        hasText: /Save|Speichern|Create|Erstellen|OK/i,
-      });
-      await saveBtn1.first().click({ force: true });
-      await page.waitForTimeout(1_500);
-      console.log("Created duty: FLIRT Woche 1");
-    } else {
-      console.log("Dialog did not open for FLIRT Woche 1");
-    }
-
-    // Create "FLIRT Woche 2"
-    await addDutyBtn.first().click({ force: true });
-    await page.waitForTimeout(1_500);
-    const dialog2 = page.locator("vaadin-dialog-overlay").first();
-    const dialog2Visible = await dialog2.isVisible().catch(() => false);
-    if (dialog2Visible) {
-      const labelInput2 = dialog2.locator("vaadin-text-field input").first();
-      await labelInput2.click();
-      await labelInput2.fill("FLIRT Woche 2");
-      await page.keyboard.press("Tab");
-      await page.waitForTimeout(500);
-
-      const saveBtn2 = dialog2.locator("vaadin-button").filter({
-        hasText: /Save|Speichern|Create|Erstellen|OK/i,
-      });
-      await saveBtn2.first().click({ force: true });
-      await page.waitForTimeout(1_500);
-      console.log("Created duty: FLIRT Woche 2");
-    } else {
-      console.log("Dialog did not open for FLIRT Woche 2");
-    }
-
-    await screenshot(page, "09d2-duty-weeks-created");
-  });
-
-  test("09d3. verify Gantt chart renders", async () => {
-    // Ensure we are on the Vehicle Planning page
-    if (!page.url().includes("vehicleplanning")) {
-      await page.goto("/vehicleplanning");
-      await page.waitForTimeout(2_000);
-    }
-
-    // Look for the tltv-gantt web component or any gantt-related elements
-    const ganttInfo = await page.evaluate(() => {
-      // Check for the tltv-gantt custom element
-      const ganttEl = document.querySelector("tltv-gantt");
-      if (ganttEl) {
-        return {
-          found: true,
-          tagName: "tltv-gantt",
-          visible: (ganttEl as HTMLElement).offsetParent !== null,
-          width: (ganttEl as HTMLElement).offsetWidth,
-          height: (ganttEl as HTMLElement).offsetHeight,
-        };
-      }
-      // Fallback: look for any element with "gantt" in tag name
-      const allEls = document.querySelectorAll("*");
-      for (const el of allEls) {
-        if (el.tagName.toLowerCase().includes("gantt")) {
-          return {
-            found: true,
-            tagName: el.tagName.toLowerCase(),
-            visible: (el as HTMLElement).offsetParent !== null,
-            width: (el as HTMLElement).offsetWidth,
-            height: (el as HTMLElement).offsetHeight,
-          };
-        }
-      }
-      return { found: false, tagName: null, visible: false, width: 0, height: 0 };
-    });
-
-    console.log(`Gantt element: ${JSON.stringify(ganttInfo)}`);
-
-    if (ganttInfo.found) {
-      expect(ganttInfo.visible).toBe(true);
-      console.log(
-        `Gantt chart rendered: tag=${ganttInfo.tagName}, ${ganttInfo.width}x${ganttInfo.height}px`,
-      );
-    } else {
-      // The Gantt might not render if no rotation is selected or no data
-      console.log("WARN: Gantt element not found in DOM — may need rotation selection first");
-    }
-
-    // Verify shelf/duty rows by checking for text content
-    const rowInfo = await page.evaluate(() => {
-      const allText = document.body.innerText || "";
-      const hasShelf = /Shelf|Ablage/i.test(allText);
-      const hasDuty = /FLIRT Woche|Dienst|Duty/i.test(allText);
-      return { hasShelf, hasDuty };
-    });
-    console.log(`Gantt rows — shelf: ${rowInfo.hasShelf}, duty: ${rowInfo.hasDuty}`);
-
-    await screenshot(page, "09d3-gantt-chart");
-  });
-
-  test("09d4. click Von/Fur button", async () => {
-    // Ensure we are on the Vehicle Planning page
-    if (!page.url().includes("vehicleplanning")) {
-      await page.goto("/vehicleplanning");
-      await page.waitForTimeout(2_000);
-    }
-
-    // Select the rotation set first (Von/Fur needs a selected rotation)
-    const rotationCombo = page.locator("vaadin-combo-box").first();
-    await expect(rotationCombo).toBeVisible({ timeout: 10_000 });
-    await rotationCombo.click();
-    await rotationCombo.locator("input").fill("S-Bahn FLIRT");
-    const rotOption = page
-      .locator("vaadin-combo-box-item")
-      .filter({ hasText: /S-Bahn FLIRT Umlauf/ })
-      .first();
-    const rotVisible = await rotOption.isVisible().catch(() => false);
-    if (rotVisible) {
-      await rotOption.click();
-    } else {
-      await page.keyboard.press("Escape");
-      console.log("S-Bahn FLIRT Umlauf not found — skipping Von/Fur click");
-      await screenshot(page, "09d4-rotation-not-found");
-      return;
-    }
-    await page.waitForTimeout(1_000);
-
-    // Find and click the "Von/Fur aktualisieren" / "Update vehicle links" button
-    const writeLinkBtn = page.locator("vaadin-button").filter({
-      hasText: /Von\/F.r|Update vehicle links|writeLinks/i,
-    });
-    let btnFound = await writeLinkBtn.first().isVisible().catch(() => false);
-
-    // Fallback: find button with CONNECT icon
-    if (!btnFound) {
-      const connectBtn = page.locator(
-        'vaadin-button:has(vaadin-icon[icon*="connect"])',
-      );
-      btnFound = await connectBtn.first().isVisible().catch(() => false);
-      if (btnFound) {
-        await connectBtn.first().click({ force: true });
-      }
-    } else {
-      await writeLinkBtn.first().click({ force: true });
-    }
-
-    if (!btnFound) {
-      console.log("Von/Fur button not found — skipping");
-      await screenshot(page, "09d4-vonbis-not-found");
-      return;
-    }
-
-    // Wait for notification
-    await page.waitForTimeout(3_000);
-    const notification = page.locator("vaadin-notification-card");
-    const notifVisible = await notification.first().isVisible().catch(() => false);
-    if (notifVisible) {
-      const notifText = await notification.first().textContent();
-      console.log(`Von/Fur notification: ${notifText}`);
-      // Should contain success message
-      if (/aktualisiert|updated|success/i.test(notifText || "")) {
-        console.log("Von/Fur update successful");
-      } else if (/error|fehler/i.test(notifText || "")) {
-        console.log("WARN: Von/Fur returned error");
-      }
-    } else {
-      console.log("No notification appeared after Von/Fur click");
-    }
-
-    await screenshot(page, "09d4-vonbis-clicked");
-  });
-
-  test("09d5. verify Von/Fur in Path Manager", async () => {
-    test.setTimeout(90_000);
-
-    // Navigate to Path Manager
-    await page.goto("/pathmanager");
-    await page.waitForTimeout(2_000);
-
-    // Wait for grid to load
-    const treeGrid = page.locator("vaadin-grid-tree-toggle, vaadin-grid");
-    await expect(treeGrid.first()).toBeVisible({ timeout: 15_000 });
-
-    // Use the REST API to list trains and check for associatedTrainOtn in locations
-    const apiBase = "http://localhost:8085/api/v1/pathmanager";
-
-    // Get all trains — the cookies from the page session should work
-    const trainsResult = await page.evaluate(async (url: string) => {
-      try {
-        const resp = await fetch(url + "/trains", { credentials: "include" });
-        if (!resp.ok) return { error: `HTTP ${resp.status}`, trains: [] };
-        const trains = await resp.json();
-        return { error: null, trains: trains.slice(0, 10) }; // limit to first 10
-      } catch (e: any) {
-        return { error: e.message, trains: [] };
-      }
-    }, apiBase);
-
-    if (trainsResult.error) {
-      console.log(`API error fetching trains: ${trainsResult.error}`);
-      await screenshot(page, "09d5-api-error");
-      return;
-    }
-
-    console.log(`Fetched ${trainsResult.trains.length} trains from API`);
-
-    // For each train, check versions and locations for associatedTrainOtn
-    let foundAssociation = false;
-    for (const train of trainsResult.trains) {
-      const trainId = train.id;
-      if (!trainId) continue;
-
-      const locationsResult = await page.evaluate(
-        async ({ url, tId }: { url: string; tId: string }) => {
-          try {
-            // Get versions first
-            const versResp = await fetch(`${url}/trains/${tId}/versions`, {
-              credentials: "include",
-            });
-            if (!versResp.ok) return { error: `HTTP ${versResp.status}`, locations: [] };
-            const versions = await versResp.json();
-            if (!versions || versions.length === 0) return { error: null, locations: [] };
-
-            // Use the latest version
-            const latestVersion = versions[versions.length - 1];
-            const locsResp = await fetch(
-              `${url}/trains/${tId}/versions/${latestVersion.id}/locations`,
-              { credentials: "include" },
-            );
-            if (!locsResp.ok) return { error: `HTTP ${locsResp.status}`, locations: [] };
-            const locations = await locsResp.json();
-            return { error: null, locations };
-          } catch (e: any) {
-            return { error: e.message, locations: [] };
-          }
-        },
-        { url: apiBase, tId: trainId },
-      );
-
-      if (locationsResult.error) {
-        continue;
-      }
-
-      for (const loc of locationsResult.locations) {
-        if (loc.associatedTrainOtn) {
-          console.log(
-            `Train ${train.operationalTrainNumber || trainId}: ` +
-              `location "${loc.primaryLocationName}" has associatedTrainOtn="${loc.associatedTrainOtn}"`,
-          );
-          foundAssociation = true;
-        }
-      }
-    }
-
-    if (foundAssociation) {
-      console.log("Von/Fur verification: associatedTrainOtn values found in PM locations");
-    } else {
-      console.log(
-        "WARN: No associatedTrainOtn values found — Von/Fur may not have been executed " +
-          "or no trains are assigned to vehicles",
-      );
-    }
-
-    await screenshot(page, "09d5-vonbis-verification");
-  });
-
-  test("09d. verify TTR phase in Path Manager", async () => {
-    await page.goto("/pathmanager");
-    await page.waitForTimeout(2_000);
-
-    // Verify page loaded
-    const treeGrid = page.locator("vaadin-grid-tree-toggle, vaadin-grid");
-    await expect(treeGrid.first()).toBeVisible({ timeout: 15_000 });
-
-    // Select the first year node via the Vaadin TreeGrid JS API.
-    // Clicking vaadin-grid-tree-toggle only expands; we need to set activeItem.
-    await page.evaluate(() => {
-      const grid = document.querySelector("vaadin-grid") as any;
-      if (!grid) throw new Error("No vaadin-grid found");
-      // The TreeGrid data provider has items; the first root item is a YearNode
-      const items = grid._cache?.items || grid.items;
-      if (items) {
-        for (let i = 0; i < items.length; i++) {
-          if (items[i]) {
-            grid.selectedItems = [items[i]];
-            grid.activeItem = items[i];
-            return;
-          }
-        }
-      }
-      throw new Error("No items found in TreeGrid cache");
-    });
-    await page.waitForTimeout(2_000);
-
-    // Look for TTR phase badge — it shows "FPJ YYYY — <phase name>"
-    // The badge is rendered in the detail panel after selecting a YearNode
-    const phaseBadge = await page.evaluate(() => {
-      const spans = document.querySelectorAll("span");
-      for (const span of spans) {
-        const text = span.textContent || "";
-        if (/FPJ\s+20\d{2}\s*[—–-]/.test(text)) {
-          const style = window.getComputedStyle(span);
-          return {
-            text: text.trim(),
-            background: style.background || style.backgroundColor,
-            visible: (span as HTMLElement).offsetParent !== null,
-          };
-        }
-      }
-      // Also look for phase keywords directly
-      for (const span of spans) {
-        const text = span.textContent || "";
-        if (
-          /Annual Ordering|Late Ordering|Ad Hoc|Jahresbestellung|Sp.tbestellung|Capacity/i.test(text) &&
-          (span as HTMLElement).offsetParent !== null
-        ) {
-          const style = window.getComputedStyle(span);
-          return {
-            text: text.trim(),
-            background: style.background || style.backgroundColor,
-            visible: true,
-          };
-        }
-      }
-      return null;
-    });
-
-    if (phaseBadge) {
-      console.log(`TTR phase badge found: "${phaseBadge.text}" (bg: ${phaseBadge.background})`);
-      expect(phaseBadge.visible).toBe(true);
-    } else {
-      // Fallback: look for any year/phase info in the detail panel
-      const phaseInfo = await page.evaluate(() => {
-        const els = document.querySelectorAll("span, div");
-        for (const el of els) {
-          const text = el.textContent || "";
-          // Match year detail heading or phase info rows
-          if (
-            (/Year.*:.*20\d{2}|Jahr.*:.*20\d{2}/i.test(text) ||
-             /Current Phase|Aktuelle Phase|Bestellphase|phase/i.test(text)) &&
-            (el as HTMLElement).offsetParent !== null
-          ) {
-            return text.trim().substring(0, 120);
-          }
-        }
-        return null;
-      });
-      console.log(`TTR phase info text: ${phaseInfo || "not found"}`);
-      expect(phaseBadge || phaseInfo).toBeTruthy();
-    }
-
-    await screenshot(page, "09d-ttr-phase");
-  });
-
-  test("09e. verify associated train field in builder", async () => {
-    test.setTimeout(120_000);
-
-    // Navigate back to the order
-    await page.goto(orderUrl);
-    await expect(page.getByText(ORDER_NR)).toBeVisible({ timeout: 10_000 });
-    await page.waitForTimeout(1_000);
-
-    // Find a FAHRPLAN position and click edit (pencil icon) to open timetable builder
-    await dismissDevBanner(page);
-    const navigated = await page.evaluate(() => {
-      const spans = document.querySelectorAll("span");
-      for (const span of spans) {
-        if (/^(TIMETABLE|FAHRPLAN)$/i.test(span.textContent?.trim() || "")) {
-          let container: HTMLElement | null = span.closest("div");
-          for (let i = 0; i < 8 && container; i++) {
-            const pencilIcon = container.querySelector(
-              'vaadin-icon[icon*="pencil"], vaadin-icon[icon*="edit"]',
-            );
-            if (pencilIcon) {
-              const btn = pencilIcon.closest("vaadin-button") as HTMLElement;
-              if (btn && btn.offsetParent !== null) {
-                btn.click();
-                return true;
-              }
-            }
-            container =
-              container.parentElement?.closest("div") as HTMLElement | null;
-          }
-        }
-      }
-      return false;
-    });
-
-    if (!navigated) {
-      console.log("Could not find pencil/edit icon — trying direct navigation");
-      await screenshot(page, "09e-edit-nav-failed");
-      return;
-    }
-
-    // Wait for timetable builder to load
-    await page.waitForURL(/\/timetable-builder/, { timeout: 20_000 });
-    await page.waitForTimeout(2_000);
-
-    // Check if we are already on Step 2 (grid visible) or need to click Next
-    const gridAlreadyVisible = await page
-      .locator("vaadin-grid")
-      .isVisible()
-      .catch(() => false);
-
-    if (!gridAlreadyVisible) {
-      // Go to Step 2 (click Next)
-      await dismissDevBanner(page);
-      await page.getByRole("button", { name: NEXT_BTN }).click();
-      await expect(page.locator("vaadin-grid")).toBeVisible({ timeout: 30_000 });
-    }
-    await page.waitForTimeout(1_500);
-
-    // Select all validity dates if available
-    const allBtn = page.getByText(ALL_LABEL, { exact: true });
-    const allVisible = await allBtn.isVisible().catch(() => false);
-    if (allVisible) {
-      await allBtn.click();
-      await page.waitForTimeout(500);
-    }
-
-    // Select an intermediate row (row 1 — not origin)
-    await selectGridRow(page, 1);
-    await page.waitForTimeout(1_000);
-
-    // Ensure halt is enabled (required before activity field is visible)
-    const haltCheckbox = page
-      .locator("vaadin-checkbox")
-      .filter({ hasText: /Zwischenhalt|Intermediate stop|halt/i })
-      .first();
-    const haltVisible = await haltCheckbox.isVisible().catch(() => false);
-    if (haltVisible) {
-      const isChecked = await page.evaluate(() => {
-        const cbs = document.querySelectorAll("vaadin-checkbox");
-        for (const cb of cbs) {
-          if (/zwischenhalt|intermediate stop|halt/i.test(cb.textContent || "")) {
-            return (cb as any).checked;
-          }
-        }
-        return false;
-      });
-      if (!isChecked) {
-        await haltCheckbox.click({ force: true });
-        await page.waitForTimeout(500);
-      }
-    }
-
-    // Now change the activity to "0044" (Rollmaterial von anderem Zug)
-    // The activity field is a vaadin-combo-box
-    const activityCombo = page.locator("vaadin-combo-box").filter({
-      hasText: /Aktivit.t|Activity/i,
-    });
-    const activityVisible = await activityCombo.first().isVisible().catch(() => false);
-
-    if (activityVisible) {
-      await activityCombo.first().click();
-      await activityCombo.first().locator("input").fill("0044");
-      await page.waitForTimeout(1_000);
-
-      // Click the 0044 option in the dropdown
-      const option0044 = page
-        .locator("vaadin-combo-box-item")
-        .filter({ hasText: /0044/ })
-        .first();
-      const optionVisible = await option0044.isVisible().catch(() => false);
-      if (optionVisible) {
-        await option0044.click();
-        await page.waitForTimeout(1_000);
-
-        // Verify the associated train field appears
-        // The field label is "Verknüpfter Zug (OTN)" / "Associated train (OTN)"
-        const assocTrainField = await page.evaluate(() => {
-          const fields = document.querySelectorAll("vaadin-text-field");
-          for (const field of fields) {
-            const label = ((field as any).label || "").toLowerCase();
-            if (
-              (label.includes("associated") || label.includes("verknüpfter") || label.includes("otn")) &&
-              (field as HTMLElement).offsetParent !== null
-            ) {
-              return { label: (field as any).label, visible: true };
-            }
-          }
-          return null;
-        });
-
-        if (assocTrainField) {
-          console.log(`Associated train field visible: "${assocTrainField.label}"`);
-          expect(assocTrainField.visible).toBe(true);
-
-          // Fill the field with "18002"
-          await setTextFieldByLabel(
-            page,
-            /Verkn.pfter Zug|Associated train/i,
-            "18002",
-          );
-          await page.waitForTimeout(500);
-          console.log("Associated train field set to 18002");
-        } else {
-          console.log("WARN: Associated train field not found after selecting 0044");
-        }
-      } else {
-        console.log("Activity 0044 option not found in combo dropdown");
-        await page.keyboard.press("Escape");
-      }
-    } else {
-      console.log("Activity combo not visible — halt may not be enabled or editor not shown");
-    }
-
-    await screenshot(page, "09e-associated-train");
-
-    // Click Apply to confirm (but don't save — we navigate away without saving)
-    await dismissDevBanner(page);
-    const applyBtnVisible = await page.locator("vaadin-button").filter({
-      hasText: APPLY_BTN,
-    }).first().isVisible().catch(() => false);
-    if (applyBtnVisible) {
-      await clickVaadinButton(page, APPLY_BTN);
-      await page.waitForTimeout(500);
-    }
-
-    // Navigate back to order detail (without saving the timetable builder)
-    await page.goto(orderUrl);
-    await expect(page.getByText(ORDER_NR)).toBeVisible({ timeout: 10_000 });
-  });
-
-  // ══════════════════════════════════════════════════════════════════
   // ── PHASE 6: SEND TO PATH MANAGER ──────────────────────────────
   // ══════════════════════════════════════════════════════════════════
 
@@ -1872,102 +1591,6 @@ test.describe("S-Bahn Olten-Aarau: Full Integration Test", () => {
       console.log("Could not find eye icon to navigate to archive view");
       await screenshot(page, "12-archive-nav-failed");
     }
-  });
-
-  // ══════════════════════════════════════════════════════════════════
-  // ── PHASE 8: VEHICLE PLANNING ──────────────────────────────────
-  // ══════════════════════════════════════════════════════════════════
-
-  test("13. navigate to Vehicle Planning and create rotation", async () => {
-    await page.goto("/vehicleplanning");
-    await page.waitForTimeout(2_000);
-
-    // Check if view is accessible
-    const accessDenied = await page
-      .getByText(/Could not navigate|not accessible|PermitAll/i)
-      .first()
-      .isVisible()
-      .catch(() => false);
-
-    if (accessDenied) {
-      console.log(
-        "Vehicle Planning view is not accessible — skipping VP tests",
-      );
-      await screenshot(page, "13-vehicle-planning-access-denied");
-      return;
-    }
-
-    // Verify the page loaded (title or combo)
-    const titleVisible = await page
-      .getByText(/Vehicle Planning|Fahrzeugumlauf/i)
-      .first()
-      .isVisible()
-      .catch(() => false);
-    const comboVisible = await page
-      .locator("vaadin-combo-box")
-      .first()
-      .isVisible()
-      .catch(() => false);
-    expect(titleVisible || comboVisible).toBe(true);
-
-    await screenshot(page, "13a-vehicle-planning");
-
-    // Look for "New rotation" button
-    await dismissDevBanner(page);
-    const newRotBtn = page.locator("vaadin-button").filter({
-      hasText: /Neuer Umlauf|New rotation|Umlauf.*neu|\+ Umlauf/i,
-    });
-    const btnVisible = await newRotBtn.first().isVisible().catch(() => false);
-    if (!btnVisible) {
-      console.log("New rotation button not found — skipping rotation creation");
-      await screenshot(page, "13b-rotation-button-missing");
-      return;
-    }
-    await newRotBtn.first().click({ force: true });
-
-    // A dialog should appear (use .first() to avoid strict mode with AI dialog)
-    const dialog = page.locator("vaadin-dialog-overlay").first();
-    await expect(dialog).toBeVisible({ timeout: 10_000 });
-
-    // Fill the rotation name
-    const nameInput = dialog.locator("vaadin-text-field input").first();
-    await nameInput.click();
-    await nameInput.fill("S-Bahn FLIRT Umlauf");
-    await page.keyboard.press("Tab");
-    await page.waitForTimeout(500);
-
-    await screenshot(page, "13c-rotation-dialog");
-
-    // Save/confirm the dialog
-    await dismissDevBanner(page);
-    const saveBtn = dialog.locator("vaadin-button").filter({
-      hasText: /Save|Speichern|Create|Erstellen|OK/i,
-    });
-    await saveBtn.first().click({ force: true });
-
-    // Wait for dialog to close
-    await page.waitForTimeout(2_000);
-
-    // Verify rotation set appears in the rotation selector combo
-    const rotationCombo = page.locator("vaadin-combo-box").first();
-    await expect(rotationCombo).toBeVisible({ timeout: 5_000 });
-
-    // Check if rotation is now available
-    await rotationCombo.click();
-    await rotationCombo.locator("input").fill("S-Bahn FLIRT");
-    const rotOption = page
-      .locator("vaadin-combo-box-item")
-      .filter({ hasText: /S-Bahn FLIRT Umlauf/ })
-      .first();
-    const rotVisible = await rotOption.isVisible().catch(() => false);
-    console.log(`S-Bahn FLIRT Umlauf in rotation list: ${rotVisible}`);
-    if (rotVisible) {
-      await rotOption.click();
-    } else {
-      await page.keyboard.press("Escape");
-    }
-
-    await screenshot(page, "13d-rotation-created");
   });
 
   // ══════════════════════════════════════════════════════════════════

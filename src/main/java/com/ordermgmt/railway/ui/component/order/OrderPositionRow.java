@@ -3,6 +3,7 @@ package com.ordermgmt.railway.ui.component.order;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 
@@ -11,15 +12,17 @@ import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.Span;
-import com.vaadin.flow.component.icon.Icon;
 import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
+import com.vaadin.flow.router.QueryParameters;
 
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.order.model.PositionType;
 import com.ordermgmt.railway.domain.order.model.PurchasePosition;
 import com.ordermgmt.railway.domain.order.service.AuditService;
+import com.ordermgmt.railway.domain.pathmanager.model.PathProcessState;
+import com.ordermgmt.railway.domain.pathmanager.model.PmPlanningStatus;
 import com.ordermgmt.railway.ui.component.AuditHistoryDialog;
 import com.ordermgmt.railway.ui.component.PurchaseCalendarPanel;
 import com.ordermgmt.railway.ui.component.StatusBadge;
@@ -31,6 +34,10 @@ public class OrderPositionRow extends Div {
     private static final DateTimeFormatter DT_FMT = DateTimeFormatter.ofPattern("dd.MM. HH:mm");
     private static final int MAX_TAGS = 3;
     private final OrderPosition position;
+    private final PathProcessState pmState;
+    private final PmPlanningStatus planningStatus;
+    private final Consumer<OrderPosition> onAcceptAlteration;
+    private final Consumer<OrderPosition> onRejectAlteration;
     private final BiFunction<String, Object[], String> translator;
     private final AuditService auditService;
     private final Div calendarSlot = new Div();
@@ -38,12 +45,19 @@ public class OrderPositionRow extends Div {
 
     public OrderPositionRow(
             OrderPosition position,
+            PathProcessState pmState,
+            PmPlanningStatus planningStatus,
             BiFunction<String, Object[], String> translator,
             Consumer<OrderPosition> onEdit,
             Consumer<OrderPosition> onDelete,
-            Consumer<OrderPosition> onSendToPm,
+            Consumer<OrderPosition> onAcceptAlteration,
+            Consumer<OrderPosition> onRejectAlteration,
             AuditService auditService) {
         this.position = position;
+        this.pmState = pmState;
+        this.planningStatus = planningStatus;
+        this.onAcceptAlteration = onAcceptAlteration;
+        this.onRejectAlteration = onRejectAlteration;
         this.translator = translator;
         this.auditService = auditService;
 
@@ -55,7 +69,7 @@ public class OrderPositionRow extends Div {
                 .set("box-sizing", "border-box")
                 .set("transition", "background-color 120ms ease, box-shadow 120ms ease");
 
-        add(createSummary(translator, onEdit, onDelete, onSendToPm));
+        add(createSummary(translator, onEdit, onDelete));
 
         calendarSlot.setWidthFull();
         calendarSlot
@@ -70,8 +84,7 @@ public class OrderPositionRow extends Div {
     private HorizontalLayout createSummary(
             BiFunction<String, Object[], String> t,
             Consumer<OrderPosition> onEdit,
-            Consumer<OrderPosition> onDelete,
-            Consumer<OrderPosition> onSendToPm) {
+            Consumer<OrderPosition> onDelete) {
 
         Div info = createInfoBlock(t);
 
@@ -110,8 +123,8 @@ public class OrderPositionRow extends Div {
         viewBtn.addClickListener(e -> navigateToArchiveView());
         viewBtn.setVisible(position.getType() == PositionType.FAHRPLAN);
 
-        // Send to / View in Path Manager button for FAHRPLAN positions
-        Button pmBtn = createPathManagerButton(onSendToPm);
+        // View-in-RailOpt button for transferred FAHRPLAN positions (sending is automatic on save)
+        Button pmBtn = createPathManagerButton();
 
         // Edit + Delete (smaller, secondary)
         Button editBtn = new Button(VaadinIcon.EDIT.create());
@@ -167,6 +180,16 @@ public class OrderPositionRow extends Div {
                 .set("min-width", "150px");
 
         header.add(name, createTypeBadge(t), createStatusBadge(t));
+        if (position.getType() == PositionType.FAHRPLAN
+                && position.getPmReferenceTrainId() != null) {
+            header.add(createRailOptBadge(t));
+            if (planningStatus != null && planningStatus != PmPlanningStatus.UNPLANNED) {
+                header.add(createPlanningBadge(t));
+            }
+            if (pmState == PathProcessState.ALTERATION_OFFERED) {
+                header.add(createAlterationActions(t));
+            }
+        }
         info.add(header);
 
         Div meta = new Div();
@@ -293,6 +316,57 @@ public class OrderPositionRow extends Div {
         };
     }
 
+    /** Visible "transferred to RailOpt" badge showing the current RailOpt process state. */
+    private StatusBadge createRailOptBadge(BiFunction<String, Object[], String> t) {
+        String stateLabel =
+                pmState != null
+                        ? t.apply("pm.state." + pmState.name(), new Object[0])
+                        : t.apply("position.sentToPm", new Object[0]);
+        return new StatusBadge("RailOpt · " + stateLabel, railOptBadgeType());
+    }
+
+    /** Planning status from RailOpt (planned / on shelf / on physical resource). */
+    private StatusBadge createPlanningBadge(BiFunction<String, Object[], String> t) {
+        String label = t.apply("pm.planning." + planningStatus.name(), new Object[0]);
+        StatusBadge.StatusType type =
+                switch (planningStatus) {
+                    case ON_PHYSICAL_RESOURCE -> StatusBadge.StatusType.SUCCESS;
+                    case ON_SHELF -> StatusBadge.StatusType.WARNING;
+                    case PLANNED -> StatusBadge.StatusType.INFO;
+                    case UNPLANNED -> StatusBadge.StatusType.NEUTRAL;
+                };
+        return new StatusBadge(t.apply("pm.planning.label", new Object[0]) + " · " + label, type);
+    }
+
+    private StatusBadge.StatusType railOptBadgeType() {
+        if (pmState == null) {
+            return StatusBadge.StatusType.INFO;
+        }
+        return switch (pmState) {
+            case BOOKED -> StatusBadge.StatusType.SUCCESS;
+            case WITHDRAWN, CANCELED, NO_ALTERNATIVE -> StatusBadge.StatusType.DANGER;
+            case ALTERATION_ANNOUNCED, ALTERATION_OFFERED -> StatusBadge.StatusType.WARNING;
+            case NEW, SUPERSEDED -> StatusBadge.StatusType.NEUTRAL;
+            default -> StatusBadge.StatusType.INFO;
+        };
+    }
+
+    /** Accept/reject buttons shown on the order when RailOpt has offered a path alteration. */
+    private HorizontalLayout createAlterationActions(BiFunction<String, Object[], String> t) {
+        Button accept = new Button(t.apply("order.alteration.accept", new Object[0]));
+        accept.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_SUCCESS);
+        accept.addClickListener(e -> onAcceptAlteration.accept(position));
+
+        Button reject = new Button(t.apply("order.alteration.reject", new Object[0]));
+        reject.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_ERROR);
+        reject.addClickListener(e -> onRejectAlteration.accept(position));
+
+        HorizontalLayout box = new HorizontalLayout(accept, reject);
+        box.setSpacing(true);
+        box.setPadding(false);
+        return box;
+    }
+
     private String formatRoute() {
         String from = position.getFromLocation();
         String to = position.getToLocation();
@@ -326,25 +400,33 @@ public class OrderPositionRow extends Div {
         return badge;
     }
 
-    private Button createPathManagerButton(Consumer<OrderPosition> onSendToPm) {
-        boolean isFahrplan = position.getType() == PositionType.FAHRPLAN;
-        boolean alreadySent = position.getPmReferenceTrainId() != null;
+    /**
+     * View-only link into RailOpt for a transferred FAHRPLAN position. Sending happens
+     * automatically on save (see the Timetable Builder hint), so this button only opens the train
+     * in RailOpt.
+     */
+    private Button createPathManagerButton() {
+        boolean show =
+                position.getType() == PositionType.FAHRPLAN
+                        && position.getPmReferenceTrainId() != null;
 
-        Icon icon = VaadinIcon.TRAIN.create();
-        Button btn = new Button(icon);
+        Button btn = new Button(VaadinIcon.TRAIN.create());
         btn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
-        btn.setVisible(isFahrplan);
-
-        if (alreadySent) {
+        btn.setVisible(show);
+        if (show) {
             btn.setTooltipText(translator.apply("position.viewInPm", new Object[0]));
             btn.getStyle().set("color", "var(--rom-accent)");
-            btn.addClickListener(e -> UI.getCurrent().navigate("pathmanager"));
-        } else {
-            btn.setTooltipText(translator.apply("position.sendToPm", new Object[0]));
-            btn.getStyle().set("color", "var(--rom-status-warning)");
-            btn.addClickListener(e -> onSendToPm.accept(position));
+            btn.addClickListener(
+                    e ->
+                            UI.getCurrent()
+                                    .navigate(
+                                            "pathmanager",
+                                            QueryParameters.simple(
+                                                    Map.of(
+                                                            "train",
+                                                            position.getPmReferenceTrainId()
+                                                                    .toString()))));
         }
-
         return btn;
     }
 

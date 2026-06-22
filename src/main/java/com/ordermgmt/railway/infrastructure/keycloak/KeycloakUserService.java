@@ -143,11 +143,17 @@ public class KeycloakUserService {
         try {
             String token = getAdminToken();
             String enc = URLEncoder.encode(query == null ? "" : query, StandardCharsets.UTF_8);
-            String url = keycloakUrl + "/admin/realms/" + realm + "/users?"
-                    + "firstNameOrLastName=true"
-                    + "&email=" + enc
-                    + "&username=" + enc
-                    + "&max=50";
+            String url =
+                    keycloakUrl
+                            + "/admin/realms/"
+                            + realm
+                            + "/users?"
+                            + "firstNameOrLastName=true"
+                            + "&email="
+                            + enc
+                            + "&username="
+                            + enc
+                            + "&max=50";
 
             HttpHeaders headers = new HttpHeaders();
             headers.setBearerAuth(token);
@@ -178,9 +184,14 @@ public class KeycloakUserService {
         try {
             String token = getAdminToken();
             String enc = URLEncoder.encode(query == null ? "" : query, StandardCharsets.UTF_8);
-            String url = keycloakUrl + "/admin/realms/" + realm + "/groups?"
-                    + "search=" + enc
-                    + "&max=50";
+            String url =
+                    keycloakUrl
+                            + "/admin/realms/"
+                            + realm
+                            + "/groups?"
+                            + "search="
+                            + enc
+                            + "&max=50";
 
             HttpHeaders headers = new HttpHeaders();
             headers.setBearerAuth(token);

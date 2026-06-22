@@ -95,14 +95,16 @@ public class RollingStockView extends VerticalLayout {
         if (item.getEvn() != null) {
             Div evnDiv = new Div();
             evnDiv.setText("EVN: " + item.getEvn());
-            evnDiv.getStyle().set("font-size", "var(--lumo-font-size-s)")
+            evnDiv.getStyle()
+                    .set("font-size", "var(--lumo-font-size-s)")
                     .set("color", "var(--lumo-secondary-text-color)");
             card.add(evnDiv);
         }
 
         // Technical details
         Div details = new Div();
-        details.getStyle().set("font-size", "var(--lumo-font-size-s)")
+        details.getStyle()
+                .set("font-size", "var(--lumo-font-size-s)")
                 .set("margin-top", "var(--lumo-space-xs)");
         StringBuilder sb = new StringBuilder();
         if (item.getKeeperCode() != null) sb.append(item.getKeeperCode()).append(" | ");
@@ -122,7 +124,8 @@ public class RollingStockView extends VerticalLayout {
             if (item.getSeats2ndClass() != null) cap += item.getSeats2ndClass() + " (2.Kl)";
             capacityDiv.setText("Kapazität: " + cap.trim());
         } else if (item.getMaxPayload() != null) {
-            capacityDiv.setText("Nutzlast: " + String.format("%.1f t", item.getMaxPayload() / 1000.0));
+            capacityDiv.setText(
+                    "Nutzlast: " + String.format("%.1f t", item.getMaxPayload() / 1000.0));
         }
         if (item.getPowerOutput() != null) {
             Div powerDiv = new Div();
@@ -166,8 +169,10 @@ public class RollingStockView extends VerticalLayout {
         ComboBox<VehicleCategory> category = new ComboBox<>(getTranslation("rs.category"));
         category.setItems(VehicleCategory.values());
         category.setItemLabelGenerator(c -> getTranslation("rs.category." + c.name()));
-        category.setValue(item.getVehicleCategory() != null
-                ? item.getVehicleCategory() : VehicleCategory.EMU);
+        category.setValue(
+                item.getVehicleCategory() != null
+                        ? item.getVehicleCategory()
+                        : VehicleCategory.EMU);
 
         TextField evn = new TextField("EVN");
         evn.setValue(nvl(item.getEvn()));
@@ -220,46 +225,67 @@ public class RollingStockView extends VerticalLayout {
                 new FormLayout.ResponsiveStep("0", 1),
                 new FormLayout.ResponsiveStep("400px", 2),
                 new FormLayout.ResponsiveStep("600px", 3));
-        form.add(designation, category, evn, keeper, country, uicCode,
-                axles, length, weight, speed, power, traction,
-                seats1, seats2, payload, coupling, brake);
+        form.add(
+                designation,
+                category,
+                evn,
+                keeper,
+                country,
+                uicCode,
+                axles,
+                length,
+                weight,
+                speed,
+                power,
+                traction,
+                seats1,
+                seats2,
+                payload,
+                coupling,
+                brake);
         dialog.add(form);
 
         Button saveBtn = new Button(getTranslation("common.save"));
         saveBtn.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
-        saveBtn.addClickListener(e -> {
-            if (designation.getValue() == null || designation.getValue().isBlank()) {
-                designation.setInvalid(true);
-                return;
-            }
-            item.setDesignation(designation.getValue());
-            item.setVehicleCategory(category.getValue());
-            item.setEvn(blankToNull(evn.getValue()));
-            item.setKeeperCode(blankToNull(keeper.getValue()));
-            item.setOwnerCountryCode(blankToNull(country.getValue()));
-            item.setUicLetterCode(blankToNull(uicCode.getValue()));
-            item.setNumberOfAxles(axles.getValue());
-            item.setLengthOverBuffers(length.getValue());
-            item.setWeightEmpty(weight.getValue());
-            item.setMaxSpeed(speed.getValue());
-            item.setPowerOutput(power.getValue());
-            item.setTractionSystem(blankToNull(traction.getValue()));
-            item.setSeats1stClass(seats1.getValue());
-            item.setSeats2ndClass(seats2.getValue());
-            item.setMaxPayload(payload.getValue());
-            item.setCouplingType(blankToNull(coupling.getValue()));
-            item.setBrakeType(blankToNull(brake.getValue()));
-            service.save(item);
-            dialog.close();
-            refreshCards();
-            Notification.show(getTranslation("rs.saved"), 2000,
-                    Notification.Position.BOTTOM_START);
-        });
+        saveBtn.addClickListener(
+                e -> {
+                    if (designation.getValue() == null || designation.getValue().isBlank()) {
+                        designation.setInvalid(true);
+                        return;
+                    }
+                    item.setDesignation(designation.getValue());
+                    item.setVehicleCategory(category.getValue());
+                    item.setEvn(blankToNull(evn.getValue()));
+                    item.setKeeperCode(blankToNull(keeper.getValue()));
+                    item.setOwnerCountryCode(blankToNull(country.getValue()));
+                    item.setUicLetterCode(blankToNull(uicCode.getValue()));
+                    item.setNumberOfAxles(axles.getValue());
+                    item.setLengthOverBuffers(length.getValue());
+                    item.setWeightEmpty(weight.getValue());
+                    item.setMaxSpeed(speed.getValue());
+                    item.setPowerOutput(power.getValue());
+                    item.setTractionSystem(blankToNull(traction.getValue()));
+                    item.setSeats1stClass(seats1.getValue());
+                    item.setSeats2ndClass(seats2.getValue());
+                    item.setMaxPayload(payload.getValue());
+                    item.setCouplingType(blankToNull(coupling.getValue()));
+                    item.setBrakeType(blankToNull(brake.getValue()));
+                    service.save(item);
+                    dialog.close();
+                    refreshCards();
+                    Notification.show(
+                            getTranslation("rs.saved"), 2000, Notification.Position.BOTTOM_START);
+                });
         Button cancelBtn = new Button(getTranslation("common.cancel"), e -> dialog.close());
         dialog.getFooter().add(cancelBtn, saveBtn);
         dialog.open();
     }
 
-    private String nvl(String s) { return s != null ? s : ""; }
-    private String blankToNull(String s) { return s != null && !s.isBlank() ? s : null; }
+    private String nvl(String s) {
+        return s != null ? s : "";
+    }
+
+    private String blankToNull(String s) {
+        return s != null && !s.isBlank() ? s : null;
+    }
 }

@@ -244,6 +244,30 @@ public class PurchaseOrderService {
         }
     }
 
+    /**
+     * Order-side response to a RailOpt-announced path alteration: accepts or rejects the offered
+     * alteration on the linked reference train, then re-syncs the purchase status.
+     */
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
+    public void respondToAlteration(UUID orderPositionId, boolean accept) {
+        OrderPosition position =
+                orderPositionRepository
+                        .findById(orderPositionId)
+                        .orElseThrow(
+                                () ->
+                                        new IllegalArgumentException(
+                                                "Order position not found: " + orderPositionId));
+        UUID trainId = position.getPmReferenceTrainId();
+        if (trainId == null) {
+            return;
+        }
+        pathProcessEngine.executeTransition(
+                trainId,
+                accept ? PathAction.ACCEPT_ALTERATION : PathAction.REJECT_ALTERATION,
+                accept ? "Alteration accepted (order)" : "Alteration rejected (order)");
+        syncAllTttStatuses(orderPositionId);
+    }
+
     private String generatePositionNumber() {
         return POSITION_PREFIX + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
     }
@@ -307,12 +331,18 @@ public class PurchaseOrderService {
 
     private PurchaseStatus mapProcessStateToPurchaseStatus(PathProcessState state) {
         return switch (state) {
-            case DRAFT_OFFERED, FINAL_OFFERED, RECEIPT_CONFIRMED, CREATED, MODIFIED ->
+            case DRAFT_OFFERED,
+                    FINAL_OFFERED,
+                    RECEIPT_CONFIRMED,
+                    CREATED,
+                    MODIFIED,
+                    REVISION_REQUESTED ->
                     PurchaseStatus.BESTELLT;
-            case BOOKED -> PurchaseStatus.BESTAETIGT;
+            case BOOKED, ALTERATION_ANNOUNCED, ALTERATION_OFFERED, MODIFICATION_REQUESTED ->
+                    PurchaseStatus.BESTAETIGT;
             case NO_ALTERNATIVE, CANCELED -> PurchaseStatus.ABGELEHNT;
             case WITHDRAWN, SUPERSEDED -> PurchaseStatus.STORNIERT;
-            default -> null;
+            default -> null; // NEW: not yet ordered
         };
     }
 }

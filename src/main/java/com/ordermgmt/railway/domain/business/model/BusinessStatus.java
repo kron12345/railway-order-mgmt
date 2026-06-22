@@ -9,14 +9,15 @@ public enum BusinessStatus {
     ANNULLIERT;
 
     /**
-     * Returns the valid next status targets for this status.
-     * Closed/annulled states are absorbing (no transitions allowed).
+     * Returns the valid next status targets for this status. Closed/annulled states are absorbing
+     * (no transitions allowed).
      */
     public java.util.Set<BusinessStatus> nextTargets() {
         return switch (this) {
             case ABGESCHLOSSEN, ANNULLIERT -> java.util.Collections.emptySet();
             case IN_BEARBEITUNG -> java.util.Set.of(FREIGEGEBEN);
-            case FREIGEGEBEN -> java.util.Set.of(IN_BEARBEITUNG, UEBERARBEITEN, ABGESCHLOSSEN, ANNULLIERT);
+            case FREIGEGEBEN ->
+                    java.util.Set.of(IN_BEARBEITUNG, UEBERARBEITEN, ABGESCHLOSSEN, ANNULLIERT);
             case UEBERARBEITEN -> java.util.Set.of(ABGESCHLOSSEN, ANNULLIERT);
         };
     }

@@ -182,39 +182,74 @@ public class TimetableTableStep extends Div {
                     return null;
                 });
 
+        // Sequence: tiny, fixed, no resize/tooltip needed
         rowGrid.addColumn(TimetableRowData::getSequence)
                 .setHeader("#")
-                .setWidth("30px")
+                .setWidth("38px")
                 .setFlexGrow(0);
-        rowGrid.addColumn(TimetableRowData::getName)
+
+        // Name (point): TTT-aware renderer — origin/destination/halt/manually-added rows get the
+        // accent badge since their UOPID + Name will be exported in the Path Request.
+        rowGrid.addComponentColumn(this::renderPointCell)
                 .setHeader(t("timetable.table.point"))
-                .setFlexGrow(1);
-        rowGrid.addColumn(this::combinedArrivalLabel)
+                .setFlexGrow(1)
+                .setResizable(true)
+                .setTooltipGenerator(this::pointTooltip);
+
+        // Arrival: ComponentRenderer so user-entered (TTT-exportable) values can be styled
+        // bold + accent \u2014 at a glance the user sees what gets sent in the Path Request.
+        rowGrid.addComponentColumn(row -> renderTimeCell(row, true))
                 .setHeader(t("timetable.table.arrival"))
-                .setWidth("90px")
-                .setFlexGrow(0);
-        rowGrid.addColumn(this::dwellLabel)
+                .setAutoWidth(true)
+                .setFlexGrow(0)
+                .setResizable(true)
+                .setTooltipGenerator(this::arrivalTooltip);
+
+        // Dwell: TTT-aware so user-entered DwellTime is visually distinct from a missing/zero dwell
+        rowGrid.addComponentColumn(this::renderDwellCell)
                 .setHeader(t("timetable.editor.dwell"))
-                .setWidth("45px")
-                .setFlexGrow(0);
-        rowGrid.addColumn(this::combinedDepartureLabel)
+                .setAutoWidth(true)
+                .setFlexGrow(0)
+                .setResizable(true)
+                .setTooltipGenerator(this::dwellTooltip);
+
+        // Departure: same TTT-aware renderer as arrival
+        rowGrid.addComponentColumn(row -> renderTimeCell(row, false))
                 .setHeader(t("timetable.table.departure"))
-                .setWidth("90px")
-                .setFlexGrow(0);
+                .setAutoWidth(true)
+                .setFlexGrow(0)
+                .setResizable(true)
+                .setTooltipGenerator(this::departureTooltip);
+
         rowGrid.addColumn(row -> Boolean.TRUE.equals(row.getHalt()) ? "\u2713" : "\u2014")
                 .setHeader(t("timetable.table.halt"))
-                .setWidth("35px")
+                .setWidth("42px")
                 .setFlexGrow(0);
+
+        // Activity: auto-width since codes vary in length; tooltip carries the full label
         rowGrid.addColumn(row -> activityLabel(row, activityOptions))
                 .setHeader(t("timetable.table.activity"))
-                .setWidth("80px")
-                .setFlexGrow(0);
+                .setAutoWidth(true)
+                .setFlexGrow(0)
+                .setResizable(true)
+                .setTooltipGenerator(this::activityTooltip);
 
         // Actions column: + (insert) and trash (soft-delete)
         rowGrid.addComponentColumn(this::createRowActions)
                 .setHeader("")
-                .setWidth("60px")
+                .setWidth("64px")
                 .setFlexGrow(0);
+
+        // Excel-like: double-click anywhere on the header recalculates auto-width columns to fit
+        // their current content. Single-click drag on the resizer (built-in) is unaffected.
+        rowGrid.getElement()
+                .executeJs(
+                        "this.addEventListener('dblclick', e => {"
+                                + "  const slot = e.target && e.target.assignedSlot;"
+                                + "  if (!slot) return;"
+                                + "  const name = slot.name || '';"
+                                + "  if (name.startsWith('header')) { this.recalculateColumnWidths(); }"
+                                + "});");
 
         rowGrid.asSingleSelect()
                 .addValueChangeListener(
@@ -225,30 +260,235 @@ public class TimetableTableStep extends Div {
                         });
     }
 
-    /** Combined arrival: constraint if set, else estimate, with qualifier tag. */
+    /**
+     * Combined arrival: constraint if set, else estimate, with qualifier tag and TTT-export marker
+     * (\u25cf) prefix when the row's arrival was user-entered (i.e. will be sent in the Path
+     * Request as a TTT Timing entry).
+     */
     private String combinedArrivalLabel(TimetableRowData row) {
+        String marker = editingService.hasUserEnteredArrival(row) ? "\u25cf " : "";
+        String offsetSuffix = formatOffsetSuffix(row.getArrivalOffset());
         String constraint = arrivalConstraintLabel(row);
         if (!"\u2014".equals(constraint)) {
             String qualifier = timingQualifierCode(row.getArrivalMode(), true);
-            return constraint + (qualifier != null ? " [" + qualifier + "]" : "");
+            return marker
+                    + constraint
+                    + (qualifier != null ? " [" + qualifier + "]" : "")
+                    + offsetSuffix;
         }
-        return timeOrDash(row.getEstimatedArrival());
+        return timeOrDash(row.getEstimatedArrival()) + offsetSuffix;
     }
 
-    /** Combined departure: constraint if set, else estimate, with qualifier tag. */
+    /** Combined departure with the same marker + offset rules as arrival. */
     private String combinedDepartureLabel(TimetableRowData row) {
+        String marker = editingService.hasUserEnteredDeparture(row) ? "\u25cf " : "";
+        String offsetSuffix = formatOffsetSuffix(row.getDepartureOffset());
         String constraint = departureConstraintLabel(row);
         if (!"\u2014".equals(constraint)) {
             String qualifier = timingQualifierCode(row.getDepartureMode(), false);
-            return constraint + (qualifier != null ? " [" + qualifier + "]" : "");
+            return marker
+                    + constraint
+                    + (qualifier != null ? " [" + qualifier + "]" : "")
+                    + offsetSuffix;
         }
-        return timeOrDash(row.getEstimatedDeparture());
+        return timeOrDash(row.getEstimatedDeparture()) + offsetSuffix;
+    }
+
+    /** "+1d" / "-1d" suffix for non-zero day offsets, empty for same-day. */
+    private String formatOffsetSuffix(Integer offset) {
+        if (offset == null || offset == 0) return "";
+        return offset > 0 ? " +" + offset + "d" : " " + offset + "d";
+    }
+
+    /**
+     * Cell renderer for the arrival/departure columns. User-entered (TTT-exportable) values are
+     * displayed in bold accent color, with a small "TTT" badge prefix — making contractual times
+     * visually distinct from machine-derived estimates.
+     */
+    private com.vaadin.flow.component.html.Span renderTimeCell(
+            TimetableRowData row, boolean isArrival) {
+        // Endpoints have no opposite-side time concept by definition — Origin has no arrival
+        // (the train doesn't arrive there from anywhere on this run), Destination has no
+        // departure. Return an empty span instead of "—" so the cell is visually clean.
+        if (isArrival && isOrigin(row)) {
+            return new com.vaadin.flow.component.html.Span();
+        }
+        if (!isArrival && isDestination(row)) {
+            return new com.vaadin.flow.component.html.Span();
+        }
+        boolean userEntered =
+                isArrival
+                        ? editingService.hasUserEnteredArrival(row)
+                        : editingService.hasUserEnteredDeparture(row);
+        String text = isArrival ? combinedArrivalLabel(row) : combinedDepartureLabel(row);
+        // Strip the leading "● " marker from text since the badge replaces it visually.
+        if (text.startsWith("● ")) text = text.substring(2);
+        return tttCell(text, userEntered);
+    }
+
+    /**
+     * Cell renderer for the operational point name. Marked TTT when the row will be sent in the
+     * Path Request (origin, destination, halt, or manually-added pass-through).
+     */
+    private com.vaadin.flow.component.html.Span renderPointCell(TimetableRowData row) {
+        return tttCell(
+                row.getName() == null ? "" : row.getName(), editingService.isExportedToTtt(row));
+    }
+
+    /**
+     * Cell renderer for the dwell column. Marked TTT when the user explicitly entered a dwell value
+     * — that DwellTime travels in the Path Request as part of TimingAtLocation.
+     */
+    private com.vaadin.flow.component.html.Span renderDwellCell(TimetableRowData row) {
+        return tttCell(dwellLabel(row), Boolean.TRUE.equals(row.getUserEnteredDwell()));
+    }
+
+    /** Common TTT-or-plain cell builder — keeps the badge style consistent across columns. */
+    private com.vaadin.flow.component.html.Span tttCell(String text, boolean ttt) {
+        com.vaadin.flow.component.html.Span span = new com.vaadin.flow.component.html.Span();
+        if (ttt && text != null && !text.isBlank()) {
+            com.vaadin.flow.component.html.Span badge =
+                    new com.vaadin.flow.component.html.Span("TTT");
+            badge.getStyle()
+                    .set("font-size", "9px")
+                    .set("font-weight", "700")
+                    .set("background", "var(--rom-accent)")
+                    .set("color", "var(--rom-bg-base, #1a1a1a)")
+                    .set("padding", "1px 5px")
+                    .set("border-radius", "3px")
+                    .set("margin-right", "6px")
+                    .set("letter-spacing", "0.04em")
+                    .set("vertical-align", "middle");
+            com.vaadin.flow.component.html.Span value =
+                    new com.vaadin.flow.component.html.Span(text);
+            value.getStyle().set("font-weight", "600").set("color", "var(--rom-accent)");
+            span.add(badge, value);
+        } else {
+            span.setText(text == null ? "" : text);
+            if (text != null && !text.isBlank()) {
+                span.getStyle().set("color", "var(--rom-text-muted, var(--rom-text-primary))");
+            }
+        }
+        return span;
     }
 
     /** Dwell minutes, only shown if > 0. */
     private String dwellLabel(TimetableRowData row) {
         Integer dwell = row.getDwellMinutes();
         return dwell != null && dwell > 0 ? dwell + "'" : "";
+    }
+
+    // ── Tooltip generators ───────────────────────────────────────────
+
+    private String pointTooltip(TimetableRowData row) {
+        StringBuilder sb = new StringBuilder();
+        if (row.getName() != null) sb.append(row.getName());
+        if (row.getUopid() != null && !row.getUopid().isBlank()) {
+            sb.append(" (").append(row.getCountry() == null ? "" : row.getCountry() + " ");
+            sb.append(row.getUopid()).append(")");
+        }
+        if (row.getRoutePointRole() != null) {
+            sb.append("\n").append(row.getRoutePointRole().name());
+        }
+        return sb.toString();
+    }
+
+    private String arrivalTooltip(TimetableRowData row) {
+        return timeSideTooltip(
+                row,
+                true,
+                row.getArrivalMode(),
+                row.getArrivalExact(),
+                row.getArrivalEarliest(),
+                row.getArrivalLatest(),
+                row.getCommercialArrival(),
+                row.getEstimatedArrival());
+    }
+
+    private String departureTooltip(TimetableRowData row) {
+        return timeSideTooltip(
+                row,
+                false,
+                row.getDepartureMode(),
+                row.getDepartureExact(),
+                row.getDepartureEarliest(),
+                row.getDepartureLatest(),
+                row.getCommercialDeparture(),
+                row.getEstimatedDeparture());
+    }
+
+    private String timeSideTooltip(
+            TimetableRowData row,
+            boolean arrival,
+            com.ordermgmt.railway.domain.timetable.model.TimeConstraintMode mode,
+            String exact,
+            String earliest,
+            String latest,
+            String commercial,
+            String estimated) {
+        if (mode == null) {
+            mode = com.ordermgmt.railway.domain.timetable.model.TimeConstraintMode.NONE;
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append(t(arrival ? "timetable.editor.arrival" : "timetable.editor.departure"));
+        sb.append(" — ").append(t("timetable.timeMode." + mode.name())).append("\n");
+        switch (mode) {
+            case EXACT -> sb.append(arrival ? "ALA: " : "ALD: ").append(timeOrDash(exact));
+            case WINDOW ->
+                    sb.append(arrival ? "ELA: " : "ELD: ")
+                            .append(timeOrDash(earliest))
+                            .append("\n")
+                            .append(arrival ? "LLA: " : "LLD: ")
+                            .append(timeOrDash(latest));
+            case AFTER ->
+                    sb.append("≥ ")
+                            .append(arrival ? "ELA: " : "ELD: ")
+                            .append(timeOrDash(earliest));
+            case BEFORE ->
+                    sb.append("≤ ").append(arrival ? "LLA: " : "LLD: ").append(timeOrDash(latest));
+            case COMMERCIAL ->
+                    sb.append(arrival ? "PLA: " : "PLD: ").append(timeOrDash(commercial));
+            case NONE -> sb.append("—");
+        }
+        if (estimated != null && !estimated.isBlank()) {
+            sb.append("\n")
+                    .append(
+                            t(
+                                    arrival
+                                            ? "timetable.editor.estimatedArrival"
+                                            : "timetable.editor.estimatedDeparture"))
+                    .append(": ")
+                    .append(estimated);
+        }
+        return sb.toString();
+    }
+
+    private String dwellTooltip(TimetableRowData row) {
+        Integer dwell = row.getDwellMinutes();
+        if (dwell == null || dwell <= 0) {
+            return Boolean.TRUE.equals(row.getHalt()) ? t("timetable.editor.halt") : "—";
+        }
+        return t("timetable.editor.dwell") + ": " + dwell + " min";
+    }
+
+    private String activityTooltip(TimetableRowData row) {
+        if (row.getActivityCodes() != null && !row.getActivityCodes().isEmpty()) {
+            return row.getActivityCodes().stream()
+                    .map(code -> com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils
+                            .findActivityOption(code, activityOptions)
+                            .map(opt -> opt.code() + " — " + opt.label())
+                            .orElse(code))
+                    .reduce((left, right) -> left + "\n" + right)
+                    .orElse("—");
+        }
+        return com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.findActivityOption(
+                        row.getActivityCode(), activityOptions)
+                .map(opt -> opt.code() + " — " + opt.label())
+                .orElseGet(
+                        () ->
+                                Boolean.TRUE.equals(row.getHalt())
+                                        ? t("timetable.stop.activityRequired")
+                                        : "—");
     }
 
     private HorizontalLayout createRowActions(TimetableRowData row) {
@@ -298,14 +538,119 @@ public class TimetableTableStep extends Div {
 
     // ── Add stop handler ──────────────────────────────────────────────
 
-    private void handleAddStop(int insertAfterIndex, OperationalPoint point, String activityCode) {
-        editingService.insertStop(timetableRows, insertAfterIndex + 1, point, activityCode);
-        recalculateEstimatesIfNeeded();
+    private void handleAddStop(
+            int insertAfterIndex,
+            OperationalPoint point,
+            String activityCode,
+            AddStopForm.StopTimes times) {
+        TimetableRowData newRow = buildStopRow(point, activityCode, times);
+        // The new row brings its own anchors; the service propagates neighbours.
+        editingService.insertStop(
+                timetableRows, insertAfterIndex + 1, newRow, editorPanel.getPropagationMode());
+
+        var violations = editingService.validate(timetableRows);
+        if (!violations.isEmpty()) {
+            Notification.show(violations.get(0), 4000, Position.BOTTOM_END)
+                    .addThemeVariants(NotificationVariant.LUMO_ERROR);
+        }
+
         rowGrid.setItems(timetableRows);
-        TimetableRowData newRow = timetableRows.get(insertAfterIndex + 1);
         rowGrid.asSingleSelect().setValue(newRow);
         selectedRow = newRow;
         editorPanel.populate(newRow, isOrigin(newRow), isDestination(newRow));
+    }
+
+    /** Build a row from the form's collected times, populating the right fields per mode. */
+    private TimetableRowData buildStopRow(
+            OperationalPoint point, String activityCode, AddStopForm.StopTimes times) {
+        TimetableRowData row = new TimetableRowData();
+        row.setUopid(point.getUopid());
+        row.setName(point.getName());
+        row.setCountry(point.getCountry());
+        row.setRoutePointRole(com.ordermgmt.railway.domain.timetable.model.RoutePointRole.VIA);
+        row.setJourneyLocationType("INTERMEDIATE");
+        row.setHalt(true);
+        row.setActivityCode(activityCode);
+        row.setActivityCodes(List.of(activityCode));
+        row.setManuallyAdded(true);
+        applyArrival(row, times);
+        applyDeparture(row, times);
+        // dwell derived from arrival → departure of the new row, no hardcoded default
+        var arr = times.arrivalPrimary();
+        var dep = times.departurePrimary();
+        if (arr != null && dep != null) {
+            row.setDwellMinutes((int) java.time.Duration.between(arr, dep).toMinutes());
+            row.setUserEnteredDwell(true);
+        }
+        return row;
+    }
+
+    private void applyArrival(TimetableRowData row, AddStopForm.StopTimes t) {
+        java.time.format.DateTimeFormatter f =
+                java.time.format.DateTimeFormatter.ofPattern("HH:mm");
+        row.setArrivalMode(t.arrivalMode());
+        row.setEstimatedArrival(t.arrivalPrimary().format(f));
+        switch (t.arrivalMode()) {
+            case EXACT -> {
+                row.setArrivalExact(t.arrivalPrimary().format(f));
+                row.setUserEnteredArrivalExact(true);
+            }
+            case WINDOW -> {
+                row.setArrivalEarliest(t.arrivalPrimary().format(f));
+                row.setArrivalLatest(t.arrivalSecondary().format(f));
+                row.setUserEnteredArrivalEarliest(true);
+                row.setUserEnteredArrivalLatest(true);
+            }
+            case AFTER -> {
+                row.setArrivalEarliest(t.arrivalPrimary().format(f));
+                row.setUserEnteredArrivalEarliest(true);
+            }
+            case BEFORE -> {
+                row.setArrivalLatest(t.arrivalPrimary().format(f));
+                row.setUserEnteredArrivalLatest(true);
+            }
+            case COMMERCIAL -> {
+                row.setCommercialArrival(t.arrivalPrimary().format(f));
+                row.setUserEnteredCommercialArrival(true);
+            }
+            case NONE -> {
+                /* estimated already set */
+            }
+        }
+    }
+
+    private void applyDeparture(TimetableRowData row, AddStopForm.StopTimes t) {
+        java.time.format.DateTimeFormatter f =
+                java.time.format.DateTimeFormatter.ofPattern("HH:mm");
+        row.setDepartureMode(t.departureMode());
+        row.setEstimatedDeparture(t.departurePrimary().format(f));
+        switch (t.departureMode()) {
+            case EXACT -> {
+                row.setDepartureExact(t.departurePrimary().format(f));
+                row.setUserEnteredDepartureExact(true);
+            }
+            case WINDOW -> {
+                row.setDepartureEarliest(t.departureSecondary().format(f));
+                row.setDepartureLatest(t.departurePrimary().format(f));
+                row.setUserEnteredDepartureEarliest(true);
+                row.setUserEnteredDepartureLatest(true);
+            }
+            case AFTER -> {
+                row.setDepartureEarliest(t.departurePrimary().format(f));
+                row.setUserEnteredDepartureEarliest(true);
+            }
+            case BEFORE -> {
+                row.setDepartureLatest(t.departurePrimary().format(f));
+                row.setUserEnteredDepartureLatest(true);
+            }
+            case COMMERCIAL -> {
+                row.setCommercialDeparture(t.departurePrimary().format(f));
+                row.setUserEnteredCommercialDeparture(true);
+            }
+            case NONE -> {
+                /* estimated already set */
+            }
+        }
     }
 
     // ── Editor sync ───────────────────────────────────────────────────
@@ -321,6 +666,15 @@ public class TimetableTableStep extends Div {
         if (selectedRow == null) {
             return true;
         }
+        int idx = timetableRows.indexOf(selectedRow);
+        if (idx < 0) {
+            return true;
+        }
+        // Snapshot anchors BEFORE applying the user's edits, so propagate()
+        // can detect direction (arrival changed → backward, departure → forward)
+        // independent of which mode the user is in.
+        TimetableEditingService.TimeSnapshot before = editingService.snapshot(selectedRow);
+
         if (!editorPanel.syncToRow(
                 selectedRow,
                 isOrigin(selectedRow),
@@ -329,32 +683,31 @@ public class TimetableTableStep extends Div {
             return false;
         }
 
-        // Phase 3: Propagate time changes
-        propagateIfNeeded(selectedRow, true);
-        propagateIfNeeded(selectedRow, false);
+        // Enforce halt rules (Regel 3 + 4 + 5):
+        //   halt=false → strip all constraint fields
+        //   halt + dwell + 1 side → mirror dwell into other side, same mode
+        //   halt + 2 sides → drop dwell (it's implied by the delta)
+        // applyHaltRules supersedes the old deriveDepartureFromDwell + reconcileDwell pair.
+        editingService.applyHaltRules(selectedRow);
 
-        // Phase 4: Fill in missing estimates when first time is entered
+        // Distance-weighted speed interpolation refreshes estimated* on intermediate rows
+        // between user-entered anchors. propagate() then handles delta shifts.
+        editingService.interpolateBetweenAnchors(timetableRows);
+
+        editingService.propagate(timetableRows, idx, before, editorPanel.getPropagationMode());
+
+        var violations = editingService.validate(timetableRows);
+        if (!violations.isEmpty() && showNotifications) {
+            Notification.show(violations.get(0), 4500, Position.BOTTOM_END)
+                    .addThemeVariants(NotificationVariant.LUMO_ERROR);
+        }
+
+        // Fill missing estimates if the user just entered a first anchor
         recalculateEstimatesIfNeeded();
 
         rowGrid.getDataProvider().refreshAll();
         editorPanel.populate(selectedRow, isOrigin(selectedRow), isDestination(selectedRow));
         return true;
-    }
-
-    private void propagateIfNeeded(TimetableRowData row, boolean isArrival) {
-        int idx = timetableRows.indexOf(row);
-        if (idx < 0) {
-            return;
-        }
-        String currentExact = isArrival ? row.getArrivalExact() : row.getDepartureExact();
-        String estimated = isArrival ? row.getEstimatedArrival() : row.getEstimatedDeparture();
-        LocalTime exactTime = parseTime(currentExact);
-        LocalTime estTime = parseTime(estimated);
-
-        if (exactTime != null && estTime != null && !exactTime.equals(estTime)) {
-            editingService.propagateTimeChange(
-                    timetableRows, idx, isArrival, exactTime, editorPanel.getPropagationMode());
-        }
     }
 
     // ── Estimate gap filling ─────────────────────────────────────────────

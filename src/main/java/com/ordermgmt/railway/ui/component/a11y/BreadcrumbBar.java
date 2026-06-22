@@ -8,11 +8,11 @@ import com.vaadin.flow.component.html.Nav;
 import com.vaadin.flow.component.html.Span;
 
 /**
- * Pinned breadcrumb trail for orientation in nested master-detail flows
- * (e.g. <i>Aufträge › #A-2026-001 › Position 04</i>).
+ * Pinned breadcrumb trail for orientation in nested master-detail flows (e.g. <i>Aufträge ›
+ * #A-2026-001 › Position 04</i>).
  *
- * <p>Renders as {@code <nav aria-label="breadcrumb">} with the last crumb marked
- * {@code aria-current="page"} — meets WAI-ARIA Authoring Practices breadcrumb pattern.
+ * <p>Renders as {@code <nav aria-label="breadcrumb">} with the last crumb marked {@code
+ * aria-current="page"} — meets WAI-ARIA Authoring Practices breadcrumb pattern.
  */
 public class BreadcrumbBar extends Nav {
 
@@ -40,7 +40,8 @@ public class BreadcrumbBar extends Nav {
                 Anchor a = new Anchor("", c.label());
                 a.addClassName("biz-breadcrumb__link");
                 String route = c.route();
-                a.getElement().addEventListener("click", e -> UI.getCurrent().navigate(route))
+                a.getElement()
+                        .addEventListener("click", e -> UI.getCurrent().navigate(route))
                         .addEventData("event.preventDefault()");
                 add(a);
             }

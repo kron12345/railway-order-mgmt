@@ -34,13 +34,13 @@ import com.ordermgmt.railway.domain.order.service.AuditService;
 import com.ordermgmt.railway.ui.component.AuditHistoryDialog;
 
 /**
- * Read-only detail view for a {@link Business}. Default mode in /businesses/{id}.
- * Edit / create still uses {@link BusinessDetailView} (form), reachable via the
- * "Bearbeiten" button which navigates to {@code /businesses/{id}/edit}.
+ * Read-only detail view for a {@link Business}. Default mode in /businesses/{id}. Edit / create
+ * still uses {@link BusinessDetailView} (form), reachable via the "Bearbeiten" button which
+ * navigates to {@code /businesses/{id}/edit}.
  *
- * <p>Layout: header (title + status pill + edit/delete actions), then four cards —
- * Stammdaten, Verknüpfte Auftragspositionen (clickable → /orders/...), Verknüpfte
- * Bestellpositionen, Dokumente (download via StreamResource).
+ * <p>Layout: header (title + status pill + edit/delete actions), then four cards — Stammdaten,
+ * Verknüpfte Auftragspositionen (clickable → /orders/...), Verknüpfte Bestellpositionen, Dokumente
+ * (download via StreamResource).
  */
 public class BusinessReadView extends VerticalLayout {
 
@@ -52,10 +52,11 @@ public class BusinessReadView extends VerticalLayout {
     private final java.util.function.Function<String, String> tr;
     private final Business business;
 
-    public BusinessReadView(BusinessService businessService,
-                            AuditService auditService,
-                            UUID businessId,
-                            java.util.function.Function<String, String> tr) {
+    public BusinessReadView(
+            BusinessService businessService,
+            AuditService auditService,
+            UUID businessId,
+            java.util.function.Function<String, String> tr) {
         this.businessService = businessService;
         this.auditService = auditService;
         this.tr = tr;
@@ -105,7 +106,8 @@ public class BusinessReadView extends VerticalLayout {
         var editBtn = new Button(tr.apply("common.edit"), VaadinIcon.EDIT.create());
         editBtn.addThemeVariants(ButtonVariant.LUMO_PRIMARY, ButtonVariant.LUMO_SMALL);
         editBtn.addClassName("rom-btn-primary");
-        editBtn.addClickListener(e -> UI.getCurrent().navigate("businesses/" + business.getId() + "/edit"));
+        editBtn.addClickListener(
+                e -> UI.getCurrent().navigate("businesses/" + business.getId() + "/edit"));
 
         var deleteBtn = new Button(VaadinIcon.TRASH.create(), e -> confirmDelete());
         deleteBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
@@ -119,9 +121,9 @@ public class BusinessReadView extends VerticalLayout {
     private void openAuditHistory() {
         var entries = auditService.getBusinessHistory(business.getId());
         new AuditHistoryDialog(
-                tr.apply("audit.title") + " — " + safe(business.getTitle()),
-                entries,
-                (k, args) -> tr.apply(k))
+                        tr.apply("audit.title") + " — " + safe(business.getTitle()),
+                        entries,
+                        (k, args) -> tr.apply(k))
                 .open();
     }
 
@@ -130,17 +132,17 @@ public class BusinessReadView extends VerticalLayout {
             java.util.function.Function<String, String> tr) {
         var pill = new com.vaadin.flow.component.orderedlayout.HorizontalLayout();
         pill.addClassName("biz-status-pill-icon");
-        pill.addClassName("biz-status-pill-icon--"
-                + business.getStatus().name().toLowerCase());
+        pill.addClassName("biz-status-pill-icon--" + business.getStatus().name().toLowerCase());
         pill.setPadding(false);
         pill.setSpacing(false);
-        var iconSpec = switch (business.getStatus()) {
-            case IN_BEARBEITUNG -> VaadinIcon.HOURGLASS;
-            case FREIGEGEBEN -> VaadinIcon.CHECK_CIRCLE_O;
-            case UEBERARBEITEN -> VaadinIcon.WARNING;
-            case ABGESCHLOSSEN -> VaadinIcon.LOCK;
-            case ANNULLIERT -> VaadinIcon.BAN;
-        };
+        var iconSpec =
+                switch (business.getStatus()) {
+                    case IN_BEARBEITUNG -> VaadinIcon.HOURGLASS;
+                    case FREIGEGEBEN -> VaadinIcon.CHECK_CIRCLE_O;
+                    case UEBERARBEITEN -> VaadinIcon.WARNING;
+                    case ABGESCHLOSSEN -> VaadinIcon.LOCK;
+                    case ANNULLIERT -> VaadinIcon.BAN;
+                };
         var icon = iconSpec.create();
         icon.addClassName("biz-status-pill-icon__icon");
         icon.getElement().setAttribute("aria-hidden", "true");
@@ -165,7 +167,9 @@ public class BusinessReadView extends VerticalLayout {
         addRow(grid, tr.apply("business.assignment"), formatAssignee());
         addRow(grid, tr.apply("business.team"), safe(business.getTeam()));
         addRow(grid, tr.apply("business.validity"), formatValidity());
-        addRow(grid, tr.apply("business.dueDate"),
+        addRow(
+                grid,
+                tr.apply("business.dueDate"),
                 business.getDueDate() == null ? "—" : business.getDueDate().format(DATE_FMT));
         addRow(grid, tr.apply("business.tags"), safe(business.getTags()));
         addRow(grid, tr.apply("audit.created"), formatAudit(business.getCreatedAt()));
@@ -211,19 +215,23 @@ public class BusinessReadView extends VerticalLayout {
         var name = new Span(safe(op.getName()).isEmpty() ? "—" : op.getName());
         name.addClassName("biz-link-row__name");
 
-        var orderNum = new Span(op.getOrder() != null && op.getOrder().getOrderNumber() != null
-                ? op.getOrder().getOrderNumber() : "—");
+        var orderNum =
+                new Span(
+                        op.getOrder() != null && op.getOrder().getOrderNumber() != null
+                                ? op.getOrder().getOrderNumber()
+                                : "—");
         orderNum.addClassName("biz-link-row__sub");
 
         var spacer = new Div();
         spacer.getStyle().set("flex", "1");
 
         var goBtn = new Button(VaadinIcon.ARROW_RIGHT.create());
-        goBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY,
-                ButtonVariant.LUMO_ICON);
-        String route = op.getOrder() != null
-                ? "orders/" + op.getOrder().getId() + "/positions/" + op.getId()
-                : null;
+        goBtn.addThemeVariants(
+                ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY, ButtonVariant.LUMO_ICON);
+        String route =
+                op.getOrder() != null
+                        ? "orders/" + op.getOrder().getId() + "/positions/" + op.getId()
+                        : null;
         goBtn.setEnabled(route != null);
         goBtn.getElement().setAttribute("aria-label", tr.apply("business.openPosition"));
         if (route != null) goBtn.addClickListener(e -> UI.getCurrent().navigate(route));
@@ -277,20 +285,26 @@ public class BusinessReadView extends VerticalLayout {
         var name = new Span(op != null && op.getName() != null ? op.getName() : "—");
         name.addClassName("biz-link-row__name");
 
-        var orderNum = new Span(op != null && op.getOrder() != null && op.getOrder().getOrderNumber() != null
-                ? op.getOrder().getOrderNumber() : "—");
+        var orderNum =
+                new Span(
+                        op != null
+                                        && op.getOrder() != null
+                                        && op.getOrder().getOrderNumber() != null
+                                ? op.getOrder().getOrderNumber()
+                                : "—");
         orderNum.addClassName("biz-link-row__sub");
 
         var spacer = new Div();
         spacer.getStyle().set("flex", "1");
 
         var goBtn = new Button(VaadinIcon.ARROW_RIGHT.create());
-        goBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY,
-                ButtonVariant.LUMO_ICON);
+        goBtn.addThemeVariants(
+                ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY, ButtonVariant.LUMO_ICON);
         // BP does not have its own detail route — jump to the parent order position.
-        String route = op != null && op.getOrder() != null
-                ? "orders/" + op.getOrder().getId() + "/positions/" + op.getId()
-                : null;
+        String route =
+                op != null && op.getOrder() != null
+                        ? "orders/" + op.getOrder().getId() + "/positions/" + op.getId()
+                        : null;
         goBtn.setEnabled(route != null);
         goBtn.getElement().setAttribute("aria-label", tr.apply("business.openPosition"));
         if (route != null) goBtn.addClickListener(e -> UI.getCurrent().navigate(route));
@@ -339,8 +353,12 @@ public class BusinessReadView extends VerticalLayout {
         var name = new Span(safe(doc.getFilename()));
         name.addClassName("biz-link-row__name");
 
-        var meta = new Span((doc.getContentType() == null ? "" : doc.getContentType())
-                + (doc.getCreatedAt() != null ? "  ·  " + formatAudit(doc.getCreatedAt()) : ""));
+        var meta =
+                new Span(
+                        (doc.getContentType() == null ? "" : doc.getContentType())
+                                + (doc.getCreatedAt() != null
+                                        ? "  ·  " + formatAudit(doc.getCreatedAt())
+                                        : ""));
         meta.addClassName("biz-link-row__sub");
 
         var spacer = new Div();
@@ -350,10 +368,15 @@ public class BusinessReadView extends VerticalLayout {
         // browser render uploaded business documents inline (defence in depth against
         // user-supplied HTML/SVG slipping past the MIME whitelist via filename guesses).
         String safeName = doc.getFilename() != null ? doc.getFilename() : "document";
-        StreamResource resource = new StreamResource(safeName,
-                () -> new ByteArrayInputStream(doc.getData() == null ? new byte[0] : doc.getData()));
+        StreamResource resource =
+                new StreamResource(
+                        safeName,
+                        () ->
+                                new ByteArrayInputStream(
+                                        doc.getData() == null ? new byte[0] : doc.getData()));
         if (doc.getContentType() != null) resource.setContentType(doc.getContentType());
-        resource.setHeader("Content-Disposition",
+        resource.setHeader(
+                "Content-Disposition",
                 "attachment; filename=\"" + sanitiseHeaderValue(safeName) + "\"");
 
         var download = new Anchor(resource, "");
@@ -362,10 +385,9 @@ public class BusinessReadView extends VerticalLayout {
         download.addClassName("biz-doc-download");
         download.getElement().setAttribute("aria-label", tr.apply("business.downloadDocument"));
 
-        var historyBtn = new Button(VaadinIcon.CLOCK.create(),
-                e -> openDocumentHistory(doc));
-        historyBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY,
-                ButtonVariant.LUMO_ICON);
+        var historyBtn = new Button(VaadinIcon.CLOCK.create(), e -> openDocumentHistory(doc));
+        historyBtn.addThemeVariants(
+                ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY, ButtonVariant.LUMO_ICON);
         historyBtn.getElement().setAttribute("aria-label", tr.apply("audit.button"));
 
         row.add(icon, name, meta, spacer, historyBtn, download);
@@ -376,9 +398,9 @@ public class BusinessReadView extends VerticalLayout {
     private void openDocumentHistory(BusinessDocument doc) {
         var entries = auditService.getBusinessDocumentHistory(doc.getId());
         new AuditHistoryDialog(
-                tr.apply("audit.title") + " — " + safe(doc.getFilename()),
-                entries,
-                (k, args) -> tr.apply(k))
+                        tr.apply("audit.title") + " — " + safe(doc.getFilename()),
+                        entries,
+                        (k, args) -> tr.apply(k))
                 .open();
     }
 
@@ -392,13 +414,16 @@ public class BusinessReadView extends VerticalLayout {
         dialog.setConfirmText(tr.apply("common.delete"));
         dialog.setCancelText(tr.apply("common.cancel"));
         dialog.setConfirmButtonTheme("error primary");
-        dialog.addConfirmListener(e -> {
-            businessService.delete(business.getId());
-            Notification.show(tr.apply("business.deleted"), 1500,
-                    Notification.Position.BOTTOM_END)
-                    .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
-            UI.getCurrent().navigate("businesses");
-        });
+        dialog.addConfirmListener(
+                e -> {
+                    businessService.delete(business.getId());
+                    Notification.show(
+                                    tr.apply("business.deleted"),
+                                    1500,
+                                    Notification.Position.BOTTOM_END)
+                            .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+                    UI.getCurrent().navigate("businesses");
+                });
         dialog.open();
     }
 

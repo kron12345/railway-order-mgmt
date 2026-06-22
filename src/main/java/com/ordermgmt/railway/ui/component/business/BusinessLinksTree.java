@@ -33,9 +33,9 @@ import com.ordermgmt.railway.domain.userprefs.service.UserViewPreferenceService;
 import com.ordermgmt.railway.ui.component.grid.GridPreferenceBinder;
 
 /**
- * Unified tree view for everything linked to a business: orders → order positions →
- * purchase positions. Provides a live filter, two link buttons (one per kind), and
- * delegates persistence + actions to suppliers/callbacks.
+ * Unified tree view for everything linked to a business: orders → order positions → purchase
+ * positions. Provides a live filter, two link buttons (one per kind), and delegates persistence +
+ * actions to suppliers/callbacks.
  */
 public class BusinessLinksTree extends Div {
 
@@ -48,15 +48,18 @@ public class BusinessLinksTree extends Div {
     public BusinessLinksTree(Spec spec) {
         this.spec = spec;
         addClassName("biz-links-tree");
-        getStyle().set("display", "flex").set("flex-direction", "column")
-                .set("min-height", "0").set("height", "100%");
+        getStyle()
+                .set("display", "flex")
+                .set("flex-direction", "column")
+                .set("min-height", "0")
+                .set("height", "100%");
 
         add(buildToolbar());
         add(tree);
 
         tree.addClassName("biz-links-tree__grid");
-        tree.addThemeVariants(GridVariant.LUMO_COMPACT, GridVariant.LUMO_NO_BORDER,
-                GridVariant.LUMO_ROW_STRIPES);
+        tree.addThemeVariants(
+                GridVariant.LUMO_COMPACT, GridVariant.LUMO_NO_BORDER, GridVariant.LUMO_ROW_STRIPES);
         tree.setSizeFull();
         configureColumns();
 
@@ -70,11 +73,12 @@ public class BusinessLinksTree extends Div {
     }
 
     public void refresh() {
-        roots = buildTree(
-                spec.allOrderPositions.get(),
-                spec.allPurchasePositions.get(),
-                spec.linkedOrderPositions.get(),
-                spec.linkedPurchasePositions.get());
+        roots =
+                buildTree(
+                        spec.allOrderPositions.get(),
+                        spec.allPurchasePositions.get(),
+                        spec.linkedOrderPositions.get(),
+                        spec.linkedPurchasePositions.get());
         applyFilter();
     }
 
@@ -95,10 +99,11 @@ public class BusinessLinksTree extends Div {
         filter.setValueChangeMode(ValueChangeMode.LAZY);
         filter.setValueChangeTimeout(220);
         filter.addClassName("biz-links-tree__filter");
-        filter.addValueChangeListener(e -> {
-            filterText = e.getValue() == null ? "" : e.getValue().trim().toLowerCase();
-            applyFilter();
-        });
+        filter.addValueChangeListener(
+                e -> {
+                    filterText = e.getValue() == null ? "" : e.getValue().trim().toLowerCase();
+                    applyFilter();
+                });
 
         bar.add(filter);
         bar.expand(filter);
@@ -109,7 +114,10 @@ public class BusinessLinksTree extends Div {
 
     private void configureColumns() {
         tree.addComponentColumn(this::buildLinkCheckbox)
-                .setKey("__linked").setHeader("").setWidth("44px").setFlexGrow(0)
+                .setKey("__linked")
+                .setHeader("")
+                .setWidth("44px")
+                .setFlexGrow(0)
                 .setFrozen(true);
         tree.addComponentHierarchyColumn(this::buildNameCell)
                 .setKey("name")
@@ -118,15 +126,15 @@ public class BusinessLinksTree extends Div {
         tree.addColumn(BusinessLinkNode::number)
                 .setKey("number")
                 .setHeader(spec.translator.apply("business.tree.number"))
-                .setWidth("160px").setFlexGrow(0);
+                .setWidth("160px")
+                .setFlexGrow(0);
     }
 
     private Component buildLinkCheckbox(BusinessLinkNode node) {
         if (node.kind() == BusinessLinkNode.Kind.ORDER) return new Span();
         var cb = new Checkbox(node.linked());
         cb.addClassName("biz-tree-checkbox");
-        cb.getElement().setAttribute("aria-label",
-                spec.translator.apply("business.linked"));
+        cb.getElement().setAttribute("aria-label", spec.translator.apply("business.linked"));
         cb.addValueChangeListener(e -> toggleLink(node, Boolean.TRUE.equals(e.getValue())));
         return cb;
     }
@@ -144,11 +152,14 @@ public class BusinessLinksTree extends Div {
                 if (wantLinked) spec.onLinkPurchasePosition.accept(id);
                 else spec.onUnlinkPurchasePosition.accept(id);
             }
-            default -> { return; }
+            default -> {
+                return;
+            }
         }
         Notification.show(
-                spec.translator.apply(wantLinked ? "business.linked" : "business.unlinked"),
-                1200, Notification.Position.BOTTOM_END)
+                        spec.translator.apply(wantLinked ? "business.linked" : "business.unlinked"),
+                        1200,
+                        Notification.Position.BOTTOM_END)
                 .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
         refresh();
     }
@@ -177,10 +188,11 @@ public class BusinessLinksTree extends Div {
 
     // ─── tree assembly + filtering ─────────
 
-    private List<BusinessLinkNode> buildTree(List<OrderPosition> allOps,
-                                             List<PurchasePosition> allPps,
-                                             List<OrderPosition> linkedOps,
-                                             List<PurchasePosition> linkedPps) {
+    private List<BusinessLinkNode> buildTree(
+            List<OrderPosition> allOps,
+            List<PurchasePosition> allPps,
+            List<OrderPosition> linkedOps,
+            List<PurchasePosition> linkedPps) {
         Set<UUID> linkedOpIds = new HashSet<>();
         for (OrderPosition op : linkedOps) linkedOpIds.add(op.getId());
         Set<UUID> linkedPpIds = new HashSet<>();
@@ -191,10 +203,11 @@ public class BusinessLinksTree extends Div {
 
         for (OrderPosition op : allOps) {
             BusinessLinkNode orderNode = ensureOrderNode(ordersByID, op.getOrder());
-            BusinessLinkNode opNode = BusinessLinkNode.orderPosition(
-                    op.getId(),
-                    op.getName() != null ? op.getName() : "—",
-                    linkedOpIds.contains(op.getId()));
+            BusinessLinkNode opNode =
+                    BusinessLinkNode.orderPosition(
+                            op.getId(),
+                            op.getName() != null ? op.getName() : "—",
+                            linkedOpIds.contains(op.getId()));
             opsByID.put(op.getId(), opNode);
             orderNode.children().add(opNode);
         }
@@ -206,36 +219,44 @@ public class BusinessLinksTree extends Div {
             if (opNode == null) {
                 // Edge case: PP exists but its OP wasn't returned by allOps — synthesize.
                 BusinessLinkNode orderNode = ensureOrderNode(ordersByID, op.getOrder());
-                opNode = BusinessLinkNode.orderPosition(
-                        op.getId(),
-                        op.getName() != null ? op.getName() : "—",
-                        linkedOpIds.contains(op.getId()));
+                opNode =
+                        BusinessLinkNode.orderPosition(
+                                op.getId(),
+                                op.getName() != null ? op.getName() : "—",
+                                linkedOpIds.contains(op.getId()));
                 opsByID.put(op.getId(), opNode);
                 orderNode.children().add(opNode);
             }
-            opNode.children().add(BusinessLinkNode.purchasePosition(
-                    pp.getId(),
-                    op.getName() != null ? op.getName() : "—",
-                    pp.getPositionNumber() != null ? pp.getPositionNumber() : "—",
-                    linkedPpIds.contains(pp.getId())));
+            opNode.children()
+                    .add(
+                            BusinessLinkNode.purchasePosition(
+                                    pp.getId(),
+                                    op.getName() != null ? op.getName() : "—",
+                                    pp.getPositionNumber() != null ? pp.getPositionNumber() : "—",
+                                    linkedPpIds.contains(pp.getId())));
         }
 
         return new ArrayList<>(ordersByID.values());
     }
 
     private BusinessLinkNode ensureOrderNode(Map<UUID, BusinessLinkNode> map, Order order) {
-        UUID key = order != null && order.getId() != null
-                ? order.getId() : new UUID(0, 0);
-        return map.computeIfAbsent(key, k -> BusinessLinkNode.order(
-                k,
-                order != null && order.getName() != null ? order.getName()
-                        : spec.translator.apply("business.tree.unknownOrder"),
-                order != null && order.getOrderNumber() != null ? order.getOrderNumber() : "—"));
+        UUID key = order != null && order.getId() != null ? order.getId() : new UUID(0, 0);
+        return map.computeIfAbsent(
+                key,
+                k ->
+                        BusinessLinkNode.order(
+                                k,
+                                order != null && order.getName() != null
+                                        ? order.getName()
+                                        : spec.translator.apply("business.tree.unknownOrder"),
+                                order != null && order.getOrderNumber() != null
+                                        ? order.getOrderNumber()
+                                        : "—"));
     }
 
     private void applyFilter() {
-        List<BusinessLinkNode> visible = filterText.isBlank()
-                ? roots : filterTree(roots, filterText);
+        List<BusinessLinkNode> visible =
+                filterText.isBlank() ? roots : filterTree(roots, filterText);
         tree.setItems(visible, BusinessLinkNode::children);
         if (!filterText.isBlank()) {
             expandAll(visible);
@@ -277,9 +298,11 @@ public class BusinessLinksTree extends Div {
     private BusinessLinkNode cloneShallow(BusinessLinkNode n) {
         return switch (n.kind()) {
             case ORDER -> BusinessLinkNode.order(n.entityId(), n.name(), n.number());
-            case ORDER_POSITION -> BusinessLinkNode.orderPosition(n.entityId(), n.name(), n.linked());
-            case PURCHASE_POSITION -> BusinessLinkNode.purchasePosition(
-                    n.entityId(), n.name(), n.number(), n.linked());
+            case ORDER_POSITION ->
+                    BusinessLinkNode.orderPosition(n.entityId(), n.name(), n.linked());
+            case PURCHASE_POSITION ->
+                    BusinessLinkNode.purchasePosition(
+                            n.entityId(), n.name(), n.number(), n.linked());
         };
     }
 
@@ -292,7 +315,9 @@ public class BusinessLinksTree extends Div {
 
     // ─── builder ─────────
 
-    public static Spec spec() { return new Spec(); }
+    public static Spec spec() {
+        return new Spec();
+    }
 
     public static class Spec {
         Function<String, String> translator = k -> k;
@@ -307,18 +332,63 @@ public class BusinessLinksTree extends Div {
         String viewKey;
         UserViewPreferenceService preferenceService;
 
-        public Spec translator(Function<String, String> v) { this.translator = v; return this; }
-        public Spec linkedOrderPositions(Supplier<List<OrderPosition>> v) { this.linkedOrderPositions = v; return this; }
-        public Spec linkedPurchasePositions(Supplier<List<PurchasePosition>> v) { this.linkedPurchasePositions = v; return this; }
-        public Spec allOrderPositions(Supplier<List<OrderPosition>> v) { this.allOrderPositions = v; return this; }
-        public Spec allPurchasePositions(Supplier<List<PurchasePosition>> v) { this.allPurchasePositions = v; return this; }
-        public Spec onLinkOrderPosition(Consumer<UUID> v) { this.onLinkOrderPosition = v; return this; }
-        public Spec onUnlinkOrderPosition(Consumer<UUID> v) { this.onUnlinkOrderPosition = v; return this; }
-        public Spec onLinkPurchasePosition(Consumer<UUID> v) { this.onLinkPurchasePosition = v; return this; }
-        public Spec onUnlinkPurchasePosition(Consumer<UUID> v) { this.onUnlinkPurchasePosition = v; return this; }
-        public Spec viewKey(String v) { this.viewKey = v; return this; }
-        public Spec preferenceService(UserViewPreferenceService v) { this.preferenceService = v; return this; }
+        public Spec translator(Function<String, String> v) {
+            this.translator = v;
+            return this;
+        }
 
-        public BusinessLinksTree build() { return new BusinessLinksTree(this); }
+        public Spec linkedOrderPositions(Supplier<List<OrderPosition>> v) {
+            this.linkedOrderPositions = v;
+            return this;
+        }
+
+        public Spec linkedPurchasePositions(Supplier<List<PurchasePosition>> v) {
+            this.linkedPurchasePositions = v;
+            return this;
+        }
+
+        public Spec allOrderPositions(Supplier<List<OrderPosition>> v) {
+            this.allOrderPositions = v;
+            return this;
+        }
+
+        public Spec allPurchasePositions(Supplier<List<PurchasePosition>> v) {
+            this.allPurchasePositions = v;
+            return this;
+        }
+
+        public Spec onLinkOrderPosition(Consumer<UUID> v) {
+            this.onLinkOrderPosition = v;
+            return this;
+        }
+
+        public Spec onUnlinkOrderPosition(Consumer<UUID> v) {
+            this.onUnlinkOrderPosition = v;
+            return this;
+        }
+
+        public Spec onLinkPurchasePosition(Consumer<UUID> v) {
+            this.onLinkPurchasePosition = v;
+            return this;
+        }
+
+        public Spec onUnlinkPurchasePosition(Consumer<UUID> v) {
+            this.onUnlinkPurchasePosition = v;
+            return this;
+        }
+
+        public Spec viewKey(String v) {
+            this.viewKey = v;
+            return this;
+        }
+
+        public Spec preferenceService(UserViewPreferenceService v) {
+            this.preferenceService = v;
+            return this;
+        }
+
+        public BusinessLinksTree build() {
+            return new BusinessLinksTree(this);
+        }
     }
 }

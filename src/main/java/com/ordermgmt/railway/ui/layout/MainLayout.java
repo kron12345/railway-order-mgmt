@@ -43,9 +43,10 @@ public class MainLayout extends AppLayout
     private SideNav sideNav;
     private Div breadcrumb;
 
-    public MainLayout(KeycloakUserService keycloakUserService,
-                      OrderService orderService,
-                      BusinessService businessService) {
+    public MainLayout(
+            KeycloakUserService keycloakUserService,
+            OrderService orderService,
+            BusinessService businessService) {
         this.keycloakUserService = keycloakUserService;
         this.orderService = orderService;
         this.businessService = businessService;
@@ -57,9 +58,9 @@ public class MainLayout extends AppLayout
     }
 
     /**
-     * Vim-style two-step shortcuts (g o → /orders, g b → /businesses) plus single-key
-     * helpers. Implemented as a global keydown listener on the body so any focus state
-     * works, except when typing into a text input.
+     * Vim-style two-step shortcuts (g o → /orders, g b → /businesses) plus single-key helpers.
+     * Implemented as a global keydown listener on the body so any focus state works, except when
+     * typing into a text input.
      */
     private void registerGlobalShortcuts() {
         // Wires global vim-style keys, Ctrl+K (command palette), and Shift+? (help)
@@ -165,25 +166,29 @@ public class MainLayout extends AppLayout
                         getTranslation("nav.orders"), "orders", VaadinIcon.CLIPBOARD.create()));
         sideNav.addItem(
                 new SideNavItem(
-                        getTranslation("nav.businesses"), "businesses", VaadinIcon.BRIEFCASE.create()));
+                        getTranslation("nav.businesses"),
+                        "businesses",
+                        VaadinIcon.BRIEFCASE.create()));
         sideNav.addItem(
                 new SideNavItem(
                         getTranslation("nav.customers"), "customers", VaadinIcon.USERS.create()));
-        sideNav.addItem(
+
+        // Fahrplanmanager + Rollmaterial are temporary test stand-ins that will later be sourced
+        // from the external RailOpt system. They are grouped under a collapsed "RailOpt (Demo)"
+        // section so they stay reachable without cluttering the primary navigation or confusing
+        // customers during the demo.
+        SideNavItem external = new SideNavItem(getTranslation("nav.external"));
+        external.setPrefixComponent(VaadinIcon.FLASK.create());
+        external.addItem(
                 new SideNavItem(
                         getTranslation("nav.pathmanager"),
                         "pathmanager",
                         VaadinIcon.TRAIN.create()));
-        sideNav.addItem(
+        external.addItem(
                 new SideNavItem(
-                        getTranslation("nav.railcars"),
-                        "rollingstock",
-                        VaadinIcon.TRAIN.create()));
-        sideNav.addItem(
-                new SideNavItem(
-                        getTranslation("nav.vehicleplanning"),
-                        "vehicleplanning",
-                        VaadinIcon.COG.create()));
+                        getTranslation("nav.railcars"), "rollingstock", VaadinIcon.TRAIN.create()));
+        sideNav.addItem(external);
+
         sideNav.addItem(
                 new SideNavItem(
                         getTranslation("nav.settings"), "settings", VaadinIcon.COG.create()));
@@ -235,7 +240,6 @@ public class MainLayout extends AppLayout
             case "new" -> getTranslation("order.new");
             case "timetable-builder" -> getTranslation("timetable.builder.title");
             case "pathmanager" -> getTranslation("nav.pathmanager");
-            case "vehicleplanning" -> getTranslation("nav.vehicleplanning");
             default -> {
                 if (segment.matches("[0-9a-f\\-]{36}")) {
                     yield segment.substring(0, 8) + "…";

@@ -1,6 +1,9 @@
 package com.ordermgmt.railway.domain.order.service;
 
+import java.time.LocalDate;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -93,6 +96,58 @@ public class OrderService {
     @Transactional(readOnly = true)
     public long count() {
         return orderRepository.count();
+    }
+
+    /** Number of days within which an order's end of validity counts as a "critical deadline". */
+    private static final int CRITICAL_DEADLINE_DAYS = 30;
+
+    /**
+     * Aggregated counts for the dashboard, computed from a single order scan to avoid one query per
+     * KPI. "Active" excludes orders already in the final billing phase; a deadline is "critical"
+     * when a still-active order's validity ends within {@value #CRITICAL_DEADLINE_DAYS} days.
+     */
+    public record DashboardStats(
+            long total,
+            long active,
+            long inPlanning,
+            long inProduction,
+            long criticalDeadlines,
+            Map<ProcessStatus, Long> byStatus) {}
+
+    @Transactional(readOnly = true)
+    public DashboardStats dashboardStats() {
+        List<Order> all = orderRepository.findAll();
+        LocalDate horizon = LocalDate.now().plusDays(CRITICAL_DEADLINE_DAYS);
+
+        Map<ProcessStatus, Long> byStatus = new EnumMap<>(ProcessStatus.class);
+        for (ProcessStatus s : ProcessStatus.values()) {
+            byStatus.put(s, 0L);
+        }
+
+        long active = 0;
+        long planning = 0;
+        long production = 0;
+        long critical = 0;
+        for (Order order : all) {
+            ProcessStatus status = order.getProcessStatus();
+            if (status != null) {
+                byStatus.merge(status, 1L, Long::sum);
+            }
+            boolean finalPhase = status == ProcessStatus.ABRECHNUNG_NACHBEREITUNG;
+            if (!finalPhase) {
+                active++;
+            }
+            if (status == ProcessStatus.PLANUNG) {
+                planning++;
+            }
+            if (status == ProcessStatus.PRODUKTION) {
+                production++;
+            }
+            if (!finalPhase && order.getValidTo() != null && !order.getValidTo().isAfter(horizon)) {
+                critical++;
+            }
+        }
+        return new DashboardStats(all.size(), active, planning, production, critical, byStatus);
     }
 
     private void initializePositions(List<Order> orders) {

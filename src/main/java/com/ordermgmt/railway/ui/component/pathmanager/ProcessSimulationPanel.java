@@ -367,7 +367,7 @@ public class ProcessSimulationPanel extends VerticalLayout {
         if (state == null) {
             return new StatusBadge("--", StatusBadge.StatusType.NEUTRAL);
         }
-        String label = state.name();
+        String label = t("pm.state." + state.name());
         return switch (state) {
             case NEW -> new StatusBadge(label, StatusBadge.StatusType.NEUTRAL);
             case CREATED, MODIFIED -> new StatusBadge(label, StatusBadge.StatusType.INFO);
