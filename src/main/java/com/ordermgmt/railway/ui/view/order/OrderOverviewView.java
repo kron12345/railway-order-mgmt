@@ -152,8 +152,9 @@ public class OrderOverviewView extends VerticalLayout implements BeforeEnterObse
                                                 o.getOrderNumber() == null
                                                         ? "—"
                                                         : o.getOrderNumber()))
-                        .extraToolbar(List.of(buildNewButton()))
-                        .shortcutNew(() -> UI.getCurrent().navigate("orders/new"))
+                        .extraToolbar(canMutate() ? List.of(buildNewButton()) : List.of())
+                        .shortcutNew(
+                                canMutate() ? () -> UI.getCurrent().navigate("orders/new") : null)
                         .onSelect(id -> UI.getCurrent().navigate("orders/" + id))
                         .build();
         shell.setSizeFull();
@@ -261,6 +262,10 @@ public class OrderOverviewView extends VerticalLayout implements BeforeEnterObse
                         new SkipLinks.SkipTarget("order-list", getTranslation("a11y.skip.list")),
                         new SkipLinks.SkipTarget(
                                 "order-detail", getTranslation("a11y.skip.detail"))));
+    }
+
+    private boolean canMutate() {
+        return CurrentUserHelper.hasAnyRole("ADMIN", "DISPATCHER");
     }
 
     private Component buildNewButton() {

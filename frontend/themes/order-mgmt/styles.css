@@ -1191,6 +1191,41 @@ vaadin-button:focus-visible {
     color: var(--rom-text-muted);
 }
 
+/* === Internal "Bearbeitungs-Status" row (A1) === */
+.order-detail__internal-status {
+    padding: 4px 12px 8px 12px;
+}
+.order-detail__internal-status-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--rom-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.order-internal-status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border: 1px solid var(--rom-border);
+    border-radius: 2px;
+    background: rgba(148, 163, 184, 0.10);
+    color: var(--rom-text-primary);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+}
+.order-detail__lock-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--rom-status-warning);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+}
+.order-detail__lock-hint vaadin-icon {
+    width: 13px;
+    height: 13px;
+}
+
 /* === Amber-themed primary buttons === */
 vaadin-button[theme~="primary"] {
     background: var(--rom-accent) !important;

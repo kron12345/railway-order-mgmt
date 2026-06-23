@@ -20,11 +20,14 @@ import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
+import com.vaadin.flow.component.select.Select;
+import com.vaadin.flow.component.select.SelectVariant;
 import com.vaadin.flow.spring.annotation.SpringComponent;
 
 import com.ordermgmt.railway.domain.customer.repository.CustomerRepository;
 import com.ordermgmt.railway.domain.infrastructure.repository.PredefinedTagRepository;
 import com.ordermgmt.railway.domain.order.model.Order;
+import com.ordermgmt.railway.domain.order.model.PositionStatus;
 import com.ordermgmt.railway.domain.order.model.ProcessStatus;
 import com.ordermgmt.railway.domain.order.repository.PurchasePositionRepository;
 import com.ordermgmt.railway.domain.order.repository.ResourceCatalogItemRepository;
@@ -33,6 +36,7 @@ import com.ordermgmt.railway.domain.order.service.OrderService;
 import com.ordermgmt.railway.domain.order.service.PurchaseOrderService;
 import com.ordermgmt.railway.domain.order.service.ResourceNeedService;
 import com.ordermgmt.railway.domain.pathmanager.service.PathManagerService;
+import com.ordermgmt.railway.infrastructure.keycloak.CurrentUserHelper;
 import com.ordermgmt.railway.ui.component.AuditHistoryDialog;
 import com.ordermgmt.railway.ui.component.order.OrderFormPanel;
 import com.ordermgmt.railway.ui.component.order.OrderPositionPanel;
@@ -125,6 +129,12 @@ public class OrderDetailView extends VerticalLayout {
     /** New order: show form directly (needs data first). */
     private void buildNewOrderView() {
         removeAll();
+        // Defence-in-depth: a user without a mutation role could reach /orders/new by URL even
+        // though the toolbar button is hidden; bounce them back to the list (service also guards).
+        if (!canMutate()) {
+            UI.getCurrent().navigate("orders");
+            return;
+        }
         add(createBackRow(getTranslation("order.new")));
         OrderFormPanel form =
                 new OrderFormPanel(
@@ -157,7 +167,11 @@ public class OrderDetailView extends VerticalLayout {
         add(createCompactHeader());
         add(
                 new OrderStatusStepper(
-                        order.getProcessStatus(), true, this::getTranslation, this::changeStatus));
+                        order.getProcessStatus(),
+                        canMutate(),
+                        this::getTranslation,
+                        this::changeStatus));
+        add(buildInternalStatusRow());
 
         var positionPanel =
                 new OrderPositionPanel(
@@ -237,6 +251,110 @@ public class OrderDetailView extends VerticalLayout {
         }
     }
 
+    private boolean canMutate() {
+        return CurrentUserHelper.hasAnyRole("ADMIN", "DISPATCHER");
+    }
+
+    /** SOB §5.7: while the order is "in Bearbeitung", its content is locked for the orderer. */
+    private boolean isEditLocked() {
+        return order.getInternalStatus() == PositionStatus.IN_BEARBEITUNG;
+    }
+
+    /**
+     * Internal "Bearbeitungs-Status" row: an editable select for users who may mutate, a read-only
+     * badge otherwise. The status itself stays changeable even while the content is locked, so the
+     * order can be sent back via "überarbeiten".
+     */
+    private Component buildInternalStatusRow() {
+        HorizontalLayout row = new HorizontalLayout();
+        row.addClassName("order-detail__internal-status");
+        row.setAlignItems(FlexComponent.Alignment.CENTER);
+        row.setSpacing(true);
+        row.setPadding(false);
+
+        Span label = new Span(getTranslation("order.internalStatus"));
+        label.addClassName("order-detail__internal-status-label");
+        row.add(label);
+
+        if (canMutate()) {
+            Select<PositionStatus> select = new Select<>();
+            select.setItems(PositionStatus.values());
+            select.setItemLabelGenerator(
+                    s -> s == null ? "—" : getTranslation("position.status." + s.name()));
+            select.setEmptySelectionAllowed(true);
+            select.setEmptySelectionCaption("—");
+            select.setValue(order.getInternalStatus());
+            select.addThemeVariants(SelectVariant.LUMO_SMALL);
+            select.addValueChangeListener(
+                    e -> {
+                        if (e.isFromClient()) {
+                            changeInternalStatus(e.getValue());
+                        }
+                    });
+            row.add(select);
+        } else {
+            row.add(buildInternalStatusBadge());
+        }
+
+        if (isEditLocked()) {
+            Span lock =
+                    new Span(
+                            VaadinIcon.LOCK.create(),
+                            new Span(getTranslation("order.locked.inBearbeitung")));
+            lock.addClassName("order-detail__lock-hint");
+            row.add(lock);
+        }
+        return row;
+    }
+
+    private Component buildInternalStatusBadge() {
+        PositionStatus status = order.getInternalStatus();
+        Span badge =
+                new Span(status == null ? "—" : getTranslation("position.status." + status.name()));
+        badge.addClassName("order-internal-status-badge");
+        if (status != null) {
+            badge.addClassName("order-internal-status-badge--" + status.name().toLowerCase());
+        }
+        return badge;
+    }
+
+    /**
+     * Changes the internal Bearbeitungs-Status. Surfaces a SOB §5.7 violation (FREIGEGEBEN without
+     * a Kostenträger) as a friendly notification; in every case the view is rebuilt so the control
+     * reflects the persisted value.
+     */
+    private void changeInternalStatus(PositionStatus newStatus) {
+        if (newStatus == order.getInternalStatus()) {
+            return;
+        }
+        try {
+            order = orderService.setInternalStatus(order.getId(), newStatus);
+            Notification.show(
+                            getTranslation(
+                                    "order.internalStatus.changed",
+                                    newStatus == null
+                                            ? "—"
+                                            : getTranslation(
+                                                    "position.status." + newStatus.name())),
+                            2000,
+                            Notification.Position.BOTTOM_END)
+                    .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+        } catch (OrderService.CostCenterRequiredException ex) {
+            Notification.show(
+                            getTranslation("order.costCenter.required"),
+                            3500,
+                            Notification.Position.MIDDLE)
+                    .addThemeVariants(NotificationVariant.LUMO_ERROR);
+        } catch (RuntimeException ex) {
+            Notification.show(
+                            getTranslation("order.phase.denied"),
+                            3000,
+                            Notification.Position.MIDDLE)
+                    .addThemeVariants(NotificationVariant.LUMO_ERROR);
+        }
+        buildDetailView();
+    }
+
     private HorizontalLayout createBackRow(String titleText) {
         Button back = new Button(VaadinIcon.ARROW_LEFT.create());
         back.addThemeVariants(ButtonVariant.LUMO_TERTIARY);
@@ -297,14 +415,15 @@ public class OrderDetailView extends VerticalLayout {
         Span spacer = new Span();
         spacer.getStyle().set("flex", "1");
 
-        header.add(
-                createCompactBackButton(),
-                left,
-                statusPill,
-                spacer,
-                createHistoryButton(),
-                createEditButton(),
-                createDeleteButton());
+        header.add(createCompactBackButton(), left, statusPill, spacer, createHistoryButton());
+        // SOB §5.7: edit is hidden while the order is locked ("in Bearbeitung"); both edit and
+        // delete are hidden for users without a mutation role (service layer enforces this too).
+        if (canMutate() && !isEditLocked()) {
+            header.add(createEditButton());
+        }
+        if (canMutate()) {
+            header.add(createDeleteButton());
+        }
         header.getStyle().set("display", "flex").set("align-items", "center").set("gap", "12px");
         return header;
     }

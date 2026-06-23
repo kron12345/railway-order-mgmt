@@ -67,8 +67,17 @@ public class Order {
     @Column(length = 40)
     private ProcessStatus processStatus = ProcessStatus.AUFTRAG;
 
+    /** Internal "Bearbeitungs-Status" (German), shown alongside the process phase (SOB §5.6). */
+    @Enumerated(EnumType.STRING)
     @Column(length = 50)
-    private String internalStatus;
+    private PositionStatus internalStatus;
+
+    /**
+     * Kostenträger / PSP-Element. Required before the order may be set to FREIGEGEBEN (SOB §5.7).
+     */
+    @jakarta.validation.constraints.Size(max = 100)
+    @Column(length = 100)
+    private String costCenter;
 
     /** Assignment (mirrors Business): USER = Keycloak person, GROUP = free-text team. */
     @Column(length = 30)

@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
+import com.ordermgmt.railway.domain.order.model.PositionStatus;
 import com.ordermgmt.railway.domain.order.model.ProcessStatus;
 import com.ordermgmt.railway.domain.order.repository.OrderPositionRepository;
 import com.ordermgmt.railway.domain.order.repository.OrderRepository;
@@ -69,7 +70,20 @@ public class OrderService {
 
     @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
     public Order save(Order order) {
+        requireCostCenterIfReleased(order);
         return orderRepository.save(order);
+    }
+
+    /**
+     * Enforces SOB §5.7 on every persist path (not just the status transition): a {@code
+     * FREIGEGEBEN} order must always carry a Kostenträger, so it cannot be cleared via a normal
+     * edit-save.
+     */
+    private void requireCostCenterIfReleased(Order order) {
+        if (order.getInternalStatus() == PositionStatus.FREIGEGEBEN
+                && (order.getCostCenter() == null || order.getCostCenter().isBlank())) {
+            throw new CostCenterRequiredException();
+        }
     }
 
     /**
@@ -86,6 +100,27 @@ public class OrderService {
         }
         order.setAssignmentType(type);
         order.setAssignmentName(name);
+        return orderRepository.save(order);
+    }
+
+    /** Thrown when an order is moved to {@code FREIGEGEBEN} without a Kostenträger (SOB §5.7). */
+    public static class CostCenterRequiredException extends IllegalStateException {}
+
+    /**
+     * Sets the internal "Bearbeitungs-Status" of the order. Enforces SOB §5.7: an order may only
+     * become {@code FREIGEGEBEN} once a Kostenträger/PSP-Element is set. No-op when unchanged.
+     */
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
+    public Order setInternalStatus(UUID id, PositionStatus status) {
+        Order order = orderRepository.findById(id).orElseThrow();
+        if (order.getInternalStatus() == status) {
+            return order;
+        }
+        if (status == PositionStatus.FREIGEGEBEN
+                && (order.getCostCenter() == null || order.getCostCenter().isBlank())) {
+            throw new CostCenterRequiredException();
+        }
+        order.setInternalStatus(status);
         return orderRepository.save(order);
     }
 

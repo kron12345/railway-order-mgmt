@@ -127,7 +127,8 @@ classDiagram
 | validFrom | date | ja | Gueltig ab |
 | validTo | date | ja | Gueltig bis |
 | processStatus | enum | ja | `AUFTRAG`, `PLANUNG`, `PRODUKT_LEISTUNG`, `PRODUKTION`, `ABRECHNUNG_NACHBEREITUNG` |
-| internalStatus | string? | nein | Interner Bearbeitungsstatus auf Auftragsebene |
+| internalStatus | enum? | nein | Interner Bearbeitungs-Status (`PositionStatus`: `IN_BEARBEITUNG`, `FREIGEGEBEN`, `UEBERARBEITEN`, `UEBERMITTELT`, `BEANTRAGT`, `ABGESCHLOSSEN`, `ANNULLIERT`); deutsch, SOB §5.6 |
+| costCenter | string? | nein | Kostenträger/PSP-Element; Pflicht bevor `internalStatus`=`FREIGEGEBEN` gesetzt werden kann (SOB §5.7) |
 | assignmentType | string? | nein | Zuweisungstyp `USER` (Keycloak-Benutzer) oder `GROUP` (Freitext-Team); analog zu `Geschäft` |
 | assignmentName | string? | nein | Kanonischer Zuweisungswert (bei `USER` der Keycloak-`preferred_username`) |
 | version | int | ja | Optimistic Locking |

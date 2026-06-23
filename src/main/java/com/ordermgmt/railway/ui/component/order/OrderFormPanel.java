@@ -19,6 +19,7 @@ import com.ordermgmt.railway.domain.customer.repository.CustomerRepository;
 import com.ordermgmt.railway.domain.infrastructure.model.PredefinedTag;
 import com.ordermgmt.railway.domain.infrastructure.repository.PredefinedTagRepository;
 import com.ordermgmt.railway.domain.order.model.Order;
+import com.ordermgmt.railway.domain.order.model.PositionStatus;
 import com.ordermgmt.railway.ui.util.StringUtils;
 import com.ordermgmt.railway.ui.util.TagSelectionHelper;
 
@@ -34,12 +35,16 @@ public class OrderFormPanel extends Div {
     private final ComboBox<Customer> customerCombo = new ComboBox<>();
     private final DatePicker validFrom = new DatePicker();
     private final DatePicker validTo = new DatePicker();
+    private final TextField costCenter = new TextField();
     private final CheckboxGroup<PredefinedTag> tags = new CheckboxGroup<>();
     private final TextArea comment = new TextArea();
     private final BiFunction<String, Object[], String> translator;
     private final List<PredefinedTag> availableTags;
     private final LinkedHashSet<String> unmatchedTags = new LinkedHashSet<>();
     private final TagSelectionHelper tagHelper;
+
+    /** SOB §5.7: a released (FREIGEGEBEN) order must keep its Kostenträger; cannot be cleared. */
+    private final boolean releaseRequiresCostCenter;
 
     public OrderFormPanel(
             Order order,
@@ -49,6 +54,7 @@ public class OrderFormPanel extends Div {
         this.translator = translator;
         this.availableTags = loadAvailableTags(predefinedTagRepository);
         this.tagHelper = new TagSelectionHelper(tags, availableTags, unmatchedTags, translator);
+        this.releaseRequiresCostCenter = order.getInternalStatus() == PositionStatus.FREIGEGEBEN;
 
         setWidthFull();
         getStyle()
@@ -96,6 +102,11 @@ public class OrderFormPanel extends Div {
         validTo.setHelperText(t("order.validTo.help"));
         validTo.setWidthFull();
 
+        costCenter.setLabel(t("order.costCenter"));
+        costCenter.setMaxLength(100);
+        costCenter.setHelperText(t("order.costCenter.help"));
+        costCenter.setWidthFull();
+
         tags.setLabel(t("order.tags"));
         tags.setItems(availableTags);
         tags.setItemLabelGenerator(tagHelper::tagLabel);
@@ -115,7 +126,7 @@ public class OrderFormPanel extends Div {
                 new FormLayout.ResponsiveStep("800px", 3));
 
         form.add(orderNumber, name, customerCombo);
-        form.add(validFrom, validTo);
+        form.add(validFrom, validTo, costCenter);
         form.setColspan(tags, 3);
         form.add(tags);
         form.setColspan(comment, 3);
@@ -134,6 +145,7 @@ public class OrderFormPanel extends Div {
         tagHelper.readTags(order.getTags());
         tagHelper.updateHelperText("order.tags.help", "order.tags.legacy");
         comment.setValue(StringUtils.nvl(order.getComment()));
+        costCenter.setValue(StringUtils.nvl(order.getCostCenter()));
     }
 
     public void writeTo(Order order) {
@@ -144,6 +156,7 @@ public class OrderFormPanel extends Div {
         order.setValidTo(validTo.getValue());
         order.setTags(tagHelper.joinSelectedTags());
         order.setComment(StringUtils.blankToNull(comment.getValue()));
+        order.setCostCenter(StringUtils.blankToNull(costCenter.getValue()));
     }
 
     public boolean validate() {
@@ -169,6 +182,11 @@ public class OrderFormPanel extends Div {
                 && validTo.getValue().isBefore(validFrom.getValue())) {
             validTo.setInvalid(true);
             validTo.setErrorMessage(t("order.validTo") + " < " + t("order.validFrom"));
+            valid = false;
+        }
+        if (releaseRequiresCostCenter && costCenter.getValue().isBlank()) {
+            costCenter.setInvalid(true);
+            costCenter.setErrorMessage(t("order.costCenter.required"));
             valid = false;
         }
         return valid;
