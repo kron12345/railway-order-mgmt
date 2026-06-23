@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -68,6 +69,23 @@ public class OrderService {
 
     @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
     public Order save(Order order) {
+        return orderRepository.save(order);
+    }
+
+    /**
+     * Sets the assignee for an order (mirrors {@code BusinessService.setAssignee}). {@code type} is
+     * the {@code AssignmentType} name (USER/GROUP) or {@code null}; {@code name} the canonical
+     * value. No-op when unchanged so re-renders do not churn the audit log.
+     */
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
+    public Order setAssignee(UUID id, String type, String name) {
+        Order order = orderRepository.findById(id).orElseThrow();
+        if (Objects.equals(order.getAssignmentType(), type)
+                && Objects.equals(order.getAssignmentName(), name)) {
+            return order;
+        }
+        order.setAssignmentType(type);
+        order.setAssignmentName(name);
         return orderRepository.save(order);
     }
 

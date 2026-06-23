@@ -128,6 +128,8 @@ classDiagram
 | validTo | date | ja | Gueltig bis |
 | processStatus | enum | ja | `AUFTRAG`, `PLANUNG`, `PRODUKT_LEISTUNG`, `PRODUKTION`, `ABRECHNUNG_NACHBEREITUNG` |
 | internalStatus | string? | nein | Interner Bearbeitungsstatus auf Auftragsebene |
+| assignmentType | string? | nein | Zuweisungstyp `USER` (Keycloak-Benutzer) oder `GROUP` (Freitext-Team); analog zu `Geschäft` |
+| assignmentName | string? | nein | Kanonischer Zuweisungswert (bei `USER` der Keycloak-`preferred_username`) |
 | version | int | ja | Optimistic Locking |
 | createdAt / updatedAt | datetime | ja | Technische Zeitstempel |
 | createdBy / updatedBy | string? | ja | Fachlicher Benutzerkontext |

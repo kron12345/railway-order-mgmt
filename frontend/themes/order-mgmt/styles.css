@@ -666,6 +666,90 @@ vaadin-button:focus-visible {
     flex: 0 0 auto;
     align-items: center;
 }
+
+/* ─── Reusable filter panel (A3.2) ─────────────────────────── */
+.md-filter-toggle {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--rom-text-secondary);
+}
+.md-filter-toggle--open {
+    color: var(--rom-accent);
+    background: var(--rom-accent-muted);
+}
+.md-filter-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 16px;
+    height: 16px;
+    margin-left: 6px;
+    padding: 0 4px;
+    border-radius: 8px;
+    background: var(--rom-accent);
+    color: var(--rom-bg-primary);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 600;
+}
+.md-filter-panel {
+    flex: 0 0 auto;
+    background: var(--rom-bg-secondary);
+    border-bottom: 1px solid var(--rom-border-subtle);
+}
+.md-filter-body {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 12px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--rom-border-subtle);
+}
+.md-filter-cell {
+    display: flex;
+}
+.md-filter-field {
+    --vaadin-input-field-border-radius: 2px;
+    font-size: 12px;
+}
+.md-filter-daterange {
+    align-items: flex-end;
+    gap: 8px;
+}
+.md-filter-clear-all {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--rom-text-muted);
+    align-self: flex-end;
+}
+.md-filter-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px 12px;
+}
+.md-filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px 4px 2px 8px;
+    border: 1px solid var(--rom-border);
+    border-radius: 2px;
+    background: var(--rom-accent-muted);
+    color: var(--rom-text-primary);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    line-height: 1.4;
+}
+.md-filter-chip__remove {
+    --lumo-button-size: 18px;
+    min-width: 18px;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    margin: 0;
+    color: var(--rom-text-secondary);
+}
 .md-split {
     flex: 1 1 auto;
     --vaadin-split-layout-splitter-color: var(--rom-border);

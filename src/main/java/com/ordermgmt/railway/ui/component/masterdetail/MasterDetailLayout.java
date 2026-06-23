@@ -19,6 +19,7 @@ import com.vaadin.flow.component.textfield.TextFieldVariant;
 import com.vaadin.flow.data.value.ValueChangeMode;
 
 import com.ordermgmt.railway.ui.component.a11y.AriaLive;
+import com.ordermgmt.railway.ui.component.masterdetail.filter.FilterPanel;
 
 /**
  * Generic Bloomberg-style master-detail shell: scrollable card list on the left, detail panel on
@@ -30,7 +31,7 @@ import com.ordermgmt.railway.ui.component.a11y.AriaLive;
  */
 public class MasterDetailLayout<T> extends Div {
 
-    private final Spec<T> spec;
+    private final MasterDetailSpec<T> spec;
     private final TextField filter = new TextField();
     private final Div listScroll = new Div();
     private final Div detailPane = new Div();
@@ -43,12 +44,33 @@ public class MasterDetailLayout<T> extends Div {
     private UUID selectedId;
     private String filterText = "";
 
-    public MasterDetailLayout(Spec<T> spec) {
+    private FilterPanel<T> filterPanel;
+    private Predicate<T> panelPredicate = t -> true;
+
+    public MasterDetailLayout(MasterDetailSpec<T> spec) {
         this.spec = spec;
         addClassName("md-layout");
         getStyle().set("display", "flex").set("flex-direction", "column").set("height", "100%");
 
+        if (!spec.filterFields.isEmpty()) {
+            filterPanel =
+                    new FilterPanel<>(
+                            spec.filterFields,
+                            predicate -> {
+                                panelPredicate = predicate;
+                                applyFilter();
+                            },
+                            new FilterPanel.Labels(
+                                    spec.filterToggleLabel,
+                                    spec.filterClearAllLabel,
+                                    spec.filterChipClearAria,
+                                    spec.filterPanelAria));
+        }
+
         add(buildToolbar());
+        if (filterPanel != null) {
+            add(filterPanel);
+        }
         add(buildSplit());
         add(ariaLive);
 
@@ -114,6 +136,10 @@ public class MasterDetailLayout<T> extends Div {
                     applyFilter();
                 });
         bar.add(filter);
+
+        if (filterPanel != null) {
+            bar.add(filterPanel.getToggle());
+        }
 
         for (Component extra : spec.extraToolbar) {
             bar.add(extra);
@@ -217,8 +243,9 @@ public class MasterDetailLayout<T> extends Div {
 
     private void applyFilter() {
         visibleItems.clear();
-        Predicate<T> matches =
+        Predicate<T> text =
                 filterText.isBlank() ? t -> true : t -> spec.matcher.test(t, filterText);
+        Predicate<T> matches = text.and(panelPredicate);
         for (T t : allItems) {
             if (matches.test(t)) visibleItems.add(t);
         }
@@ -314,127 +341,7 @@ public class MasterDetailLayout<T> extends Div {
         }
     }
 
-    /**
-     * Builder-style configuration. All fields except {@code idExtractor}, {@code cardRenderer},
-     * {@code matcher}, {@code onSelect} have safe defaults.
-     */
-    public static class Spec<T> {
-        Function<T, UUID> idExtractor;
-        Function<T, Component> cardRenderer;
-        java.util.function.BiPredicate<T, String> matcher;
-        java.util.function.Consumer<UUID> onSelect = id -> {};
-        Runnable shortcutNew;
-        boolean shortcutFocusFilter = true;
-        String filterPlaceholder = "Filter…";
-        String filterAriaLabel = "Filter";
-        String filterId = "md-filter";
-        String listId = "md-list";
-        String detailId = "md-detail";
-        String listAriaLabel = "Liste";
-        String detailAriaLabel = "Detail";
-        String toolbarAriaLabel = "Toolbar";
-        String emptyText = "Keine Einträge";
-        String detailEmptyText = "Wähle einen Eintrag aus der Liste.";
-        TriFunction<T, Integer, Integer, String> announceTemplate =
-                (item, index, total) -> "Eintrag " + index + " von " + total;
-        List<Component> extraToolbar = new ArrayList<>();
-
-        public Spec<T> idExtractor(Function<T, UUID> v) {
-            this.idExtractor = v;
-            return this;
-        }
-
-        public Spec<T> cardRenderer(Function<T, Component> v) {
-            this.cardRenderer = v;
-            return this;
-        }
-
-        public Spec<T> matcher(java.util.function.BiPredicate<T, String> v) {
-            this.matcher = v;
-            return this;
-        }
-
-        public Spec<T> onSelect(java.util.function.Consumer<UUID> v) {
-            this.onSelect = v;
-            return this;
-        }
-
-        public Spec<T> shortcutNew(Runnable v) {
-            this.shortcutNew = v;
-            return this;
-        }
-
-        public Spec<T> filterPlaceholder(String v) {
-            this.filterPlaceholder = v;
-            return this;
-        }
-
-        public Spec<T> filterAriaLabel(String v) {
-            this.filterAriaLabel = v;
-            return this;
-        }
-
-        public Spec<T> filterId(String v) {
-            this.filterId = v;
-            return this;
-        }
-
-        public Spec<T> listId(String v) {
-            this.listId = v;
-            return this;
-        }
-
-        public Spec<T> detailId(String v) {
-            this.detailId = v;
-            return this;
-        }
-
-        public Spec<T> listAriaLabel(String v) {
-            this.listAriaLabel = v;
-            return this;
-        }
-
-        public Spec<T> detailAriaLabel(String v) {
-            this.detailAriaLabel = v;
-            return this;
-        }
-
-        public Spec<T> toolbarAriaLabel(String v) {
-            this.toolbarAriaLabel = v;
-            return this;
-        }
-
-        public Spec<T> emptyText(String v) {
-            this.emptyText = v;
-            return this;
-        }
-
-        public Spec<T> detailEmptyText(String v) {
-            this.detailEmptyText = v;
-            return this;
-        }
-
-        public Spec<T> announceTemplate(TriFunction<T, Integer, Integer, String> v) {
-            this.announceTemplate = v;
-            return this;
-        }
-
-        public Spec<T> extraToolbar(List<Component> v) {
-            this.extraToolbar = v;
-            return this;
-        }
-
-        public MasterDetailLayout<T> build() {
-            return new MasterDetailLayout<>(this);
-        }
-    }
-
-    public static <T> Spec<T> spec() {
-        return new Spec<>();
-    }
-
-    @FunctionalInterface
-    public interface TriFunction<A, B, C, R> {
-        R apply(A a, B b, C c);
+    public static <T> MasterDetailSpec<T> spec() {
+        return new MasterDetailSpec<>();
     }
 }

@@ -70,6 +70,13 @@ public class Order {
     @Column(length = 50)
     private String internalStatus;
 
+    /** Assignment (mirrors Business): USER = Keycloak person, GROUP = free-text team. */
+    @Column(length = 30)
+    private String assignmentType;
+
+    @Column(length = 255)
+    private String assignmentName;
+
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<OrderPosition> positions = new ArrayList<>();
 

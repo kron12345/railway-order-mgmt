@@ -1,15 +1,20 @@
 package com.ordermgmt.railway.ui.component.order;
 
 import java.time.format.DateTimeFormatter;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 
+import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 
+import com.ordermgmt.railway.domain.business.model.AssignmentType;
 import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.domain.order.model.ProcessStatus;
+import com.ordermgmt.railway.infrastructure.keycloak.KeycloakUserService;
+import com.ordermgmt.railway.ui.component.business.AssigneeComboBox;
 
 /**
  * Bloomberg-style master-list card for an {@link Order}. Status gutter on the left, status pill
@@ -19,7 +24,12 @@ public class OrderCard extends Div {
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("dd.MM.yy");
 
-    public OrderCard(Order order, Function<String, String> tr, int positionCount) {
+    public OrderCard(
+            Order order,
+            Function<String, String> tr,
+            int positionCount,
+            KeycloakUserService keycloakUserService,
+            BiConsumer<AssignmentType, String> onAssign) {
         addClassName("order-card-tile");
         if (order.getProcessStatus() != null) {
             addClassName("order-card-tile--" + order.getProcessStatus().name().toLowerCase());
@@ -63,8 +73,32 @@ public class OrderCard extends Div {
         }
 
         body.add(buildMetaRow(order, positionCount, tr));
+        body.add(buildAssigneeControl(order, tr, keycloakUserService, onAssign));
 
         add(body);
+    }
+
+    /**
+     * Always-on assignee combo (Keycloak person), styled like text — mirrors {@code BusinessCard}.
+     */
+    private Component buildAssigneeControl(
+            Order order,
+            Function<String, String> tr,
+            KeycloakUserService keycloakUserService,
+            BiConsumer<AssignmentType, String> onAssign) {
+        var picker = new AssigneeComboBox(keycloakUserService, onAssign);
+        picker.addClassName("order-card-tile__assignee-select");
+        picker.preset(
+                AssignmentType.fromString(order.getAssignmentType()), order.getAssignmentName());
+        picker.setPlaceholder("— " + tr.apply("order.unassigned"));
+        picker.getElement().setAttribute("aria-label", tr.apply("order.assignment"));
+        picker.getElement()
+                .addEventListener("click", e -> {})
+                .addEventData("event.stopPropagation()");
+        picker.getElement()
+                .addEventListener("mousedown", e -> {})
+                .addEventData("event.stopPropagation()");
+        return picker;
     }
 
     private HorizontalLayout buildStatusPill(ProcessStatus status, Function<String, String> tr) {

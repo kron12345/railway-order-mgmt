@@ -24,10 +24,18 @@ import com.vaadin.flow.router.RouteAlias;
 
 import com.ordermgmt.railway.domain.business.service.BusinessService;
 import com.ordermgmt.railway.domain.order.model.Order;
+import com.ordermgmt.railway.domain.order.model.ProcessStatus;
 import com.ordermgmt.railway.domain.order.repository.OrderPositionRepository;
 import com.ordermgmt.railway.domain.order.service.OrderService;
+import com.ordermgmt.railway.infrastructure.keycloak.CurrentUserHelper;
+import com.ordermgmt.railway.infrastructure.keycloak.KeycloakUserService;
 import com.ordermgmt.railway.ui.component.a11y.SkipLinks;
 import com.ordermgmt.railway.ui.component.masterdetail.MasterDetailLayout;
+import com.ordermgmt.railway.ui.component.masterdetail.filter.DateRangeFilterField;
+import com.ordermgmt.railway.ui.component.masterdetail.filter.FilterField;
+import com.ordermgmt.railway.ui.component.masterdetail.filter.SelectFilterField;
+import com.ordermgmt.railway.ui.component.masterdetail.filter.TextFilterField;
+import com.ordermgmt.railway.ui.component.masterdetail.filter.ToggleFilterField;
 import com.ordermgmt.railway.ui.component.order.OrderCard;
 import com.ordermgmt.railway.ui.layout.MainLayout;
 
@@ -54,6 +62,7 @@ public class OrderOverviewView extends VerticalLayout implements BeforeEnterObse
     private final OrderPositionRepository positionRepository;
     private final BusinessService businessService;
     private final ObjectProvider<OrderDetailView> detailFactory;
+    private final KeycloakUserService keycloakUserService;
     private final MasterDetailLayout<Order> shell;
     private final Map<UUID, Integer> positionCounts = new HashMap<>();
 
@@ -61,11 +70,13 @@ public class OrderOverviewView extends VerticalLayout implements BeforeEnterObse
             OrderService orderService,
             OrderPositionRepository positionRepository,
             BusinessService businessService,
-            ObjectProvider<OrderDetailView> detailFactory) {
+            ObjectProvider<OrderDetailView> detailFactory,
+            KeycloakUserService keycloakUserService) {
         this.orderService = orderService;
         this.positionRepository = positionRepository;
         this.businessService = businessService;
         this.detailFactory = detailFactory;
+        this.keycloakUserService = keycloakUserService;
 
         setSizeFull();
         setPadding(false);
@@ -82,7 +93,21 @@ public class OrderOverviewView extends VerticalLayout implements BeforeEnterObse
                         .cardRenderer(
                                 o ->
                                         new OrderCard(
-                                                o, tr, positionCounts.getOrDefault(o.getId(), 0)))
+                                                o,
+                                                tr,
+                                                positionCounts.getOrDefault(o.getId(), 0),
+                                                keycloakUserService,
+                                                (t, v) -> {
+                                                    try {
+                                                        orderService.setAssignee(
+                                                                o.getId(),
+                                                                t == null ? null : t.name(),
+                                                                v);
+                                                    } catch (RuntimeException ex) {
+                                                        // parent refresh shows current state
+                                                    }
+                                                    loadOrders();
+                                                }))
                         .matcher(
                                 (o, q) -> {
                                     String num =
@@ -111,6 +136,11 @@ public class OrderOverviewView extends VerticalLayout implements BeforeEnterObse
                         .listAriaLabel(getTranslation("order.list.aria"))
                         .detailAriaLabel(getTranslation("order.detail.aria"))
                         .toolbarAriaLabel(getTranslation("order.toolbar.aria"))
+                        .filterFields(buildFilterFields())
+                        .filterToggleLabel(getTranslation("filter.toggle"))
+                        .filterClearAllLabel(getTranslation("filter.clearAll"))
+                        .filterChipClearAria(getTranslation("filter.chip.clearAria"))
+                        .filterPanelAria(getTranslation("filter.panel.aria"))
                         .emptyText(getTranslation("order.empty"))
                         .detailEmptyText(getTranslation("order.detail.empty"))
                         .announceTemplate(
@@ -194,6 +224,33 @@ public class OrderOverviewView extends VerticalLayout implements BeforeEnterObse
             return;
         }
         shell.setDetail(detail);
+    }
+
+    /**
+     * Filter criteria for the order list, identical in shape to the business list (status /
+     * validity range / tags / "assigned to me"). "Assigned to me" matches USER-type assignments
+     * whose name is the current Keycloak user.
+     */
+    private List<FilterField<Order>> buildFilterFields() {
+        String me = CurrentUserHelper.getUsername();
+        return List.of(
+                new SelectFilterField<>(
+                        getTranslation("filter.field.status"),
+                        List.of(ProcessStatus.values()),
+                        s -> getTranslation("process." + s.name()),
+                        Order::getProcessStatus),
+                new DateRangeFilterField<>(
+                        getTranslation("filter.field.dateFrom"),
+                        getTranslation("filter.field.dateTo"),
+                        Order::getValidFrom,
+                        Order::getValidTo),
+                new TextFilterField<>(getTranslation("filter.field.tags"), Order::getTags),
+                new ToggleFilterField<>(
+                        getTranslation("filter.field.assignedToMe"),
+                        o ->
+                                "USER".equals(o.getAssignmentType())
+                                        && me != null
+                                        && me.equals(o.getAssignmentName())));
     }
 
     private Component buildSkipLinks() {

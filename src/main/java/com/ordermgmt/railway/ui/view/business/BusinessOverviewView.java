@@ -21,13 +21,20 @@ import com.vaadin.flow.router.Route;
 import com.vaadin.flow.router.RouteAlias;
 
 import com.ordermgmt.railway.domain.business.model.Business;
+import com.ordermgmt.railway.domain.business.model.BusinessStatus;
 import com.ordermgmt.railway.domain.business.service.BusinessService;
 import com.ordermgmt.railway.domain.order.service.AuditService;
 import com.ordermgmt.railway.domain.userprefs.service.UserViewPreferenceService;
+import com.ordermgmt.railway.infrastructure.keycloak.CurrentUserHelper;
 import com.ordermgmt.railway.infrastructure.keycloak.KeycloakUserService;
 import com.ordermgmt.railway.ui.component.a11y.SkipLinks;
 import com.ordermgmt.railway.ui.component.business.BusinessCard;
 import com.ordermgmt.railway.ui.component.masterdetail.MasterDetailLayout;
+import com.ordermgmt.railway.ui.component.masterdetail.filter.DateRangeFilterField;
+import com.ordermgmt.railway.ui.component.masterdetail.filter.FilterField;
+import com.ordermgmt.railway.ui.component.masterdetail.filter.SelectFilterField;
+import com.ordermgmt.railway.ui.component.masterdetail.filter.TextFilterField;
+import com.ordermgmt.railway.ui.component.masterdetail.filter.ToggleFilterField;
 import com.ordermgmt.railway.ui.layout.MainLayout;
 
 /**
@@ -108,6 +115,11 @@ public class BusinessOverviewView extends VerticalLayout implements BeforeEnterO
                         .listAriaLabel(getTranslation("business.list.aria"))
                         .detailAriaLabel(getTranslation("business.detail.aria"))
                         .toolbarAriaLabel(getTranslation("business.toolbar.aria"))
+                        .filterFields(buildFilterFields())
+                        .filterToggleLabel(getTranslation("filter.toggle"))
+                        .filterClearAllLabel(getTranslation("filter.clearAll"))
+                        .filterChipClearAria(getTranslation("filter.chip.clearAria"))
+                        .filterPanelAria(getTranslation("filter.panel.aria"))
                         .emptyText(getTranslation("business.empty"))
                         .detailEmptyText(getTranslation("business.detail.empty"))
                         .announceTemplate(
@@ -161,6 +173,33 @@ public class BusinessOverviewView extends VerticalLayout implements BeforeEnterO
         } catch (IllegalArgumentException ex) {
             UI.getCurrent().navigate("businesses");
         }
+    }
+
+    /**
+     * Filter criteria for the business list — same shape as the order list (status / validity range
+     * / tags / "assigned to me") so both views look and behave identically. "Assigned to me"
+     * matches USER-type assignments whose name is the current Keycloak user.
+     */
+    private List<FilterField<Business>> buildFilterFields() {
+        String me = CurrentUserHelper.getUsername();
+        return List.of(
+                new SelectFilterField<>(
+                        getTranslation("filter.field.status"),
+                        List.of(BusinessStatus.values()),
+                        s -> getTranslation("business.status." + s.name()),
+                        Business::getStatus),
+                new DateRangeFilterField<>(
+                        getTranslation("filter.field.dateFrom"),
+                        getTranslation("filter.field.dateTo"),
+                        Business::getValidFrom,
+                        Business::getValidTo),
+                new TextFilterField<>(getTranslation("filter.field.tags"), Business::getTags),
+                new ToggleFilterField<>(
+                        getTranslation("filter.field.assignedToMe"),
+                        b ->
+                                "USER".equals(b.getAssignmentType())
+                                        && me != null
+                                        && me.equals(b.getAssignmentName())));
     }
 
     private Component buildSkipLinks() {
