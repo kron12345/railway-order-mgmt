@@ -40,6 +40,7 @@ public class OrderPositionRow extends Div {
     private final Consumer<OrderPosition> onRejectAlteration;
     private final BiFunction<String, Object[], String> translator;
     private final AuditService auditService;
+    private final boolean editable;
     private final Div calendarSlot = new Div();
     private boolean calendarOpen = false;
 
@@ -52,7 +53,8 @@ public class OrderPositionRow extends Div {
             Consumer<OrderPosition> onDelete,
             Consumer<OrderPosition> onAcceptAlteration,
             Consumer<OrderPosition> onRejectAlteration,
-            AuditService auditService) {
+            AuditService auditService,
+            boolean editable) {
         this.position = position;
         this.pmState = pmState;
         this.planningStatus = planningStatus;
@@ -60,6 +62,7 @@ public class OrderPositionRow extends Div {
         this.onRejectAlteration = onRejectAlteration;
         this.translator = translator;
         this.auditService = auditService;
+        this.editable = editable;
 
         setWidthFull();
         addClassName("order-position-row");
@@ -127,10 +130,13 @@ public class OrderPositionRow extends Div {
         Button pmBtn = createPathManagerButton();
 
         // Edit + Delete (smaller, secondary)
+        // Edit + Delete only for mutators on an unlocked order (SOB §5.7); content is frozen
+        // while the order is "in Bearbeitung".
         Button editBtn = new Button(VaadinIcon.EDIT.create());
         editBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
         editBtn.getStyle().set("color", "var(--rom-text-muted)");
         editBtn.addClickListener(e -> onEdit.accept(position));
+        editBtn.setVisible(editable);
 
         Button histBtn = new Button(VaadinIcon.CLOCK.create());
         histBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
@@ -142,6 +148,7 @@ public class OrderPositionRow extends Div {
         delBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
         delBtn.getStyle().set("color", "var(--rom-status-danger)");
         delBtn.addClickListener(e -> onDelete.accept(position));
+        delBtn.setVisible(editable);
 
         HorizontalLayout actions =
                 new HorizontalLayout(calBtn, viewBtn, pmBtn, histBtn, editBtn, delBtn);
@@ -186,7 +193,8 @@ public class OrderPositionRow extends Div {
             if (planningStatus != null && planningStatus != PmPlanningStatus.UNPLANNED) {
                 header.add(createPlanningBadge(t));
             }
-            if (pmState == PathProcessState.ALTERATION_OFFERED) {
+            // Alteration response mutates path/purchase state → frozen on a locked order too.
+            if (pmState == PathProcessState.ALTERATION_OFFERED && editable) {
                 header.add(createAlterationActions(t));
             }
         }

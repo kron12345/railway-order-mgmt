@@ -129,8 +129,11 @@ public class BusinessOverviewView extends VerticalLayout implements BeforeEnterO
                                                 idx,
                                                 total,
                                                 b.getTitle() == null ? "—" : b.getTitle()))
-                        .extraToolbar(List.of(buildNewButton()))
-                        .shortcutNew(() -> UI.getCurrent().navigate("businesses/new"))
+                        .extraToolbar(canMutate() ? List.of(buildNewButton()) : List.of())
+                        .shortcutNew(
+                                canMutate()
+                                        ? () -> UI.getCurrent().navigate("businesses/new")
+                                        : null)
                         .onSelect(id -> UI.getCurrent().navigate("businesses/" + id))
                         .build();
         shell.setSizeFull();
@@ -151,6 +154,12 @@ public class BusinessOverviewView extends VerticalLayout implements BeforeEnterO
             return;
         }
         if ("new".equals(param)) {
+            // Defence-in-depth: non-mutators can reach /businesses/new by URL though the button is
+            // hidden; bounce them to the list (service also guards on save).
+            if (!canMutate()) {
+                UI.getCurrent().navigate("businesses");
+                return;
+            }
             shell.setSelectedId(null);
             shell.setDetail(new BusinessDetailView(businessService, prefsService, null));
             return;
@@ -163,7 +172,7 @@ public class BusinessOverviewView extends VerticalLayout implements BeforeEnterO
                 return;
             }
             shell.setSelectedId(id);
-            if ("edit".equals(mode)) {
+            if ("edit".equals(mode) && canMutate()) {
                 shell.setDetail(new BusinessDetailView(businessService, prefsService, id));
             } else {
                 shell.setDetail(
@@ -209,6 +218,10 @@ public class BusinessOverviewView extends VerticalLayout implements BeforeEnterO
                         new SkipLinks.SkipTarget("biz-list", getTranslation("a11y.skip.list")),
                         new SkipLinks.SkipTarget(
                                 "biz-detail", getTranslation("a11y.skip.detail"))));
+    }
+
+    private boolean canMutate() {
+        return CurrentUserHelper.hasAnyRole("ADMIN", "DISPATCHER");
     }
 
     private Component buildNewButton() {

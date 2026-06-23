@@ -31,6 +31,7 @@ import com.ordermgmt.railway.domain.business.service.BusinessService;
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.order.model.PurchasePosition;
 import com.ordermgmt.railway.domain.order.service.AuditService;
+import com.ordermgmt.railway.infrastructure.keycloak.CurrentUserHelper;
 import com.ordermgmt.railway.ui.component.AuditHistoryDialog;
 
 /**
@@ -103,17 +104,22 @@ public class BusinessReadView extends VerticalLayout {
         historyBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
         historyBtn.addClickListener(e -> openAuditHistory());
 
-        var editBtn = new Button(tr.apply("common.edit"), VaadinIcon.EDIT.create());
-        editBtn.addThemeVariants(ButtonVariant.LUMO_PRIMARY, ButtonVariant.LUMO_SMALL);
-        editBtn.addClassName("rom-btn-primary");
-        editBtn.addClickListener(
-                e -> UI.getCurrent().navigate("businesses/" + business.getId() + "/edit"));
+        bar.add(titleSpan, statusBadge, spacer, historyBtn);
 
-        var deleteBtn = new Button(VaadinIcon.TRASH.create(), e -> confirmDelete());
-        deleteBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
-        deleteBtn.getStyle().setColor("var(--rom-status-danger)");
+        // Edit/Delete only for users who may mutate (service layer enforces it too).
+        if (CurrentUserHelper.hasAnyRole("ADMIN", "DISPATCHER")) {
+            var editBtn = new Button(tr.apply("common.edit"), VaadinIcon.EDIT.create());
+            editBtn.addThemeVariants(ButtonVariant.LUMO_PRIMARY, ButtonVariant.LUMO_SMALL);
+            editBtn.addClassName("rom-btn-primary");
+            editBtn.addClickListener(
+                    e -> UI.getCurrent().navigate("businesses/" + business.getId() + "/edit"));
 
-        bar.add(titleSpan, statusBadge, spacer, historyBtn, editBtn, deleteBtn);
+            var deleteBtn = new Button(VaadinIcon.TRASH.create(), e -> confirmDelete());
+            deleteBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
+            deleteBtn.getStyle().setColor("var(--rom-status-danger)");
+
+            bar.add(editBtn, deleteBtn);
+        }
         bar.setFlexGrow(1, spacer);
         return bar;
     }

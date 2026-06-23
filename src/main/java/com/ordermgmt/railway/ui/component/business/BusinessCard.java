@@ -16,6 +16,7 @@ import com.ordermgmt.railway.domain.business.model.AssignmentType;
 import com.ordermgmt.railway.domain.business.model.Business;
 import com.ordermgmt.railway.domain.business.model.BusinessStatus;
 import com.ordermgmt.railway.domain.business.service.BusinessService;
+import com.ordermgmt.railway.infrastructure.keycloak.CurrentUserHelper;
 import com.ordermgmt.railway.infrastructure.keycloak.KeycloakUserService;
 
 /**
@@ -82,6 +83,11 @@ public class BusinessCard extends Div {
             Function<String, String> tr,
             BusinessService businessService,
             Runnable onChange) {
+        // Non-mutating users (no ADMIN/DISPATCHER role) see a read-only pill; the service layer
+        // enforces the same rule, so this just removes a control that would always fail.
+        if (!CurrentUserHelper.hasAnyRole("ADMIN", "DISPATCHER")) {
+            return buildStaticStatusPill(business.getStatus(), tr);
+        }
         // Terminal status (no transitions allowed) → static pill, not editable.
         Set<BusinessStatus> next = business.getStatus().nextTargets();
         if (next.isEmpty()) {

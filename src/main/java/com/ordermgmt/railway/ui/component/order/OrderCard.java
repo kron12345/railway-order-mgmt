@@ -12,6 +12,7 @@ import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 
 import com.ordermgmt.railway.domain.business.model.AssignmentType;
 import com.ordermgmt.railway.domain.order.model.Order;
+import com.ordermgmt.railway.domain.order.model.PositionStatus;
 import com.ordermgmt.railway.domain.order.model.ProcessStatus;
 import com.ordermgmt.railway.infrastructure.keycloak.KeycloakUserService;
 import com.ordermgmt.railway.ui.component.business.AssigneeComboBox;
@@ -58,6 +59,10 @@ public class OrderCard extends Div {
 
         body.add(buildStatusPill(order.getProcessStatus(), tr));
 
+        if (order.getInternalStatus() != null) {
+            body.add(buildInternalStatusBadge(order.getInternalStatus(), tr));
+        }
+
         Span title =
                 new Span(
                         safe(order.getOrderNumber()).isEmpty()
@@ -99,6 +104,16 @@ public class OrderCard extends Div {
                 .addEventListener("mousedown", e -> {})
                 .addEventData("event.stopPropagation()");
         return picker;
+    }
+
+    /**
+     * Compact internal "Bearbeitungs-Status" chip, shown only when set (SOB §5.6 overview hint).
+     */
+    private Span buildInternalStatusBadge(PositionStatus status, Function<String, String> tr) {
+        Span badge = new Span(tr.apply("position.status." + status.name()));
+        badge.addClassName("order-internal-status-badge");
+        badge.addClassName("order-internal-status-badge--" + status.name().toLowerCase());
+        return badge;
     }
 
     private HorizontalLayout buildStatusPill(ProcessStatus status, Function<String, String> tr) {

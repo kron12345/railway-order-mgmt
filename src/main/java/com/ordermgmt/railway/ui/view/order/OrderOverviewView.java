@@ -24,6 +24,7 @@ import com.vaadin.flow.router.RouteAlias;
 
 import com.ordermgmt.railway.domain.business.service.BusinessService;
 import com.ordermgmt.railway.domain.order.model.Order;
+import com.ordermgmt.railway.domain.order.model.PositionStatus;
 import com.ordermgmt.railway.domain.order.model.ProcessStatus;
 import com.ordermgmt.railway.domain.order.repository.OrderPositionRepository;
 import com.ordermgmt.railway.domain.order.service.OrderService;
@@ -240,6 +241,11 @@ public class OrderOverviewView extends VerticalLayout implements BeforeEnterObse
                         List.of(ProcessStatus.values()),
                         s -> getTranslation("process." + s.name()),
                         Order::getProcessStatus),
+                new SelectFilterField<>(
+                        getTranslation("order.internalStatus"),
+                        List.of(PositionStatus.values()),
+                        s -> getTranslation("position.status." + s.name()),
+                        Order::getInternalStatus),
                 new DateRangeFilterField<>(
                         getTranslation("filter.field.dateFrom"),
                         getTranslation("filter.field.dateTo"),

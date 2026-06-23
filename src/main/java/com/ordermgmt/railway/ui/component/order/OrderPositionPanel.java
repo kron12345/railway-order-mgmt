@@ -29,6 +29,7 @@ import com.ordermgmt.railway.domain.order.service.PurchaseOrderService;
 import com.ordermgmt.railway.domain.order.service.ResourceNeedService;
 import com.ordermgmt.railway.domain.pathmanager.model.PmReferenceTrain;
 import com.ordermgmt.railway.domain.pathmanager.service.PathManagerService;
+import com.ordermgmt.railway.infrastructure.keycloak.CurrentUserHelper;
 
 /** Displays and manages the positions that belong to an order. */
 public class OrderPositionPanel extends Div {
@@ -45,6 +46,12 @@ public class OrderPositionPanel extends Div {
     private final AuditService auditService;
     private final BiFunction<String, Object[], String> translator;
     private final VerticalLayout rowContainer = new VerticalLayout();
+
+    /**
+     * SOB §5.7: the content lock is against the Auftraggeber (the non-mutator). Mutators
+     * (ADMIN/DISPATCHER = die Planung) keep add/edit/delete during "in Bearbeitung".
+     */
+    private final boolean editable = CurrentUserHelper.hasAnyRole("ADMIN", "DISPATCHER");
 
     public OrderPositionPanel(
             Order order,
@@ -95,25 +102,30 @@ public class OrderPositionPanel extends Div {
                 .set("margin", "0")
                 .set("font-size", "var(--lumo-font-size-l)");
 
-        Button addService =
-                new Button("+ " + t("position.type.LEISTUNG"), VaadinIcon.TOOLS.create());
-        addService.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_PRIMARY);
-        addService
-                .getStyle()
-                .set("background", "var(--rom-accent)")
-                .set("color", "var(--rom-bg-primary)");
-        addService.addClickListener(e -> openServiceDialog(null));
-
-        Button addTrain = new Button("+ " + t("position.type.FAHRPLAN"), VaadinIcon.TRAIN.create());
-        addTrain.addThemeVariants(ButtonVariant.LUMO_SMALL);
-        addTrain.getStyle()
-                .set("color", "var(--rom-status-info)")
-                .set("border", "1px solid var(--rom-status-info)")
-                .set("background", "rgba(68,138,255,0.08)");
-        addTrain.addClickListener(e -> openTimetableBuilder(null));
-
-        HorizontalLayout buttons = new HorizontalLayout(addService, addTrain);
+        HorizontalLayout buttons = new HorizontalLayout();
         buttons.setSpacing(true);
+
+        // Add-position controls only for mutators on an unlocked order (SOB §5.7).
+        if (editable) {
+            Button addService =
+                    new Button("+ " + t("position.type.LEISTUNG"), VaadinIcon.TOOLS.create());
+            addService.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_PRIMARY);
+            addService
+                    .getStyle()
+                    .set("background", "var(--rom-accent)")
+                    .set("color", "var(--rom-bg-primary)");
+            addService.addClickListener(e -> openServiceDialog(null));
+
+            Button addTrain =
+                    new Button("+ " + t("position.type.FAHRPLAN"), VaadinIcon.TRAIN.create());
+            addTrain.addThemeVariants(ButtonVariant.LUMO_SMALL);
+            addTrain.getStyle()
+                    .set("color", "var(--rom-status-info)")
+                    .set("border", "1px solid var(--rom-status-info)")
+                    .set("background", "rgba(68,138,255,0.08)");
+            addTrain.addClickListener(e -> openTimetableBuilder(null));
+            buttons.add(addService, addTrain);
+        }
 
         HorizontalLayout header = new HorizontalLayout(title, buttons);
         header.setWidthFull();
@@ -149,7 +161,8 @@ public class OrderPositionPanel extends Div {
                             this::confirmDeletePosition,
                             p -> respondToAlteration(p, true),
                             p -> respondToAlteration(p, false),
-                            auditService));
+                            auditService,
+                            editable));
 
             // Resource panel (collapsible, shown below each position row)
             long resCount = pos.getResourceNeeds() != null ? pos.getResourceNeeds().size() : 0;
@@ -163,7 +176,8 @@ public class OrderPositionPanel extends Div {
                                 purchasePositionRepository,
                                 auditService,
                                 translator,
-                                this::refreshPositions);
+                                this::refreshPositions,
+                                editable);
                 resourcePanel.getStyle().set("margin", "0 12px 8px 12px");
                 rowContainer.add(resourcePanel);
             }

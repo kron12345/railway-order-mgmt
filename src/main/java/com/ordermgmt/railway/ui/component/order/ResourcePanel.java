@@ -45,6 +45,12 @@ public class ResourcePanel extends Div {
     private final AuditService auditService;
     private final BiFunction<String, Object[], String> translator;
     private final Runnable refreshCallback;
+
+    /**
+     * Mutators on an unlocked order may add/trigger/sync; otherwise the panel is read-only (§5.7).
+     */
+    private final boolean editable;
+
     private final Div contentSlot = new Div();
 
     public ResourcePanel(
@@ -55,7 +61,8 @@ public class ResourcePanel extends Div {
             PurchasePositionRepository purchasePositionRepository,
             AuditService auditService,
             BiFunction<String, Object[], String> translator,
-            Runnable refreshCallback) {
+            Runnable refreshCallback,
+            boolean editable) {
         this.position = position;
         this.resourceNeedService = resourceNeedService;
         this.purchaseOrderService = purchaseOrderService;
@@ -64,6 +71,7 @@ public class ResourcePanel extends Div {
         this.auditService = auditService;
         this.translator = translator;
         this.refreshCallback = refreshCallback;
+        this.editable = editable;
 
         setWidthFull();
         getStyle()
@@ -175,8 +183,8 @@ public class ResourcePanel extends Div {
             }
         }
 
-        // Add Purchase button for EXTERNAL resources
-        if (rn.getCoverageType() == CoverageType.EXTERNAL) {
+        // Add Purchase button for EXTERNAL resources (mutators on an unlocked order only)
+        if (editable && rn.getCoverageType() == CoverageType.EXTERNAL) {
             row.add(createAddPurchaseButton(rn));
         }
 
@@ -215,25 +223,28 @@ public class ResourcePanel extends Div {
                 row.add(createSmallBadge(pp.getPmTtrPhase(), "var(--rom-text-secondary)"));
             }
 
-            // Sync button
-            Button syncBtn = new Button(VaadinIcon.REFRESH.create());
-            syncBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
-            syncBtn.getStyle()
-                    .set("color", "var(--rom-text-muted)")
-                    .set("min-width", "24px")
-                    .set("padding", "0");
-            syncBtn.setTooltipText(tr("purchase.synced"));
-            syncBtn.addClickListener(
-                    e -> {
-                        purchaseOrderService.syncTttStatus(pp.getId());
-                        loadResources();
-                        if (refreshCallback != null) refreshCallback.run();
-                    });
-            row.add(syncBtn);
+            // Sync button (mutators on an unlocked order only)
+            if (editable) {
+                Button syncBtn = new Button(VaadinIcon.REFRESH.create());
+                syncBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
+                syncBtn.getStyle()
+                        .set("color", "var(--rom-text-muted)")
+                        .set("min-width", "24px")
+                        .set("padding", "0");
+                syncBtn.setTooltipText(tr("purchase.synced"));
+                syncBtn.addClickListener(
+                        e -> {
+                            purchaseOrderService.syncTttStatus(pp.getId());
+                            loadResources();
+                            if (refreshCallback != null) refreshCallback.run();
+                        });
+                row.add(syncBtn);
+            }
         }
 
-        // TTT order button for unordered CAPACITY purchases
-        if (pp.getPmPathRequestId() == null
+        // TTT order button for unordered CAPACITY purchases (mutators on an unlocked order only)
+        if (editable
+                && pp.getPmPathRequestId() == null
                 && pp.getResourceNeed() != null
                 && pp.getResourceNeed().getResourceType() == ResourceType.CAPACITY) {
             Button tttBtn = new Button(tr("purchase.triggerTtt"));
@@ -300,6 +311,11 @@ public class ResourcePanel extends Div {
                 .set("gap", "8px")
                 .set("margin-top", "6px")
                 .set("flex-wrap", "wrap");
+
+        // Add-resource / trigger-all are mutations: hidden on a locked order or for non-mutators.
+        if (!editable) {
+            return footer;
+        }
 
         // + Resource button
         Button addRes = new Button(tr("resource.add"), VaadinIcon.PLUS.create());
