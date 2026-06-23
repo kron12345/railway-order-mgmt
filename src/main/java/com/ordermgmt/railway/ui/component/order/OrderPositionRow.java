@@ -220,28 +220,14 @@ public class OrderPositionRow extends Div {
         // Resource summary badge
         long resourceCount =
                 position.getResourceNeeds() != null ? position.getResourceNeeds().size() : 0;
+        // Each purchase position belongs to exactly one resource need of this position, so the
+        // total is simply the count of purchases that have a resource need.
         long purchaseCount =
-                position.getResourceNeeds() != null
-                        ? position.getResourceNeeds().stream()
-                                .mapToLong(
-                                        rn ->
-                                                rn.getOrderPosition() != null
-                                                                && position.getPurchasePositions()
-                                                                        != null
-                                                        ? position.getPurchasePositions().stream()
-                                                                .filter(
-                                                                        pp ->
-                                                                                pp.getResourceNeed()
-                                                                                                != null
-                                                                                        && pp.getResourceNeed()
-                                                                                                .getId()
-                                                                                                .equals(
-                                                                                                        rn
-                                                                                                                .getId()))
-                                                                .count()
-                                                        : 0)
-                                .sum()
-                        : 0;
+                position.getPurchasePositions() == null
+                        ? 0
+                        : position.getPurchasePositions().stream()
+                                .filter(pp -> pp.getResourceNeed() != null)
+                                .count();
         if (resourceCount > 0) {
             String resLabel =
                     translator.apply(

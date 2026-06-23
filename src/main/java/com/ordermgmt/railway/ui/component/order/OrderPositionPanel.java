@@ -152,6 +152,14 @@ public class OrderPositionPanel extends Div {
             return;
         }
 
+        // One batched query for all positions' linked businesses (instead of one per row).
+        java.util.Map<
+                        java.util.UUID,
+                        java.util.List<com.ordermgmt.railway.domain.business.model.Business>>
+                businessesByPosition =
+                        businessService.findByLinkedOrderPositions(
+                                positions.stream().map(OrderPosition::getId).toList());
+
         for (OrderPosition pos : positions) {
             PmReferenceTrain pmTrain = resolveTrain(pos);
             rowContainer.add(
@@ -168,7 +176,8 @@ public class OrderPositionPanel extends Div {
                             editable));
 
             // Linked businesses for this position (clickable chips → business detail).
-            var linkedBusinesses = businessService.findByLinkedOrderPosition(pos.getId());
+            var linkedBusinesses =
+                    businessesByPosition.getOrDefault(pos.getId(), java.util.List.of());
             if (!linkedBusinesses.isEmpty()) {
                 var chips =
                         new com.ordermgmt.railway.ui.component.business.BusinessChips(

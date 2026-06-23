@@ -408,6 +408,31 @@ public class BusinessService {
         return businessRepository.findByLinkedPurchasePositionId(purchasePositionId);
     }
 
+    /** Batched linked-business lookup for many positions at once (avoids one query per row). */
+    @Transactional(readOnly = true)
+    public java.util.Map<UUID, List<Business>> findByLinkedOrderPositions(
+            java.util.Collection<UUID> orderPositionIds) {
+        return groupByFirstId(
+                businessRepository.findBusinessesByOrderPositionIds(orderPositionIds));
+    }
+
+    /** Batched linked-business lookup for many purchase positions at once. */
+    @Transactional(readOnly = true)
+    public java.util.Map<UUID, List<Business>> findByLinkedPurchasePositions(
+            java.util.Collection<UUID> purchasePositionIds) {
+        return groupByFirstId(
+                businessRepository.findBusinessesByPurchasePositionIds(purchasePositionIds));
+    }
+
+    private java.util.Map<UUID, List<Business>> groupByFirstId(List<Object[]> rows) {
+        java.util.Map<UUID, List<Business>> map = new java.util.HashMap<>();
+        for (Object[] row : rows) {
+            map.computeIfAbsent((UUID) row[0], k -> new java.util.ArrayList<>())
+                    .add((Business) row[1]);
+        }
+        return map;
+    }
+
     @Transactional(readOnly = true)
     public List<Business> findByLinkedOrder(UUID orderId) {
         return businessRepository.findByLinkedOrderId(orderId);

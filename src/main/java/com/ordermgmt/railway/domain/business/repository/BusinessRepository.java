@@ -1,10 +1,12 @@
 package com.ordermgmt.railway.domain.business.repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import com.ordermgmt.railway.domain.business.model.Business;
@@ -23,6 +25,14 @@ public interface BusinessRepository extends JpaRepository<Business, UUID> {
     /** All businesses linked to the given PurchasePosition via the M2M join table. */
     @Query("SELECT DISTINCT b FROM Business b JOIN b.purchasePositions pp WHERE pp.id = :ppId")
     List<Business> findByLinkedPurchasePositionId(UUID ppId);
+
+    /** (orderPositionId, business) pairs for a batch of positions — one query instead of N. */
+    @Query("SELECT op.id, b FROM Business b JOIN b.orderPositions op WHERE op.id IN :opIds")
+    List<Object[]> findBusinessesByOrderPositionIds(@Param("opIds") Collection<UUID> opIds);
+
+    /** (purchasePositionId, business) pairs for a batch of purchases — one query instead of N. */
+    @Query("SELECT pp.id, b FROM Business b JOIN b.purchasePositions pp WHERE pp.id IN :ppIds")
+    List<Object[]> findBusinessesByPurchasePositionIds(@Param("ppIds") Collection<UUID> ppIds);
 
     /**
      * All businesses that link to anything under the given Order — either an OrderPosition of the

@@ -15,6 +15,9 @@ spring:
     open-in-view: false
     properties:
       hibernate.default_schema: public
+      # Collapse lazy-collection N+1 cascades app-wide: Hibernate loads up to N owners' lazy
+      # collections in one IN(...) query instead of one query per owner. High-leverage, low-risk.
+      hibernate.default_batch_fetch_size: 50
       org.hibernate.envers.audit_table_suffix: _audit
       org.hibernate.envers.revision_field_name: revision_id
       org.hibernate.envers.revision_type_field_name: revision_type

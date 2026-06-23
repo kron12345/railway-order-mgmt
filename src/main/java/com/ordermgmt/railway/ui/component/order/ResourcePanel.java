@@ -54,6 +54,12 @@ public class ResourcePanel extends Div {
 
     private final Div contentSlot = new Div();
 
+    /** Businesses linked per purchase position, batched once per render (avoids one query/row). */
+    private java.util.Map<
+                    java.util.UUID,
+                    java.util.List<com.ordermgmt.railway.domain.business.model.Business>>
+            purchaseBizMap = java.util.Map.of();
+
     public ResourcePanel(
             OrderPosition position,
             ResourceNeedService resourceNeedService,
@@ -93,6 +99,18 @@ public class ResourcePanel extends Div {
     /** Reload all resources and purchases from DB and rebuild the UI. */
     public void loadResources() {
         contentSlot.removeAll();
+
+        // Batch the linked-business lookup for ALL of this position's purchases (one IN query).
+        java.util.List<java.util.UUID> ppIds =
+                position.getPurchasePositions() == null
+                        ? java.util.List.of()
+                        : position.getPurchasePositions().stream()
+                                .map(PurchasePosition::getId)
+                                .toList();
+        purchaseBizMap =
+                ppIds.isEmpty()
+                        ? java.util.Map.of()
+                        : businessService.findByLinkedPurchasePositions(ppIds);
 
         List<ResourceNeed> resources =
                 resourceNeedService.getResourcesForPosition(position.getId());
@@ -292,7 +310,7 @@ public class ResourcePanel extends Div {
         }
 
         // Linked businesses for this purchase position (clickable chips → business detail).
-        var linkedBusinesses = businessService.findByLinkedPurchasePosition(pp.getId());
+        var linkedBusinesses = purchaseBizMap.getOrDefault(pp.getId(), java.util.List.of());
         if (!linkedBusinesses.isEmpty()) {
             row.add(
                     new com.ordermgmt.railway.ui.component.business.BusinessChips(
