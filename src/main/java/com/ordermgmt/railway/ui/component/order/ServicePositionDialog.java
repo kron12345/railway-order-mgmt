@@ -68,6 +68,8 @@ public class ServicePositionDialog extends Dialog {
     private Details validityDetails;
     private final CheckboxGroup<PredefinedTag> tags = new CheckboxGroup<>();
     private final TextArea comment = new TextArea();
+    private final com.ordermgmt.railway.domain.business.service.BusinessService businessService;
+    private com.ordermgmt.railway.ui.component.business.BusinessLinkField businessLinkField;
 
     public ServicePositionDialog(
             Order order,
@@ -75,9 +77,11 @@ public class ServicePositionDialog extends Dialog {
             OrderService orderService,
             OperationalPointRepository opRepo,
             PredefinedTagRepository tagRepo,
+            com.ordermgmt.railway.domain.business.service.BusinessService businessService,
             BiFunction<String, Object[], String> translator) {
         this.order = order;
         this.orderService = orderService;
+        this.businessService = businessService;
         this.translator = translator;
         this.isNew = existing == null;
         this.position = isNew ? new OrderPosition() : existing;
@@ -233,6 +237,15 @@ public class ServicePositionDialog extends Dialog {
         form.setColspan(comment, 2);
         form.add(comment);
 
+        businessLinkField =
+                new com.ordermgmt.railway.ui.component.business.BusinessLinkField(
+                        businessService, this::t);
+        form.setColspan(businessLinkField, 2);
+        form.add(businessLinkField);
+        if (!isNew) {
+            businessLinkField.preset(businessService.findByLinkedOrderPosition(position.getId()));
+        }
+
         readFrom();
         add(form);
     }
@@ -354,7 +367,8 @@ public class ServicePositionDialog extends Dialog {
             position.setInternalStatus(PositionStatus.IN_BEARBEITUNG);
         }
 
-        orderService.savePosition(position);
+        OrderPosition saved = orderService.savePosition(position);
+        businessLinkField.applyTo(saved.getId());
         Notification.show(t("common.save") + " \u2713", 2000, Notification.Position.BOTTOM_END)
                 .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
         fireEvent(new SaveEvent(this));

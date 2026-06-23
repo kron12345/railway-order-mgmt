@@ -86,6 +86,8 @@ public class TimetableBuilderView extends VerticalLayout
     private final TextField otnField = new TextField();
     private final CheckboxGroup<PredefinedTag> tagSelector = new CheckboxGroup<>();
     private final TextArea commentField = new TextArea();
+    private final com.ordermgmt.railway.domain.business.service.BusinessService businessService;
+    private com.ordermgmt.railway.ui.component.business.BusinessLinkField businessLinkField;
     private final Div contentSlot = new Div();
     private final Span stepOneBadge = new Span();
     private final Span stepTwoBadge = new Span();
@@ -120,7 +122,8 @@ public class TimetableBuilderView extends VerticalLayout
             TimetableRoutingService timetableRoutingService,
             TimetableArchiveService timetableArchiveService,
             TimetableEditingService timetableEditingService,
-            IntervalTimetableService intervalTimetableService) {
+            IntervalTimetableService intervalTimetableService,
+            com.ordermgmt.railway.domain.business.service.BusinessService businessService) {
         this.orderService = orderService;
         this.operationalPointRepository = operationalPointRepository;
         this.predefinedTagRepository = predefinedTagRepository;
@@ -128,6 +131,7 @@ public class TimetableBuilderView extends VerticalLayout
         this.timetableArchiveService = timetableArchiveService;
         this.timetableEditingService = timetableEditingService;
         this.intervalTimetableService = intervalTimetableService;
+        this.businessService = businessService;
         setPadding(false);
         setSpacing(false);
         setSizeFull();
@@ -375,7 +379,16 @@ public class TimetableBuilderView extends VerticalLayout
                 new FormLayout.ResponsiveStep("0", 1),
                 new FormLayout.ResponsiveStep("500px", 2),
                 new FormLayout.ResponsiveStep("900px", 4));
+        businessLinkField =
+                new com.ordermgmt.railway.ui.component.business.BusinessLinkField(
+                        businessService, this::t);
         form.add(positionName, otnField, tagSelector, commentField);
+        form.setColspan(businessLinkField, 4);
+        form.add(businessLinkField);
+        if (existingPosition != null) {
+            businessLinkField.preset(
+                    businessService.findByLinkedOrderPosition(existingPosition.getId()));
+        }
         metadataDetails = new Details(t("timetable.meta.title"), form);
         metadataDetails.setOpened(existingPosition == null);
         metadataDetails.setWidthFull();
@@ -623,15 +636,17 @@ public class TimetableBuilderView extends VerticalLayout
             return;
         }
         try {
-            timetableArchiveService.saveTimetablePosition(
-                    order,
-                    existingPosition,
-                    positionName.getValue(),
-                    joinSelectedTags(),
-                    commentField.getValue(),
-                    dates,
-                    new ArrayList<>(rows),
-                    otnField.getValue());
+            OrderPosition saved =
+                    timetableArchiveService.saveTimetablePosition(
+                            order,
+                            existingPosition,
+                            positionName.getValue(),
+                            joinSelectedTags(),
+                            commentField.getValue(),
+                            dates,
+                            new ArrayList<>(rows),
+                            otnField.getValue());
+            businessLinkField.applyTo(saved.getId());
             Notification.show(t("timetable.save.success"), 2500, Position.BOTTOM_END)
                     .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
             navigateToOrder();

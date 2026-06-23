@@ -128,7 +128,14 @@ public class ResourceNeedService {
             need.setCatalogItem(item);
         }
 
-        return resourceNeedRepository.save(need);
+        ResourceNeed saved = resourceNeedRepository.save(need);
+        // Keep the parent's managed collection in sync — OrderPosition.resourceNeeds uses
+        // orphanRemoval=true, so a later save of a stale OrderPosition would otherwise delete this
+        // need (and cascade-delete its purchases).
+        if (position.getResourceNeeds() != null && !position.getResourceNeeds().contains(saved)) {
+            position.getResourceNeeds().add(saved);
+        }
+        return saved;
     }
 
     /** Removes a resource need by its ID. */

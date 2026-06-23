@@ -3,7 +3,6 @@ package com.ordermgmt.railway.ui.component.order;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 
@@ -15,7 +14,6 @@ import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
-import com.vaadin.flow.router.QueryParameters;
 
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.order.model.PositionType;
@@ -91,67 +89,59 @@ public class OrderPositionRow extends Div {
 
         Div info = createInfoBlock(t);
 
-        // Purchase calendar toggle — prominent button
+        // Action chips: icon + label, bordered so they clearly read as buttons (op-action* CSS).
+        // Purchase calendar — the primary action, carrying the order count.
         long purchaseCount =
                 position.getPurchasePositions() != null
                         ? position.getPurchasePositions().size()
                         : 0;
-        String btnText = translator.apply("purchase.calendar.btn", new Object[0]);
-        String calLabel = purchaseCount > 0 ? purchaseCount + " " + btnText : btnText;
-        Button calBtn = new Button(calLabel, VaadinIcon.CALENDAR.create());
+        String calText = t.apply("position.action.calendar", new Object[0]);
+        Button calBtn =
+                new Button(
+                        purchaseCount > 0 ? purchaseCount + " " + calText : calText,
+                        VaadinIcon.CALENDAR.create());
         calBtn.addThemeVariants(ButtonVariant.LUMO_SMALL);
-        calBtn.getStyle()
-                .set("font-family", "'JetBrains Mono', monospace")
-                .set("font-size", "10px")
-                .set("font-weight", "600")
-                .set("border-radius", "4px")
-                .set("min-width", "90px");
+        calBtn.addClassName("op-action");
         if (purchaseCount > 0) {
-            calBtn.getStyle()
-                    .set("background", "rgba(45,212,191,0.1)")
-                    .set("color", "var(--rom-accent)")
-                    .set("border", "1px solid rgba(45,212,191,0.3)");
-        } else {
-            calBtn.getStyle()
-                    .set("background", "rgba(148,163,184,0.06)")
-                    .set("color", "var(--rom-text-muted)")
-                    .set("border", "1px solid var(--rom-border)");
+            calBtn.addClassName("op-action--primary");
         }
         calBtn.addClickListener(e -> toggleCalendar());
 
-        // View button for FAHRPLAN positions (eye icon -> archive view)
-        Button viewBtn = new Button(VaadinIcon.EYE.create());
-        viewBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
-        viewBtn.getStyle().set("color", "var(--rom-status-info)");
-        viewBtn.addClickListener(e -> navigateToArchiveView());
-        viewBtn.setVisible(position.getType() == PositionType.FAHRPLAN);
+        // View archive (FAHRPLAN only).
+        Button viewBtn =
+                new Button(t.apply("position.action.view", new Object[0]), VaadinIcon.EYE.create());
+        viewBtn.addThemeVariants(ButtonVariant.LUMO_SMALL);
+        viewBtn.addClassNames("op-action", "op-action--info");
+        // Canonical position detail for ALL types (fields + linked businesses + timetable for
+        // FAHRPLAN). The same place the business links point to.
+        viewBtn.addClickListener(e -> navigateToDetail());
 
-        // View-in-RailOpt button for transferred FAHRPLAN positions (sending is automatic on save)
-        Button pmBtn = createPathManagerButton();
+        // History.
+        Button histBtn =
+                new Button(t.apply("audit.button", new Object[0]), VaadinIcon.CLOCK.create());
+        histBtn.addThemeVariants(ButtonVariant.LUMO_SMALL);
+        histBtn.addClassName("op-action");
+        histBtn.addClickListener(e -> openPositionHistory());
 
-        // Edit + Delete (smaller, secondary)
         // Edit + Delete only for mutators on an unlocked order (SOB §5.7); content is frozen
         // while the order is "in Bearbeitung".
-        Button editBtn = new Button(VaadinIcon.EDIT.create());
-        editBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
-        editBtn.getStyle().set("color", "var(--rom-text-muted)");
+        Button editBtn =
+                new Button(t.apply("common.edit", new Object[0]), VaadinIcon.EDIT.create());
+        editBtn.addThemeVariants(ButtonVariant.LUMO_SMALL);
+        editBtn.addClassName("op-action");
         editBtn.addClickListener(e -> onEdit.accept(position));
         editBtn.setVisible(editable);
 
-        Button histBtn = new Button(VaadinIcon.CLOCK.create());
-        histBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
-        histBtn.getStyle().set("color", "var(--rom-text-muted)");
-        histBtn.setTooltipText(translator.apply("audit.button", new Object[0]));
-        histBtn.addClickListener(e -> openPositionHistory());
-
+        // Delete stays icon-only and turns danger-red on hover, so it reads as the secondary
+        // action.
         Button delBtn = new Button(VaadinIcon.TRASH.create());
-        delBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
-        delBtn.getStyle().set("color", "var(--rom-status-danger)");
+        delBtn.addThemeVariants(ButtonVariant.LUMO_SMALL);
+        delBtn.addClassNames("op-action", "op-action--icon", "op-action--danger");
+        delBtn.setTooltipText(t.apply("common.delete", new Object[0]));
         delBtn.addClickListener(e -> onDelete.accept(position));
         delBtn.setVisible(editable);
 
-        HorizontalLayout actions =
-                new HorizontalLayout(calBtn, viewBtn, pmBtn, histBtn, editBtn, delBtn);
+        HorizontalLayout actions = new HorizontalLayout(calBtn, viewBtn, histBtn, editBtn, delBtn);
         actions.setSpacing(true);
         actions.setAlignItems(FlexComponent.Alignment.START);
 
@@ -186,10 +176,9 @@ public class OrderPositionRow extends Div {
                 .set("color", "var(--rom-text-primary)")
                 .set("min-width", "150px");
 
-        header.add(name, createTypeBadge(t), createStatusBadge(t));
+        header.add(name);
         if (position.getType() == PositionType.FAHRPLAN
                 && position.getPmReferenceTrainId() != null) {
-            header.add(createRailOptBadge(t));
             if (planningStatus != null && planningStatus != PmPlanningStatus.UNPLANNED) {
                 header.add(createPlanningBadge(t));
             }
@@ -297,42 +286,6 @@ public class OrderPositionRow extends Div {
         }
     }
 
-    private StatusBadge createTypeBadge(BiFunction<String, Object[], String> t) {
-        if (position.getType() == null) {
-            return new StatusBadge("—", StatusBadge.StatusType.NEUTRAL);
-        }
-        String label = t.apply("position.type." + position.getType().name(), new Object[0]);
-        return switch (position.getType()) {
-            case FAHRPLAN -> new StatusBadge(label, StatusBadge.StatusType.INFO);
-            case LEISTUNG -> new StatusBadge(label, StatusBadge.StatusType.WARNING);
-        };
-    }
-
-    private StatusBadge createStatusBadge(BiFunction<String, Object[], String> t) {
-        if (position.getInternalStatus() == null) {
-            return new StatusBadge("—", StatusBadge.StatusType.NEUTRAL);
-        }
-        String label =
-                t.apply("position.status." + position.getInternalStatus().name(), new Object[0]);
-        return switch (position.getInternalStatus()) {
-            case IN_BEARBEITUNG, UEBERMITTELT ->
-                    new StatusBadge(label, StatusBadge.StatusType.INFO);
-            case FREIGEGEBEN, ABGESCHLOSSEN ->
-                    new StatusBadge(label, StatusBadge.StatusType.SUCCESS);
-            case UEBERARBEITEN, BEANTRAGT -> new StatusBadge(label, StatusBadge.StatusType.WARNING);
-            case ANNULLIERT -> new StatusBadge(label, StatusBadge.StatusType.DANGER);
-        };
-    }
-
-    /** Visible "transferred to RailOpt" badge showing the current RailOpt process state. */
-    private StatusBadge createRailOptBadge(BiFunction<String, Object[], String> t) {
-        String stateLabel =
-                pmState != null
-                        ? t.apply("pm.state." + pmState.name(), new Object[0])
-                        : t.apply("position.sentToPm", new Object[0]);
-        return new StatusBadge("RailOpt · " + stateLabel, railOptBadgeType());
-    }
-
     /** Planning status from RailOpt (planned / on shelf / on physical resource). */
     private StatusBadge createPlanningBadge(BiFunction<String, Object[], String> t) {
         String label = t.apply("pm.planning." + planningStatus.name(), new Object[0]);
@@ -344,19 +297,6 @@ public class OrderPositionRow extends Div {
                     case UNPLANNED -> StatusBadge.StatusType.NEUTRAL;
                 };
         return new StatusBadge(t.apply("pm.planning.label", new Object[0]) + " · " + label, type);
-    }
-
-    private StatusBadge.StatusType railOptBadgeType() {
-        if (pmState == null) {
-            return StatusBadge.StatusType.INFO;
-        }
-        return switch (pmState) {
-            case BOOKED -> StatusBadge.StatusType.SUCCESS;
-            case WITHDRAWN, CANCELED, NO_ALTERNATIVE -> StatusBadge.StatusType.DANGER;
-            case ALTERATION_ANNOUNCED, ALTERATION_OFFERED -> StatusBadge.StatusType.WARNING;
-            case NEW, SUPERSEDED -> StatusBadge.StatusType.NEUTRAL;
-            default -> StatusBadge.StatusType.INFO;
-        };
     }
 
     /** Accept/reject buttons shown on the order when RailOpt has offered a path alteration. */
@@ -408,36 +348,6 @@ public class OrderPositionRow extends Div {
         return badge;
     }
 
-    /**
-     * View-only link into RailOpt for a transferred FAHRPLAN position. Sending happens
-     * automatically on save (see the Timetable Builder hint), so this button only opens the train
-     * in RailOpt.
-     */
-    private Button createPathManagerButton() {
-        boolean show =
-                position.getType() == PositionType.FAHRPLAN
-                        && position.getPmReferenceTrainId() != null;
-
-        Button btn = new Button(VaadinIcon.TRAIN.create());
-        btn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
-        btn.setVisible(show);
-        if (show) {
-            btn.setTooltipText(translator.apply("position.viewInPm", new Object[0]));
-            btn.getStyle().set("color", "var(--rom-accent)");
-            btn.addClickListener(
-                    e ->
-                            UI.getCurrent()
-                                    .navigate(
-                                            "pathmanager",
-                                            QueryParameters.simple(
-                                                    Map.of(
-                                                            "train",
-                                                            position.getPmReferenceTrainId()
-                                                                    .toString()))));
-        }
-        return btn;
-    }
-
     private void openPositionHistory() {
         if (auditService == null) {
             return;
@@ -451,13 +361,13 @@ public class OrderPositionRow extends Div {
         dialog.open();
     }
 
-    private void navigateToArchiveView() {
+    private void navigateToDetail() {
         if (position.getOrder() != null) {
             UI.getCurrent()
                     .navigate(
                             "orders/"
                                     + position.getOrder().getId()
-                                    + "/timetable/"
+                                    + "/positions/"
                                     + position.getId());
         }
     }

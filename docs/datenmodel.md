@@ -443,7 +443,8 @@ Eine `Bestellposition` deckt einen extern zu beschaffenden Ressourcenbedarf.
 | Auftragsposition | Ressourcenbedarf | 1 zu 0..* | Komposition | Ressourcenbedarfe gehoeren zur Position |
 | Auftragsposition | Bestellposition | 1 zu 0..* | Komposition | Bestellpositionen entstehen unter einer Position |
 | Ressourcenbedarf | Fahrplanarchiv | 0..* zu 0..1 | Assoziation | Nur `CAPACITY` verweist auf ein Archiv |
-| Geschaeft | Auftragsposition | 0..* zu 0..* | Assoziation | Fachliche Verknuepfung m:n |
+| Geschaeft | Auftragsposition | 0..* zu 0..* | Assoziation | Fachliche Verknuepfung m:n (Join `business_order_positions`, **Envers-auditiert** seit 06.2026) |
+| Geschaeft | Bestellposition | 0..* zu 0..* | Assoziation | Fachliche Verknuepfung m:n (Join `business_purchase_positions`, **Envers-auditiert** seit 06.2026) |
 
 ## Fachliche Regeln des Datenmodells
 

@@ -57,12 +57,13 @@ public class OrderPositionDetailView extends VerticalLayout {
             return;
         }
 
-        add(buildActionBar(orderId, tr));
+        add(buildActionBar(orderId, pos, positionId, tr));
         add(buildBody(pos, tr));
         add(new LinkedBusinessesPanel(businessService.findByLinkedOrderPosition(positionId), tr));
     }
 
-    private HorizontalLayout buildActionBar(UUID orderId, Function<String, String> tr) {
+    private HorizontalLayout buildActionBar(
+            UUID orderId, OrderPosition pos, UUID positionId, Function<String, String> tr) {
         var bar = new HorizontalLayout();
         bar.addClassName("order-pos-detail__actions");
         bar.setWidthFull();
@@ -84,6 +85,18 @@ public class OrderPositionDetailView extends VerticalLayout {
                 .listenOn(this);
 
         bar.add(back);
+
+        // FAHRPLAN positions: one click deeper to the timetable (keeps a single canonical detail).
+        if (pos.getType() == com.ordermgmt.railway.domain.order.model.PositionType.FAHRPLAN) {
+            var timetable =
+                    new Button(tr.apply("position.openTimetable"), VaadinIcon.CALENDAR.create());
+            timetable.addThemeVariants(ButtonVariant.LUMO_SMALL);
+            timetable.addClickListener(
+                    e ->
+                            UI.getCurrent()
+                                    .navigate("orders/" + orderId + "/timetable/" + positionId));
+            bar.add(timetable);
+        }
         return bar;
     }
 
@@ -104,6 +117,12 @@ public class OrderPositionDetailView extends VerticalLayout {
         form.addFormItem(
                 label(pos.getType() == null ? "—" : pos.getType().name()),
                 tr.apply("position.type"));
+        form.addFormItem(
+                label(
+                        pos.getInternalStatus() == null
+                                ? "—"
+                                : tr.apply("position.status." + pos.getInternalStatus().name())),
+                tr.apply("order.internalStatus"));
         form.addFormItem(label(safe(pos.getServiceType())), tr.apply("position.serviceType"));
         form.addFormItem(
                 label(safe(pos.getOperationalTrainNumber())),

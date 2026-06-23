@@ -54,6 +54,13 @@ public class AuditService {
         return getEntityHistory(ResourceNeed.class, resourceNeedId);
     }
 
+    /** Returns audit history for a PurchasePosition. */
+    public List<AuditEntry> getPurchasePositionHistory(UUID purchasePositionId) {
+        return getEntityHistory(
+                com.ordermgmt.railway.domain.order.model.PurchasePosition.class,
+                purchasePositionId);
+    }
+
     /** Returns audit history for a Business (status, assignee, fields, links). */
     public List<AuditEntry> getBusinessHistory(UUID businessId) {
         return getEntityHistory(
@@ -186,7 +193,15 @@ public class AuditService {
                 || "getUpdatedAt".equals(methodName)
                 || "getUpdatedBy".equals(methodName)
                 || "getCreatedAt".equals(methodName)
-                || "getCreatedBy".equals(methodName);
+                || "getCreatedBy".equals(methodName)
+                // Audited collections: comparing reconstructed snapshots can lazy-load/throw and
+                // the
+                // element equality is unreliable. The collection change still produced this
+                // revision
+                // (and a row in the *_audit join table), so we just skip the field-level diff here.
+                || "getOrderPositions".equals(methodName)
+                || "getPurchasePositions".equals(methodName)
+                || "getDocuments".equals(methodName);
     }
 
     private boolean objectsEqual(Object a, Object b) {

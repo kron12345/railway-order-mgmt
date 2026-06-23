@@ -43,6 +43,7 @@ public class ResourcePanel extends Div {
     private final ResourceCatalogItemRepository catalogItemRepository;
     private final PurchasePositionRepository purchasePositionRepository;
     private final AuditService auditService;
+    private final com.ordermgmt.railway.domain.business.service.BusinessService businessService;
     private final BiFunction<String, Object[], String> translator;
     private final Runnable refreshCallback;
 
@@ -60,6 +61,7 @@ public class ResourcePanel extends Div {
             ResourceCatalogItemRepository catalogItemRepository,
             PurchasePositionRepository purchasePositionRepository,
             AuditService auditService,
+            com.ordermgmt.railway.domain.business.service.BusinessService businessService,
             BiFunction<String, Object[], String> translator,
             Runnable refreshCallback,
             boolean editable) {
@@ -69,6 +71,7 @@ public class ResourcePanel extends Div {
         this.catalogItemRepository = catalogItemRepository;
         this.purchasePositionRepository = purchasePositionRepository;
         this.auditService = auditService;
+        this.businessService = businessService;
         this.translator = translator;
         this.refreshCallback = refreshCallback;
         this.editable = editable;
@@ -113,6 +116,14 @@ public class ResourcePanel extends Div {
         contentSlot.add(createFooterButtons());
     }
 
+    /** Reload this panel and notify the parent — used by the purchase action buttons. */
+    private void reloadAll() {
+        loadResources();
+        if (refreshCallback != null) {
+            refreshCallback.run();
+        }
+    }
+
     private Div createPanelHeader(int count) {
         Div header = new Div();
         header.getStyle()
@@ -135,7 +146,9 @@ public class ResourcePanel extends Div {
         Div row = new Div();
         row.setWidthFull();
         row.getStyle()
-                .set("border-left", "2px solid " + resourceColor(rn.getResourceType()))
+                .set(
+                        "border-left",
+                        "2px solid " + ResourceBadges.resourceColor(rn.getResourceType()))
                 .set("padding", "4px 0 4px 10px")
                 .set("margin-bottom", "4px");
 
@@ -147,12 +160,15 @@ public class ResourcePanel extends Div {
         info.getStyle().set("flex-wrap", "wrap").set("gap", "4px");
 
         info.add(createTypeBadge(rn));
-        info.add(createDescriptionLabel(rn));
+        Span description = createDescriptionLabel(rn);
+        if (description != null) {
+            info.add(description);
+        }
         info.add(createCoverageBadge(rn));
         info.add(createOriginBadge(rn));
 
         if (rn.getQuantity() != null && rn.getQuantity() > 1) {
-            info.add(createSmallBadge("x" + rn.getQuantity(), "var(--rom-text-secondary)"));
+            info.add(ResourceBadges.small("x" + rn.getQuantity(), "var(--rom-text-secondary)"));
         }
 
         // Audit history button
@@ -179,7 +195,7 @@ public class ResourcePanel extends Div {
             row.add(intern);
         } else {
             for (PurchasePosition pp : purchases) {
-                row.add(createPurchaseRow(pp));
+                row.add(createPurchaseRow(pp, rn));
             }
         }
 
@@ -191,7 +207,7 @@ public class ResourcePanel extends Div {
         return row;
     }
 
-    private Div createPurchaseRow(PurchasePosition pp) {
+    private Div createPurchaseRow(PurchasePosition pp, ResourceNeed need) {
         Div row = new Div();
         row.getStyle()
                 .set("display", "flex")
@@ -209,6 +225,13 @@ public class ResourcePanel extends Div {
                 .set("color", "var(--rom-accent)");
         row.add(number);
 
+        // Free-text description (entered in the purchase dialog) — shown muted next to the number.
+        if (pp.getDescription() != null && !pp.getDescription().isBlank()) {
+            Span desc = new Span(pp.getDescription());
+            desc.getStyle().set("font-size", "11px").set("color", "var(--rom-text-secondary)");
+            row.add(desc);
+        }
+
         // Status badge
         row.add(createPurchaseStatusBadge(pp));
 
@@ -216,78 +239,45 @@ public class ResourcePanel extends Div {
         if (pp.getPmPathRequestId() != null) {
             if (pp.getPmProcessState() != null) {
                 row.add(
-                        createSmallBadge(
+                        ResourceBadges.small(
                                 "TTT: " + pp.getPmProcessState(), "var(--rom-status-info)"));
             }
             if (pp.getPmTtrPhase() != null) {
-                row.add(createSmallBadge(pp.getPmTtrPhase(), "var(--rom-text-secondary)"));
+                row.add(ResourceBadges.small(pp.getPmTtrPhase(), "var(--rom-text-secondary)"));
             }
 
             // Sync button (mutators on an unlocked order only)
             if (editable) {
-                Button syncBtn = new Button(VaadinIcon.REFRESH.create());
-                syncBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
-                syncBtn.getStyle()
-                        .set("color", "var(--rom-text-muted)")
-                        .set("min-width", "24px")
-                        .set("padding", "0");
-                syncBtn.setTooltipText(tr("purchase.synced"));
-                syncBtn.addClickListener(
-                        e -> {
-                            purchaseOrderService.syncTttStatus(pp.getId());
-                            loadResources();
-                            if (refreshCallback != null) refreshCallback.run();
-                        });
-                row.add(syncBtn);
+                row.add(
+                        PurchaseOrderButtons.sync(
+                                pp, purchaseOrderService, translator, this::reloadAll));
             }
         }
 
         // TTT order button for unordered CAPACITY purchases (mutators on an unlocked order only)
         if (editable
                 && pp.getPmPathRequestId() == null
-                && pp.getResourceNeed() != null
-                && pp.getResourceNeed().getResourceType() == ResourceType.CAPACITY) {
-            Button tttBtn = new Button(tr("purchase.triggerTtt"));
-            tttBtn.addThemeVariants(ButtonVariant.LUMO_SMALL);
-            tttBtn.getStyle()
-                    .set("font-size", "10px")
-                    .set("color", "var(--rom-status-warning)")
-                    .set("border", "1px solid var(--rom-status-warning)")
-                    .set("background", "rgba(255,184,0,0.08)")
-                    .set("padding", "1px 6px");
-            tttBtn.addClickListener(
-                    e -> {
-                        TttOrderDialog tttDialog =
-                                new TttOrderDialog(
-                                        pp.getId(),
-                                        pp.getPositionNumber(),
-                                        position.getOperationalTrainNumber(),
-                                        buildRouteLabel(),
-                                        translator);
-                        tttDialog.addSubmitListener(
-                                evt -> {
-                                    try {
-                                        purchaseOrderService.triggerTttOrder(
-                                                evt.getPurchasePositionId(),
-                                                evt.getTttAttributesJson());
-                                        loadResources();
-                                        if (refreshCallback != null) refreshCallback.run();
-                                        Notification.show(
-                                                        "TTT",
-                                                        2000,
-                                                        Notification.Position.BOTTOM_END)
-                                                .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
-                                    } catch (Exception ex) {
-                                        Notification.show(
-                                                        ex.getMessage(),
-                                                        4000,
-                                                        Notification.Position.BOTTOM_END)
-                                                .addThemeVariants(NotificationVariant.LUMO_ERROR);
-                                    }
-                                });
-                        tttDialog.open();
-                    });
-            row.add(tttBtn);
+                && need.getResourceType() == ResourceType.CAPACITY) {
+            row.add(
+                    PurchaseOrderButtons.ttt(
+                            pp,
+                            position.getOperationalTrainNumber(),
+                            buildRouteLabel(),
+                            purchaseOrderService,
+                            translator,
+                            this::reloadAll));
+        }
+
+        // R²P channel for non-capacity external needs (e.g. Lokführer): mock "Bestellen" →
+        // BESTELLT,
+        // shown like the TTT flow so it reads the same way.
+        if (isR2pPurchase(need)) {
+            row.add(ResourceBadges.small("R²P", "var(--rom-status-info)"));
+            if (editable && pp.getPurchaseStatus() == PurchaseStatus.OFFEN) {
+                row.add(
+                        PurchaseOrderButtons.r2p(
+                                pp, purchaseOrderService, translator, this::reloadAll));
+            }
         }
 
         // Ordered-at timestamp
@@ -299,6 +289,14 @@ public class ResourcePanel extends Div {
                     .set("color", "var(--rom-text-muted)")
                     .set("font-family", "'JetBrains Mono', monospace");
             row.add(orderedAt);
+        }
+
+        // Linked businesses for this purchase position (clickable chips → business detail).
+        var linkedBusinesses = businessService.findByLinkedPurchasePosition(pp.getId());
+        if (!linkedBusinesses.isEmpty()) {
+            row.add(
+                    new com.ordermgmt.railway.ui.component.business.BusinessChips(
+                            linkedBusinesses, this::tr));
         }
 
         return row;
@@ -393,6 +391,12 @@ public class ResourcePanel extends Div {
         return btn;
     }
 
+    /** A non-capacity external purchase is ordered via the (mock) R²P channel, not TTT. */
+    private boolean isR2pPurchase(ResourceNeed need) {
+        return need.getCoverageType() == CoverageType.EXTERNAL
+                && need.getResourceType() != ResourceType.CAPACITY;
+    }
+
     private List<PurchasePosition> findPurchasesForNeed(ResourceNeed rn) {
         return purchasePositionRepository.findByResourceNeedId(rn.getId());
     }
@@ -412,17 +416,29 @@ public class ResourcePanel extends Div {
 
     private Span createTypeBadge(ResourceNeed rn) {
         String label = tr("resource.type." + rn.getResourceType().name());
-        String color = resourceColor(rn.getResourceType());
-        return createSmallBadge(label, color);
+        String color = ResourceBadges.resourceColor(rn.getResourceType());
+        return ResourceBadges.small(label, color);
     }
 
+    /**
+     * Descriptive label next to the type badge. Returns {@code null} when there is nothing to add
+     * beyond the badge, so the row no longer prints e.g. "Kapazität · Kapazität". For a CAPACITY
+     * need — the Fahrplantrasse that has to be ordered — the route is shown instead, which is more
+     * telling than repeating the type.
+     */
     private Span createDescriptionLabel(ResourceNeed rn) {
         String text = rn.getDescription() != null ? rn.getDescription() : "";
         if (rn.getCatalogItem() != null) {
             text = rn.getCatalogItem().getName() + (text.isEmpty() ? "" : " " + text);
         }
+        if (text.isEmpty() && rn.getResourceType() == ResourceType.CAPACITY) {
+            String route = buildRouteLabel();
+            if (route != null && !route.isBlank()) {
+                text = route;
+            }
+        }
         if (text.isEmpty()) {
-            text = tr("resource.type." + rn.getResourceType().name());
+            return null;
         }
         Span label = new Span(text);
         label.getStyle()
@@ -438,50 +454,18 @@ public class ResourcePanel extends Div {
                 rn.getCoverageType() == CoverageType.EXTERNAL
                         ? "var(--rom-status-warning)"
                         : "var(--rom-status-active)";
-        return createSmallBadge(label, color);
+        return ResourceBadges.small(label, color);
     }
 
     private Span createOriginBadge(ResourceNeed rn) {
         String label = tr("resource.origin." + rn.getOrigin().name());
-        return createSmallBadge(label, "var(--rom-text-muted)");
+        return ResourceBadges.small(label, "var(--rom-text-muted)");
     }
 
     private Span createPurchaseStatusBadge(PurchasePosition pp) {
         String label = tr("purchase.status." + pp.getPurchaseStatus().name());
-        String color = purchaseStatusColor(pp.getPurchaseStatus());
-        return createSmallBadge(label, color);
-    }
-
-    private Span createSmallBadge(String text, String color) {
-        Span badge = new Span(text);
-        badge.getStyle()
-                .set("font-size", "9px")
-                .set("font-family", "'JetBrains Mono', monospace")
-                .set("font-weight", "600")
-                .set("padding", "1px 5px")
-                .set("border-radius", "3px")
-                .set("color", color)
-                .set("background", "color-mix(in srgb, " + color + " 10%, transparent)")
-                .set("border", "1px solid color-mix(in srgb, " + color + " 20%, transparent)");
-        return badge;
-    }
-
-    private String resourceColor(ResourceType type) {
-        return switch (type) {
-            case CAPACITY -> "var(--rom-status-info)";
-            case VEHICLE -> "var(--rom-status-active)";
-            case PERSONNEL -> "var(--rom-status-warning)";
-        };
-    }
-
-    private String purchaseStatusColor(PurchaseStatus status) {
-        return switch (status) {
-            case OFFEN -> "var(--rom-text-muted)";
-            case BESTELLT -> "var(--rom-status-info)";
-            case BESTAETIGT -> "var(--rom-status-active)";
-            case ABGELEHNT -> "var(--rom-status-danger)";
-            case STORNIERT -> "var(--rom-status-neutral)";
-        };
+        String color = ResourceBadges.purchaseStatusColor(pp.getPurchaseStatus());
+        return ResourceBadges.small(label, color);
     }
 
     private String buildRouteLabel() {

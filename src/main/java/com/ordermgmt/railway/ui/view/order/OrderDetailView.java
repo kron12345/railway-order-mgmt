@@ -189,6 +189,7 @@ public class OrderDetailView extends VerticalLayout {
                         catalogItemRepository,
                         purchasePositionRepository,
                         auditService,
+                        businessService,
                         this::getTranslation);
 
         // Tab sheet: Positionen | Verknüpfte Geschäfte

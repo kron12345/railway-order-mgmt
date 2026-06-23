@@ -77,15 +77,48 @@ public class PurchaseOrderService {
                                         new IllegalArgumentException(
                                                 "Resource need not found: " + resourceNeedId));
 
+        OrderPosition orderPosition = need.getOrderPosition();
         PurchasePosition pp = new PurchasePosition();
         pp.setPositionNumber(generatePositionNumber());
-        pp.setOrderPosition(need.getOrderPosition());
+        pp.setOrderPosition(orderPosition);
         pp.setResourceNeed(need);
         pp.setDescription(description);
         pp.setValidity(validity);
         pp.setPurchaseStatus(PurchaseStatus.OFFEN);
 
-        return purchasePositionRepository.save(pp);
+        PurchasePosition saved = purchasePositionRepository.save(pp);
+        // Keep the parent's managed collection in sync. OrderPosition.purchasePositions uses
+        // orphanRemoval=true, so a later save of a stale OrderPosition (its in-memory collection
+        // not
+        // containing this row) would otherwise silently delete the freshly created purchase.
+        if (orderPosition != null
+                && orderPosition.getPurchasePositions() != null
+                && !orderPosition.getPurchasePositions().contains(saved)) {
+            orderPosition.getPurchasePositions().add(saved);
+        }
+        return saved;
+    }
+
+    /**
+     * Mock "R²P" order for a non-capacity external need (e.g. a Lokführer). The real R²P interface
+     * is not yet defined, so for the demo this simply marks the purchase as {@code BESTELLT} —
+     * mirroring the visible status of the TTT flow without creating any reference train or path
+     * request.
+     */
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
+    public void triggerR2pOrder(UUID purchasePositionId) {
+        PurchasePosition pp =
+                purchasePositionRepository
+                        .findById(purchasePositionId)
+                        .orElseThrow(
+                                () ->
+                                        new IllegalArgumentException(
+                                                "Purchase position not found: "
+                                                        + purchasePositionId));
+        pp.setPurchaseStatus(PurchaseStatus.BESTELLT);
+        pp.setOrderedAt(Instant.now());
+        pp.setStatusTimestamp(Instant.now());
+        purchasePositionRepository.save(pp);
     }
 
     /**

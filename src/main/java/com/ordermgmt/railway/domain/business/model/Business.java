@@ -59,6 +59,9 @@ public class Business {
     @OneToMany(mappedBy = "business", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<BusinessDocument> documents = new ArrayList<>();
 
+    // @Audited on the collections so link/unlink is captured by Envers (audit join tables
+    // business_order_positions_audit / business_purchase_positions_audit, V28/V29).
+    @Audited
     @ManyToMany
     @JoinTable(
             name = "business_order_positions",
@@ -67,6 +70,7 @@ public class Business {
     private List<com.ordermgmt.railway.domain.order.model.OrderPosition> orderPositions =
             new ArrayList<>();
 
+    @Audited
     @ManyToMany
     @JoinTable(
             name = "business_purchase_positions",

@@ -44,6 +44,7 @@ public class OrderPositionPanel extends Div {
     private final ResourceCatalogItemRepository catalogItemRepository;
     private final PurchasePositionRepository purchasePositionRepository;
     private final AuditService auditService;
+    private final com.ordermgmt.railway.domain.business.service.BusinessService businessService;
     private final BiFunction<String, Object[], String> translator;
     private final VerticalLayout rowContainer = new VerticalLayout();
 
@@ -64,6 +65,7 @@ public class OrderPositionPanel extends Div {
             ResourceCatalogItemRepository catalogItemRepository,
             PurchasePositionRepository purchasePositionRepository,
             AuditService auditService,
+            com.ordermgmt.railway.domain.business.service.BusinessService businessService,
             BiFunction<String, Object[], String> translator) {
         this.order = order;
         this.orderService = orderService;
@@ -75,6 +77,7 @@ public class OrderPositionPanel extends Div {
         this.catalogItemRepository = catalogItemRepository;
         this.purchasePositionRepository = purchasePositionRepository;
         this.auditService = auditService;
+        this.businessService = businessService;
         this.translator = translator;
 
         setWidthFull();
@@ -164,6 +167,16 @@ public class OrderPositionPanel extends Div {
                             auditService,
                             editable));
 
+            // Linked businesses for this position (clickable chips → business detail).
+            var linkedBusinesses = businessService.findByLinkedOrderPosition(pos.getId());
+            if (!linkedBusinesses.isEmpty()) {
+                var chips =
+                        new com.ordermgmt.railway.ui.component.business.BusinessChips(
+                                linkedBusinesses, this::t);
+                chips.getStyle().set("margin", "0 12px 6px 12px");
+                rowContainer.add(chips);
+            }
+
             // Resource panel (collapsible, shown below each position row)
             long resCount = pos.getResourceNeeds() != null ? pos.getResourceNeeds().size() : 0;
             if (resCount > 0) {
@@ -175,6 +188,7 @@ public class OrderPositionPanel extends Div {
                                 catalogItemRepository,
                                 purchasePositionRepository,
                                 auditService,
+                                businessService,
                                 translator,
                                 this::refreshPositions,
                                 editable);
@@ -227,7 +241,13 @@ public class OrderPositionPanel extends Div {
     private void openServiceDialog(OrderPosition existing) {
         ServicePositionDialog dialog =
                 new ServicePositionDialog(
-                        order, existing, orderService, opRepo, tagRepo, translator);
+                        order,
+                        existing,
+                        orderService,
+                        opRepo,
+                        tagRepo,
+                        businessService,
+                        translator);
         dialog.addSaveListener(e -> refreshPositions());
         dialog.open();
     }
