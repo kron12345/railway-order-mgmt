@@ -205,6 +205,36 @@ public class BusinessService {
         businessRepository.save(business);
     }
 
+    /**
+     * Reconciles ALL business links of one order position to exactly {@code businessIds} in a
+     * single transaction (links the added, unlinks the removed) — replaces the per-link/unlink loop
+     * the UI used to issue. Managed entities flush on commit.
+     */
+    @PreAuthorize(MUTATION_ROLES)
+    @Transactional
+    public void setOrderPositionLinks(UUID orderPositionId, java.util.Set<UUID> businessIds) {
+        OrderPosition position =
+                orderPositionRepository
+                        .findById(orderPositionId)
+                        .orElseThrow(
+                                () ->
+                                        new EntityNotFoundException(
+                                                "OrderPosition not found: " + orderPositionId));
+        java.util.Set<UUID> target = businessIds == null ? java.util.Set.of() : businessIds;
+        java.util.Set<UUID> linkedIds = new java.util.HashSet<>();
+        for (Business b : businessRepository.findByLinkedOrderPositionId(orderPositionId)) {
+            linkedIds.add(b.getId());
+            if (!target.contains(b.getId())) {
+                b.getOrderPositions().removeIf(p -> p.getId().equals(orderPositionId));
+            }
+        }
+        for (Business b : businessRepository.findAllById(target)) {
+            if (!linkedIds.contains(b.getId())) {
+                b.getOrderPositions().add(position);
+            }
+        }
+    }
+
     /** Get all linked order positions for a business. */
     @Transactional(readOnly = true)
     public List<OrderPosition> getLinkedOrderPositions(UUID businessId) {

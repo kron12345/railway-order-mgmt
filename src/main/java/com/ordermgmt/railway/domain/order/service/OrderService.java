@@ -169,38 +169,28 @@ public class OrderService {
 
     @Transactional(readOnly = true)
     public DashboardStats dashboardStats() {
-        List<Order> all = orderRepository.findAll();
         LocalDate horizon = LocalDate.now().plusDays(CRITICAL_DEADLINE_DAYS);
 
         Map<ProcessStatus, Long> byStatus = new EnumMap<>(ProcessStatus.class);
         for (ProcessStatus s : ProcessStatus.values()) {
             byStatus.put(s, 0L);
         }
-
-        long active = 0;
-        long planning = 0;
-        long production = 0;
-        long critical = 0;
-        for (Order order : all) {
-            ProcessStatus status = order.getProcessStatus();
-            if (status != null) {
-                byStatus.merge(status, 1L, Long::sum);
-            }
-            boolean finalPhase = status == ProcessStatus.ABRECHNUNG_NACHBEREITUNG;
-            if (!finalPhase) {
-                active++;
-            }
-            if (status == ProcessStatus.PLANUNG) {
-                planning++;
-            }
-            if (status == ProcessStatus.PRODUKTION) {
-                production++;
-            }
-            if (!finalPhase && order.getValidTo() != null && !order.getValidTo().isAfter(horizon)) {
-                critical++;
+        long total = 0;
+        for (Object[] row : orderRepository.countByProcessStatusGrouped()) {
+            long count = (Long) row[1];
+            total += count;
+            if (row[0] != null) {
+                byStatus.put((ProcessStatus) row[0], count);
             }
         }
-        return new DashboardStats(all.size(), active, planning, production, critical, byStatus);
+        long inFinalPhase = byStatus.getOrDefault(ProcessStatus.ABRECHNUNG_NACHBEREITUNG, 0L);
+        long active = total - inFinalPhase;
+        long planning = byStatus.getOrDefault(ProcessStatus.PLANUNG, 0L);
+        long production = byStatus.getOrDefault(ProcessStatus.PRODUKTION, 0L);
+        long critical =
+                orderRepository.countCriticalDeadlines(
+                        ProcessStatus.ABRECHNUNG_NACHBEREITUNG, horizon);
+        return new DashboardStats(total, active, planning, production, critical, byStatus);
     }
 
     private void initializePositions(List<Order> orders) {

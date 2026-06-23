@@ -73,19 +73,10 @@ public class BusinessLinkField extends Div {
     public void applyTo(UUID orderPositionId) {
         Set<UUID> selected =
                 combo.getValue().stream().map(Business::getId).collect(Collectors.toSet());
-        Set<UUID> current =
-                businessService.findByLinkedOrderPosition(orderPositionId).stream()
-                        .map(Business::getId)
-                        .collect(Collectors.toSet());
-        for (UUID id : selected) {
-            if (!current.contains(id)) {
-                tryRun(() -> businessService.linkOrderPosition(id, orderPositionId));
-            }
-        }
-        for (UUID id : current) {
-            if (!selected.contains(id)) {
-                tryRun(() -> businessService.unlinkOrderPosition(id, orderPositionId));
-            }
+        try {
+            businessService.setOrderPositionLinks(orderPositionId, selected);
+        } catch (RuntimeException ex) {
+            // best-effort: linking must not abort the position save
         }
     }
 
@@ -126,13 +117,5 @@ public class BusinessLinkField extends Div {
                 });
         dialog.getFooter().add(cancel, create);
         dialog.open();
-    }
-
-    private void tryRun(Runnable r) {
-        try {
-            r.run();
-        } catch (RuntimeException ex) {
-            // best-effort: a single failed link/unlink must not abort the position save
-        }
     }
 }

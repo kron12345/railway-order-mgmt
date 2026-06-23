@@ -3,7 +3,9 @@ package com.ordermgmt.railway.domain.business.model;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import jakarta.persistence.*;
@@ -61,14 +63,16 @@ public class Business {
 
     // @Audited on the collections so link/unlink is captured by Envers (audit join tables
     // business_order_positions_audit / business_purchase_positions_audit, V28/V29).
+    // Set (not List/bag): link/unlink does a targeted INSERT/DELETE of one join row instead of a
+    // full DELETE+re-INSERT of all rows, and dedups automatically.
     @Audited
     @ManyToMany
     @JoinTable(
             name = "business_order_positions",
             joinColumns = @JoinColumn(name = "business_id"),
             inverseJoinColumns = @JoinColumn(name = "order_position_id"))
-    private List<com.ordermgmt.railway.domain.order.model.OrderPosition> orderPositions =
-            new ArrayList<>();
+    private Set<com.ordermgmt.railway.domain.order.model.OrderPosition> orderPositions =
+            new LinkedHashSet<>();
 
     @Audited
     @ManyToMany
@@ -76,8 +80,8 @@ public class Business {
             name = "business_purchase_positions",
             joinColumns = @JoinColumn(name = "business_id"),
             inverseJoinColumns = @JoinColumn(name = "purchase_position_id"))
-    private List<com.ordermgmt.railway.domain.order.model.PurchasePosition> purchasePositions =
-            new ArrayList<>();
+    private Set<com.ordermgmt.railway.domain.order.model.PurchasePosition> purchasePositions =
+            new LinkedHashSet<>();
 
     @CreatedDate
     @Column(nullable = false, updatable = false)
