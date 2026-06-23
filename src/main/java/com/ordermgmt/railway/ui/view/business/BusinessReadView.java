@@ -52,6 +52,9 @@ public class BusinessReadView extends VerticalLayout {
     private final AuditService auditService;
     private final java.util.function.Function<String, String> tr;
     private final Business business;
+    private final List<OrderPosition> linkedOrderPositions;
+    private final List<PurchasePosition> linkedPurchasePositions;
+    private final List<BusinessDocument> documents;
 
     public BusinessReadView(
             BusinessService businessService,
@@ -61,7 +64,14 @@ public class BusinessReadView extends VerticalLayout {
         this.businessService = businessService;
         this.auditService = auditService;
         this.tr = tr;
-        this.business = businessService.getById(businessId).orElse(null);
+        // One transaction loads the business + its three UI collections (was 4-5 findById).
+        var readModel = businessService.loadReadModel(businessId).orElse(null);
+        this.business = readModel == null ? null : readModel.business();
+        this.linkedOrderPositions =
+                readModel == null ? java.util.List.of() : readModel.orderPositions();
+        this.linkedPurchasePositions =
+                readModel == null ? java.util.List.of() : readModel.purchasePositions();
+        this.documents = readModel == null ? java.util.List.of() : readModel.documents();
 
         addClassName("biz-read");
         setPadding(false);
@@ -192,7 +202,7 @@ public class BusinessReadView extends VerticalLayout {
         card.addClassName("biz-card");
         card.add(sectionTitle(tr.apply("business.linkedPositions")));
 
-        List<OrderPosition> ops = businessService.getLinkedOrderPositions(business.getId());
+        List<OrderPosition> ops = linkedOrderPositions;
         if (ops.isEmpty()) {
             card.add(empty(tr.apply("business.noLinkedPositions")));
             return card;
@@ -258,7 +268,7 @@ public class BusinessReadView extends VerticalLayout {
         card.addClassName("biz-card");
         card.add(sectionTitle(tr.apply("business.linkedPurchasePositions")));
 
-        List<PurchasePosition> pps = businessService.getLinkedPurchasePositions(business.getId());
+        List<PurchasePosition> pps = linkedPurchasePositions;
         if (pps.isEmpty()) {
             card.add(empty(tr.apply("business.noLinkedPurchasePositions")));
             return card;
@@ -331,7 +341,7 @@ public class BusinessReadView extends VerticalLayout {
         card.addClassName("biz-card");
         card.add(sectionTitle(tr.apply("business.documents")));
 
-        List<BusinessDocument> docs = businessService.getDocuments(business.getId());
+        List<BusinessDocument> docs = documents;
         if (docs.isEmpty()) {
             card.add(empty(tr.apply("business.noDocuments")));
             return card;

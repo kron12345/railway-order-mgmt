@@ -253,6 +253,42 @@ public class BusinessService {
         return new java.util.ArrayList<>(business.getOrderPositions());
     }
 
+    /** A business plus its three UI collections, loaded together for the read view. */
+    public record BusinessReadModel(
+            Business business,
+            List<OrderPosition> orderPositions,
+            List<PurchasePosition> purchasePositions,
+            List<BusinessDocument> documents) {}
+
+    /**
+     * Loads a business and its linked order/purchase positions + documents in ONE transaction (one
+     * findById), so the read view no longer re-fetches the same aggregate per card.
+     */
+    @Transactional(readOnly = true)
+    public Optional<BusinessReadModel> loadReadModel(UUID businessId) {
+        return businessRepository
+                .findById(businessId)
+                .map(
+                        business -> {
+                            for (OrderPosition op : business.getOrderPositions()) {
+                                Hibernate.initialize(op.getOrder());
+                            }
+                            for (PurchasePosition pp : business.getPurchasePositions()) {
+                                OrderPosition op = pp.getOrderPosition();
+                                if (op != null) {
+                                    Hibernate.initialize(op);
+                                    Hibernate.initialize(op.getOrder());
+                                }
+                            }
+                            Hibernate.initialize(business.getDocuments());
+                            return new BusinessReadModel(
+                                    business,
+                                    new java.util.ArrayList<>(business.getOrderPositions()),
+                                    new java.util.ArrayList<>(business.getPurchasePositions()),
+                                    new java.util.ArrayList<>(business.getDocuments()));
+                        });
+    }
+
     /** Get all order positions (for linking). Eagerly fetches {@code order} for UI rendering. */
     @Transactional(readOnly = true)
     public List<OrderPosition> getAllOrderPositions() {
