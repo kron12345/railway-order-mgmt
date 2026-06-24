@@ -66,9 +66,11 @@ public final class TimetableFormatUtils {
         if (row.getActivityCodes() != null && !row.getActivityCodes().isEmpty()) {
             String label =
                     row.getActivityCodes().stream()
-                            .map(code -> findActivityOption(code, options)
-                                    .map(TimetableFormatUtils::activityOptionLabel)
-                                    .orElse(code))
+                            .map(
+                                    code ->
+                                            findActivityOption(code, options)
+                                                    .map(TimetableFormatUtils::activityOptionLabel)
+                                                    .orElse(code))
                             .reduce((left, right) -> left + ", " + right)
                             .orElse("—");
             return label.isBlank() ? "—" : label;

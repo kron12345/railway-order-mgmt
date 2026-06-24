@@ -29,9 +29,7 @@ class TttDraftBuilderTest {
 
         assertThat(draft.journeyLocations().getFirst().timings())
                 .extracting("qualifierCode", "time", "offset")
-                .containsExactly(
-                        tuple("ELD", "10:00", 1),
-                        tuple("LLD", "10:15", 1));
+                .containsExactly(tuple("ELD", "10:00", 1), tuple("LLD", "10:15", 1));
     }
 
     @Test
