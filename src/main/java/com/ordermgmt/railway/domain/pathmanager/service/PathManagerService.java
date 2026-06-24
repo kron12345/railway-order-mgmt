@@ -15,13 +15,21 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import com.ordermgmt.railway.domain.order.model.CoverageType;
 import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.order.model.PositionType;
+import com.ordermgmt.railway.domain.order.model.ResourceNeed;
+import com.ordermgmt.railway.domain.order.model.ResourceOrigin;
+import com.ordermgmt.railway.domain.order.model.ResourcePriority;
+import com.ordermgmt.railway.domain.order.model.ResourceType;
+import com.ordermgmt.railway.domain.order.model.ValidityJsonCodec;
 import com.ordermgmt.railway.domain.order.repository.OrderPositionRepository;
 import com.ordermgmt.railway.domain.order.repository.OrderRepository;
+import com.ordermgmt.railway.domain.order.repository.ResourceNeedRepository;
 import com.ordermgmt.railway.domain.pathmanager.model.PathProcessState;
 import com.ordermgmt.railway.domain.pathmanager.model.PmJourneyLocation;
 import com.ordermgmt.railway.domain.pathmanager.model.PmPlanningStatus;
@@ -42,6 +50,7 @@ import com.ordermgmt.railway.domain.timetable.model.TimetableArchive;
 import com.ordermgmt.railway.domain.timetable.model.TimetableRowData;
 import com.ordermgmt.railway.domain.timetable.model.TttJourneyLocationDraft;
 import com.ordermgmt.railway.domain.timetable.model.TttPathRequestDraft;
+import com.ordermgmt.railway.domain.timetable.repository.TimetableArchiveRepository;
 import com.ordermgmt.railway.domain.timetable.service.TttDraftBuilder;
 
 import lombok.RequiredArgsConstructor;
@@ -66,6 +75,8 @@ public class PathManagerService {
     private final TttDraftBuilder tttDraftBuilder;
     private final OrderRepository orderRepository;
     private final OrderPositionRepository orderPositionRepository;
+    private final TimetableArchiveRepository timetableArchiveRepository;
+    private final ResourceNeedRepository resourceNeedRepository;
 
     @PersistenceContext private EntityManager entityManager;
 
@@ -103,16 +114,9 @@ public class PathManagerService {
 
     /**
      * Mock capture: turns an unassigned RailOpt reference train into a FAHRPLAN order position
-     * under the given order and back-links the train ({@code sourcePositionId}). Minimal demo
-     * mapping — OTN, von/nach (first/last journey location of the latest version) and validity
-     * (calendar).
-     *
-     * <p>Accepted mock limitation: unlike a position built via {@code
-     * TimetableArchiveService.saveTimetablePosition}, the captured position has no {@code
-     * TimetableArchive} and no CAPACITY {@code ResourceNeed}, so "open timetable" simply returns to
-     * the order (handled gracefully in {@code TimetableArchiveView}) and the position is not
-     * TTT-orderable until enriched. Building the full archive from journey locations is out of
-     * scope for this demo mock.
+     * under the given order and back-links the train ({@code sourcePositionId}). Maps OTN, von/nach
+     * and validity, and builds a {@link TimetableArchive} + CAPACITY {@link ResourceNeed} from the
+     * journey locations so the captured position has a viewable timetable and is TTT-orderable.
      */
     @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
     public OrderPosition captureUnassignedTrainAsPosition(UUID trainId, UUID orderId) {
@@ -122,21 +126,38 @@ public class PathManagerService {
         }
         Order order = orderRepository.findById(orderId).orElseThrow();
 
+        List<PmJourneyLocation> locations = latestJourneyLocations(train);
+
         OrderPosition position = new OrderPosition();
         position.setOrder(order);
         position.setType(PositionType.FAHRPLAN);
         position.setName(positionName(train));
         position.setOperationalTrainNumber(train.getOperationalTrainNumber());
         position.setPmReferenceTrainId(train.getId());
-        applyRouteFromTrain(position, train);
+        if (!locations.isEmpty()) {
+            position.setFromLocation(locations.get(0).getPrimaryLocationName());
+            position.setToLocation(locations.get(locations.size() - 1).getPrimaryLocationName());
+        }
         if (train.getCalendarStart() != null) {
             position.setStart(train.getCalendarStart().atStartOfDay());
         }
         if (train.getCalendarEnd() != null) {
             position.setEnd(train.getCalendarEnd().atStartOfDay());
         }
+        if (train.getCalendarStart() != null && train.getCalendarEnd() != null) {
+            // Mock: treat the whole calendar window as operating days so validity-based features
+            // (purchase calendar) are populated.
+            position.setValidity(
+                    ValidityJsonCodec.toJson(
+                            train.getCalendarStart()
+                                    .datesUntil(train.getCalendarEnd().plusDays(1))
+                                    .toList()));
+        }
 
         OrderPosition saved = orderPositionRepository.save(position);
+        // Enrich with a timetable archive + CAPACITY need so the captured position has a viewable
+        // timetable and is TTT-orderable (not just a thin OTN/route stub).
+        enrichWithTimetableArchive(saved, locations);
         train.setSourcePositionId(saved.getId());
         referenceTrainRepository.save(train);
         return saved;
@@ -147,18 +168,69 @@ public class PathManagerService {
         return otn != null && !otn.isBlank() ? "OTN " + otn : train.getTridCore();
     }
 
-    private void applyRouteFromTrain(OrderPosition position, PmReferenceTrain train) {
-        List<PmJourneyLocation> locations =
-                train.getTrainVersions().stream()
-                        .max(Comparator.comparing(PmTrainVersion::getVersionNumber))
-                        .map(PmTrainVersion::getJourneyLocations)
-                        .orElseGet(List::of)
-                        .stream()
-                        .sorted(Comparator.comparing(PmJourneyLocation::getSequence))
-                        .toList();
-        if (!locations.isEmpty()) {
-            position.setFromLocation(locations.get(0).getPrimaryLocationName());
-            position.setToLocation(locations.get(locations.size() - 1).getPrimaryLocationName());
+    private List<PmJourneyLocation> latestJourneyLocations(PmReferenceTrain train) {
+        return train.getTrainVersions().stream()
+                .max(Comparator.comparing(PmTrainVersion::getVersionNumber))
+                .map(PmTrainVersion::getJourneyLocations)
+                .orElseGet(List::of)
+                .stream()
+                .sorted(Comparator.comparing(PmJourneyLocation::getSequence))
+                .toList();
+    }
+
+    /**
+     * Builds a {@link TimetableArchive} from the train's journey locations and links it via a new
+     * CAPACITY {@link ResourceNeed}, so a captured position behaves like a normally-built FAHRPLAN
+     * position ("Fahrplan öffnen" + TTT-orderable). No-op when the train has no journey locations.
+     */
+    private void enrichWithTimetableArchive(
+            OrderPosition position, List<PmJourneyLocation> locations) {
+        if (locations.isEmpty()) {
+            return;
+        }
+        List<TimetableRowData> rows = new ArrayList<>();
+        for (int i = 0; i < locations.size(); i++) {
+            PmJourneyLocation loc = locations.get(i);
+            TimetableRowData row = new TimetableRowData();
+            row.setSequence(loc.getSequence() != null ? loc.getSequence() : i + 1);
+            row.setUopid(loc.getUopid());
+            row.setName(loc.getPrimaryLocationName());
+            row.setCountry(loc.getCountryCodeIso());
+            if (loc.getJourneyLocationType() != null) {
+                row.setJourneyLocationType(loc.getJourneyLocationType());
+            }
+            row.setEstimatedArrival(loc.getArrivalTime());
+            row.setEstimatedDeparture(loc.getDepartureTime());
+            row.setCommercialArrival(loc.getArrivalTime());
+            row.setCommercialDeparture(loc.getDepartureTime());
+            rows.add(row);
+        }
+
+        TimetableArchive archive = new TimetableArchive();
+        archive.setTimetableType("FAHRPLAN");
+        archive.setOperationalTrainNumber(position.getOperationalTrainNumber());
+        archive.setRouteSummary(rows.getFirst().getName() + " → " + rows.getLast().getName());
+        archive.setTableData(writeRows(rows));
+        archive = timetableArchiveRepository.save(archive);
+
+        ResourceNeed need = new ResourceNeed();
+        need.setOrderPosition(position);
+        need.setResourceType(ResourceType.CAPACITY);
+        need.setCoverageType(CoverageType.EXTERNAL);
+        need.setQuantity(1);
+        need.setOrigin(ResourceOrigin.AUTO);
+        need.setPriority(ResourcePriority.MEDIUM);
+        need.setValidFrom(position.getStart() != null ? position.getStart().toLocalDate() : null);
+        need.setValidTo(position.getEnd() != null ? position.getEnd().toLocalDate() : null);
+        need.setLinkedFahrplanId(archive.getId());
+        resourceNeedRepository.save(need);
+    }
+
+    private String writeRows(List<TimetableRowData> rows) {
+        try {
+            return OBJECT_MAPPER.writeValueAsString(rows);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("Could not serialize captured timetable rows", e);
         }
     }
 
