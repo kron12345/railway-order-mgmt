@@ -17,6 +17,9 @@ public interface OrderPositionRepository extends JpaRepository<OrderPosition, UU
 
     List<OrderPosition> findByOrderId(UUID orderId);
 
+    /** Positions carrying a given OTN — used to attach inbound R2P orders to an existing train. */
+    List<OrderPosition> findByOperationalTrainNumber(String operationalTrainNumber);
+
     @Query("SELECT DISTINCT op FROM OrderPosition op LEFT JOIN FETCH op.order")
     List<OrderPosition> findAllWithOrder();
 

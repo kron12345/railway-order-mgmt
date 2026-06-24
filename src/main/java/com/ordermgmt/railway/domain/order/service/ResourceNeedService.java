@@ -88,6 +88,26 @@ public class ResourceNeedService {
             int quantity,
             CoverageType coverage,
             String description) {
+        return addResource(
+                positionId,
+                type,
+                catalogItemId,
+                quantity,
+                coverage,
+                description,
+                ResourceOrigin.MANUAL);
+    }
+
+    /** As {@link #addResource}, but with an explicit origin (e.g. {@link ResourceOrigin#R2P}). */
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
+    public ResourceNeed addResource(
+            UUID positionId,
+            ResourceType type,
+            UUID catalogItemId,
+            int quantity,
+            CoverageType coverage,
+            String description,
+            ResourceOrigin origin) {
         if (type == null) {
             throw new IllegalArgumentException("Resource type must not be null");
         }
@@ -112,7 +132,7 @@ public class ResourceNeedService {
         need.setCoverageType(coverage);
         need.setQuantity(quantity);
         need.setDescription(description);
-        need.setOrigin(ResourceOrigin.MANUAL);
+        need.setOrigin(origin);
         need.setPriority(ResourcePriority.MEDIUM);
         need.setValidFrom(resolveValidFrom(position));
         need.setValidTo(resolveValidTo(position));

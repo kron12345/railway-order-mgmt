@@ -4,5 +4,9 @@ package com.ordermgmt.railway.domain.order.model;
 public enum ResourceOrigin {
     AUTO,
     MANUAL,
-    PLANNING
+    PLANNING,
+    /**
+     * Created from an inbound R2P order (a third party sent a timetable + personnel/vehicle order).
+     */
+    R2P
 }
