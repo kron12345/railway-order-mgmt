@@ -54,6 +54,11 @@ public class OrderPositionPanel extends Div {
      */
     private final boolean editable = CurrentUserHelper.hasAnyRole("ADMIN", "DISPATCHER");
 
+    private final java.util.List<OrderPositionRow> rows = new java.util.ArrayList<>();
+    private boolean compactMode = false;
+    private boolean allExpanded = true;
+    private Button toggleAllButton;
+
     public OrderPositionPanel(
             Order order,
             OrderService orderService,
@@ -107,6 +112,32 @@ public class OrderPositionPanel extends Div {
 
         HorizontalLayout buttons = new HorizontalLayout();
         buttons.setSpacing(true);
+        buttons.setAlignItems(FlexComponent.Alignment.CENTER);
+
+        // View controls (for everyone): compact/full toggle + collapse-/expand-all.
+        toggleAllButton = new Button();
+        toggleAllButton.addThemeVariants(ButtonVariant.LUMO_SMALL);
+        applyToggleAllLabel(toggleAllButton);
+        toggleAllButton.addClickListener(
+                e -> {
+                    allExpanded = !allExpanded;
+                    rows.forEach(r -> r.setBodyExpanded(allExpanded));
+                    applyToggleAllLabel(toggleAllButton);
+                });
+
+        Button modeBtn = new Button(VaadinIcon.GRID_SMALL.create());
+        modeBtn.addThemeVariants(ButtonVariant.LUMO_SMALL);
+        applyModeButtonLabel(modeBtn);
+        modeBtn.addClickListener(
+                e -> {
+                    compactMode = !compactMode;
+                    allExpanded = !compactMode;
+                    applyModeButtonLabel(modeBtn);
+                    applyToggleAllLabel(toggleAllButton);
+                    refreshPositions();
+                });
+
+        buttons.add(modeBtn, toggleAllButton);
 
         // Add-position controls only for mutators on an unlocked order (SOB §5.7).
         if (editable) {
@@ -138,8 +169,18 @@ public class OrderPositionPanel extends Div {
         return header;
     }
 
+    private void applyModeButtonLabel(Button b) {
+        b.setText(compactMode ? t("position.view.full") : t("position.view.compact"));
+    }
+
+    private void applyToggleAllLabel(Button b) {
+        b.setText(allExpanded ? t("position.view.collapseAll") : t("position.view.expandAll"));
+        b.setIcon((allExpanded ? VaadinIcon.CHEVRON_UP : VaadinIcon.CHEVRON_DOWN).create());
+    }
+
     private void refreshPositions() {
         rowContainer.removeAll();
+        rows.clear();
         var positions = orderService.findPositionsByOrderId(order.getId());
 
         if (positions.isEmpty()) {
@@ -162,7 +203,7 @@ public class OrderPositionPanel extends Div {
 
         for (OrderPosition pos : positions) {
             PmReferenceTrain pmTrain = resolveTrain(pos);
-            rowContainer.add(
+            OrderPositionRow row =
                     new OrderPositionRow(
                             pos,
                             pmTrain != null ? pmTrain.getProcessState() : null,
@@ -173,7 +214,9 @@ public class OrderPositionPanel extends Div {
                             p -> respondToAlteration(p, true),
                             p -> respondToAlteration(p, false),
                             auditService,
-                            editable));
+                            editable);
+            rows.add(row);
+            rowContainer.add(row);
 
             // Linked businesses for this position (clickable chips → business detail).
             var linkedBusinesses =
@@ -183,27 +226,33 @@ public class OrderPositionPanel extends Div {
                         new com.ordermgmt.railway.ui.component.business.BusinessChips(
                                 linkedBusinesses, this::t);
                 chips.getStyle().set("margin", "0 12px 6px 12px");
-                rowContainer.add(chips);
+                row.addBodyContent(chips);
             }
 
-            // Resource panel (collapsible, shown below each position row)
+            // Resource panel — lazily built collapsible body. Its constructor loads resources, so
+            // a collapsed compact row pays no DB/UI build cost until the user expands it.
             long resCount = pos.getResourceNeeds() != null ? pos.getResourceNeeds().size() : 0;
             if (resCount > 0) {
-                ResourcePanel resourcePanel =
-                        new ResourcePanel(
-                                pos,
-                                resourceNeedService,
-                                purchaseOrderService,
-                                catalogItemRepository,
-                                purchasePositionRepository,
-                                auditService,
-                                businessService,
-                                translator,
-                                this::refreshPositions,
-                                editable);
-                resourcePanel.getStyle().set("margin", "0 12px 8px 12px");
-                rowContainer.add(resourcePanel);
+                row.addLazyBodyContent(
+                        () -> {
+                            ResourcePanel resourcePanel =
+                                    new ResourcePanel(
+                                            pos,
+                                            resourceNeedService,
+                                            purchaseOrderService,
+                                            catalogItemRepository,
+                                            purchasePositionRepository,
+                                            auditService,
+                                            businessService,
+                                            translator,
+                                            this::refreshPositions,
+                                            editable);
+                            resourcePanel.getStyle().set("margin", "0 12px 8px 12px");
+                            return resourcePanel;
+                        });
             }
+
+            row.setBodyExpanded(allExpanded);
         }
     }
 

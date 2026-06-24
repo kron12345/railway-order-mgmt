@@ -5,7 +5,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
+import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
@@ -41,6 +43,11 @@ public class OrderPositionRow extends Div {
     private final boolean editable;
     private final Div calendarSlot = new Div();
     private boolean calendarOpen = false;
+    private final Div bodySlot = new Div();
+    private final Button expandToggle = new Button(VaadinIcon.CHEVRON_DOWN.create());
+    private boolean bodyExpanded = true;
+    private final List<Supplier<Component>> lazyBody = new ArrayList<>();
+    private boolean lazyBuilt = false;
 
     public OrderPositionRow(
             OrderPosition position,
@@ -71,6 +78,11 @@ public class OrderPositionRow extends Div {
                 .set("transition", "background-color 120ms ease, box-shadow 120ms ease");
 
         add(createSummary(translator, onEdit, onDelete));
+
+        bodySlot.setWidthFull();
+        bodySlot.getStyle().set("box-sizing", "border-box");
+        bodySlot.setVisible(bodyExpanded);
+        add(bodySlot);
 
         calendarSlot.setWidthFull();
         calendarSlot
@@ -145,7 +157,14 @@ public class OrderPositionRow extends Div {
         actions.setSpacing(true);
         actions.setAlignItems(FlexComponent.Alignment.START);
 
-        HorizontalLayout row = new HorizontalLayout(info, actions);
+        expandToggle.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
+        expandToggle.addClassNames("op-action", "op-action--icon");
+        expandToggle.setTooltipText(t.apply("position.view.toggle", new Object[0]));
+        expandToggle.getStyle().set("align-self", "center");
+        expandToggle.addClickListener(e -> setBodyExpanded(!bodyExpanded));
+        expandToggle.setVisible(false); // shown once collapsible body content is added
+
+        HorizontalLayout row = new HorizontalLayout(expandToggle, info, actions);
         row.setWidthFull();
         row.setAlignItems(FlexComponent.Alignment.START);
         row.getStyle().set("padding", "10px 12px").set("gap", "12px").set("cursor", "default");
@@ -240,6 +259,14 @@ public class OrderPositionRow extends Div {
 
         if (meta.getComponentCount() > 0) {
             info.add(meta);
+        }
+
+        // Combined Bestellpositions-Status rollup (procurement + external TTT) — the at-a-glance
+        // status shown in compact/collapsed mode.
+        Div rollup = PurchaseStatusRollup.build(position, translator);
+        if (rollup.getComponentCount() > 0) {
+            rollup.getStyle().set("margin-top", "2px");
+            info.add(rollup);
         }
 
         if (hasText(position.getComment())) {
@@ -360,5 +387,44 @@ public class OrderPositionRow extends Div {
 
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
+    }
+
+    /** Adds eagerly-built collapsible body content (e.g. cheap linked-business chips). */
+    public void addBodyContent(Component component) {
+        bodySlot.add(component);
+        expandToggle.setVisible(true);
+    }
+
+    /**
+     * Registers expensive body content (e.g. the resource panel) built only on first expansion, so
+     * a collapsed position in compact mode pays no DB/UI build cost until the user opens it.
+     */
+    public void addLazyBodyContent(Supplier<Component> supplier) {
+        lazyBody.add(supplier);
+        expandToggle.setVisible(true);
+        // Built on first setBodyExpanded(true) — the panel always calls that after adding content.
+    }
+
+    /** Expands or collapses the body (resources / chips). The chevron only shows with content. */
+    public void setBodyExpanded(boolean expanded) {
+        this.bodyExpanded = expanded;
+        if (expanded) {
+            buildLazyBody();
+        } else if (calendarOpen) {
+            // A collapsed position hides its purchase calendar too, so "compact" stays compact.
+            calendarOpen = false;
+            calendarSlot.setVisible(false);
+        }
+        bodySlot.setVisible(expanded);
+        expandToggle.setIcon(
+                (expanded ? VaadinIcon.CHEVRON_DOWN : VaadinIcon.CHEVRON_RIGHT).create());
+    }
+
+    private void buildLazyBody() {
+        if (lazyBuilt) {
+            return;
+        }
+        lazyBuilt = true;
+        lazyBody.forEach(s -> bodySlot.add(s.get()));
     }
 }
