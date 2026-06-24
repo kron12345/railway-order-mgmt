@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.function.BiConsumer;
 
 import com.vaadin.flow.component.combobox.ComboBox;
@@ -141,6 +140,9 @@ public class AssigneeComboBox extends ComboBox<AssigneeComboBox.Item> {
 
     @Override
     public int hashCode() {
-        return Objects.hashCode(this);
+        // Identity hash, consistent with the identity-based equals above. NOTE: must NOT be
+        // Objects.hashCode(this) — that calls this.hashCode() and recurses into a
+        // StackOverflowError.
+        return System.identityHashCode(this);
     }
 }
