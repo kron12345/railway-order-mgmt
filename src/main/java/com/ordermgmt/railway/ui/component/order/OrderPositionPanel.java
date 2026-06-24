@@ -1,6 +1,8 @@
 package com.ordermgmt.railway.ui.component.order;
 
+import java.util.List;
 import java.util.function.BiFunction;
+import java.util.function.Predicate;
 
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
@@ -20,16 +22,23 @@ import com.ordermgmt.railway.domain.infrastructure.repository.OperationalPointRe
 import com.ordermgmt.railway.domain.infrastructure.repository.PredefinedTagRepository;
 import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
+import com.ordermgmt.railway.domain.order.model.PositionStatus;
 import com.ordermgmt.railway.domain.order.model.PositionType;
+import com.ordermgmt.railway.domain.order.model.PurchaseStatus;
 import com.ordermgmt.railway.domain.order.repository.PurchasePositionRepository;
 import com.ordermgmt.railway.domain.order.repository.ResourceCatalogItemRepository;
 import com.ordermgmt.railway.domain.order.service.AuditService;
 import com.ordermgmt.railway.domain.order.service.OrderService;
 import com.ordermgmt.railway.domain.order.service.PurchaseOrderService;
 import com.ordermgmt.railway.domain.order.service.ResourceNeedService;
+import com.ordermgmt.railway.domain.pathmanager.model.PathProcessState;
 import com.ordermgmt.railway.domain.pathmanager.model.PmReferenceTrain;
 import com.ordermgmt.railway.domain.pathmanager.service.PathManagerService;
 import com.ordermgmt.railway.infrastructure.keycloak.CurrentUserHelper;
+import com.ordermgmt.railway.ui.component.masterdetail.filter.FilterField;
+import com.ordermgmt.railway.ui.component.masterdetail.filter.FilterPanel;
+import com.ordermgmt.railway.ui.component.masterdetail.filter.PredicateSelectFilterField;
+import com.ordermgmt.railway.ui.component.masterdetail.filter.SelectFilterField;
 
 /** Displays and manages the positions that belong to an order. */
 public class OrderPositionPanel extends Div {
@@ -58,6 +67,9 @@ public class OrderPositionPanel extends Div {
     private boolean compactMode = false;
     private boolean allExpanded = true;
     private Button toggleAllButton;
+    private FilterPanel<OrderPosition> filterPanel;
+    private Predicate<OrderPosition> positionFilter = p -> true;
+    private boolean ready = false;
 
     public OrderPositionPanel(
             Order order,
@@ -93,13 +105,18 @@ public class OrderPositionPanel extends Div {
                 .set("padding", "var(--lumo-space-m) var(--lumo-space-l)")
                 .set("box-sizing", "border-box");
 
+        filterPanel = buildFilterPanel();
         add(createHeader());
+        add(filterPanel);
 
         rowContainer.setPadding(false);
         rowContainer.setSpacing(false);
         rowContainer.setWidthFull();
         add(rowContainer);
 
+        // The filter panel's initial recompute() fires onChange during construction; guard against
+        // that so we render exactly once here (and on every later filter change).
+        ready = true;
         refreshPositions();
     }
 
@@ -137,7 +154,7 @@ public class OrderPositionPanel extends Div {
                     refreshPositions();
                 });
 
-        buttons.add(modeBtn, toggleAllButton);
+        buttons.add(modeBtn, toggleAllButton, filterPanel.getToggle());
 
         // Add-position controls only for mutators on an unlocked order (SOB §5.7).
         if (editable) {
@@ -179,9 +196,15 @@ public class OrderPositionPanel extends Div {
     }
 
     private void refreshPositions() {
+        if (!ready) {
+            return; // still constructing; the constructor renders once after setup
+        }
         rowContainer.removeAll();
         rows.clear();
-        var positions = orderService.findPositionsByOrderId(order.getId());
+        var positions =
+                orderService.findPositionsByOrderId(order.getId()).stream()
+                        .filter(positionFilter)
+                        .toList();
 
         if (positions.isEmpty()) {
             Span empty = new Span(t("order.positions.empty"));
@@ -331,6 +354,54 @@ public class OrderPositionPanel extends Div {
             target += "?positionId=" + existing.getId();
         }
         UI.getCurrent().navigate(target);
+    }
+
+    /**
+     * Reusable, collapsible filter for this order's positions, by their Bestellpositions-status.
+     */
+    private FilterPanel<OrderPosition> buildFilterPanel() {
+        List<FilterField<OrderPosition>> fields =
+                List.of(
+                        new SelectFilterField<>(
+                                t("position.filter.internalStatus"),
+                                List.of(PositionStatus.values()),
+                                v -> t("position.status." + v.name()),
+                                OrderPosition::getInternalStatus),
+                        new PredicateSelectFilterField<OrderPosition, PathProcessState>(
+                                t("position.filter.tttStatus"),
+                                List.of(PathProcessState.values()),
+                                v -> t("pm.state." + v.name()),
+                                this::hasPurchaseWithTtt),
+                        new PredicateSelectFilterField<OrderPosition, PurchaseStatus>(
+                                t("position.filter.purchaseStatus"),
+                                List.of(PurchaseStatus.values()),
+                                v -> t("purchase.status." + v.name()),
+                                this::hasPurchaseWithStatus));
+        FilterPanel.Labels labels =
+                new FilterPanel.Labels(
+                        t("filter.toggle"),
+                        t("filter.clearAll"),
+                        t("filter.chip.clearAria"),
+                        t("filter.panel.aria"));
+        return new FilterPanel<>(
+                fields,
+                predicate -> {
+                    positionFilter = predicate;
+                    refreshPositions();
+                },
+                labels);
+    }
+
+    private boolean hasPurchaseWithTtt(OrderPosition pos, PathProcessState state) {
+        return pos.getPurchasePositions() != null
+                && pos.getPurchasePositions().stream()
+                        .anyMatch(pp -> state.name().equals(pp.getPmProcessState()));
+    }
+
+    private boolean hasPurchaseWithStatus(OrderPosition pos, PurchaseStatus status) {
+        return pos.getPurchasePositions() != null
+                && pos.getPurchasePositions().stream()
+                        .anyMatch(pp -> pp.getPurchaseStatus() == status);
     }
 
     private String t(String key) {
