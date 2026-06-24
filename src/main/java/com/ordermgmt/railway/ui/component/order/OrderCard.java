@@ -12,9 +12,11 @@ import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 
 import com.ordermgmt.railway.domain.business.model.AssignmentType;
 import com.ordermgmt.railway.domain.order.model.Order;
+import com.ordermgmt.railway.domain.order.model.OrderType;
 import com.ordermgmt.railway.domain.order.model.PositionStatus;
 import com.ordermgmt.railway.domain.order.model.ProcessStatus;
 import com.ordermgmt.railway.infrastructure.keycloak.KeycloakUserService;
+import com.ordermgmt.railway.ui.component.StatusBadge;
 import com.ordermgmt.railway.ui.component.business.AssigneeComboBox;
 
 /**
@@ -61,6 +63,16 @@ public class OrderCard extends Div {
 
         if (order.getInternalStatus() != null) {
             body.add(buildInternalStatusBadge(order.getInternalStatus(), tr));
+        }
+
+        OrderType orderType = OrderType.of(order);
+        if (orderType != null) {
+            body.add(
+                    new StatusBadge(
+                            tr.apply("order.type." + orderType.name()),
+                            orderType == OrderType.JAHRESBESTELLUNG
+                                    ? StatusBadge.StatusType.INFO
+                                    : StatusBadge.StatusType.WARNING));
         }
 
         Span title =

@@ -25,6 +25,7 @@ import com.vaadin.flow.spring.annotation.SpringComponent;
 import com.ordermgmt.railway.domain.customer.repository.CustomerRepository;
 import com.ordermgmt.railway.domain.infrastructure.repository.PredefinedTagRepository;
 import com.ordermgmt.railway.domain.order.model.Order;
+import com.ordermgmt.railway.domain.order.model.OrderType;
 import com.ordermgmt.railway.domain.order.model.ProcessStatus;
 import com.ordermgmt.railway.domain.order.repository.PurchasePositionRepository;
 import com.ordermgmt.railway.domain.order.repository.ResourceCatalogItemRepository;
@@ -35,6 +36,7 @@ import com.ordermgmt.railway.domain.order.service.ResourceNeedService;
 import com.ordermgmt.railway.domain.pathmanager.service.PathManagerService;
 import com.ordermgmt.railway.infrastructure.keycloak.CurrentUserHelper;
 import com.ordermgmt.railway.ui.component.AuditHistoryDialog;
+import com.ordermgmt.railway.ui.component.StatusBadge;
 import com.ordermgmt.railway.ui.component.order.OrderFormPanel;
 import com.ordermgmt.railway.ui.component.order.OrderInternalStatusBar;
 import com.ordermgmt.railway.ui.component.order.OrderPositionPanel;
@@ -311,6 +313,17 @@ public class OrderDetailView extends VerticalLayout {
         }
         Span dates = new Span(formatDates());
         metaRow.add(dates);
+
+        OrderType orderType = OrderType.of(order);
+        if (orderType != null) {
+            metaRow.add(new Span(" · "));
+            metaRow.add(
+                    new StatusBadge(
+                            getTranslation("order.type." + orderType.name()),
+                            orderType == OrderType.JAHRESBESTELLUNG
+                                    ? StatusBadge.StatusType.INFO
+                                    : StatusBadge.StatusType.WARNING));
+        }
 
         Div left = new Div(titleBlock, metaRow);
         left.addClassName("order-detail__left");
