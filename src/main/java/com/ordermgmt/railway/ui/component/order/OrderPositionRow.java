@@ -50,6 +50,7 @@ public class OrderPositionRow extends Div {
     private boolean bodyExpanded = true;
     private final List<Supplier<Component>> lazyBody = new ArrayList<>();
     private boolean lazyBuilt = false;
+    private HorizontalLayout summaryHeader;
 
     public OrderPositionRow(
             OrderPosition position,
@@ -212,6 +213,7 @@ public class OrderPositionRow extends Div {
             }
         }
         info.add(header);
+        summaryHeader = header;
 
         Div meta = new Div();
         meta.getStyle().set("display", "flex").set("flex-wrap", "wrap").set("gap", "6px");
@@ -392,6 +394,20 @@ public class OrderPositionRow extends Div {
 
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
+    }
+
+    /** Flags this position with a ⚠ deviation badge; the tooltip lists the deviation details. */
+    public void setDeviations(List<String> deviations) {
+        if (deviations == null || deviations.isEmpty() || summaryHeader == null) {
+            return;
+        }
+        StatusBadge badge =
+                new StatusBadge(
+                        "⚠ " + translator.apply("position.deviation", new Object[0]),
+                        StatusBadge.StatusType.DANGER);
+        badge.setTitle(String.join("\n", deviations));
+        badge.getStyle().set("cursor", "help");
+        summaryHeader.add(badge);
     }
 
     /** Shows a selection checkbox (for mutator bulk actions) and reports each toggle. */

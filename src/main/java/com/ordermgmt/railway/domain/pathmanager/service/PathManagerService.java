@@ -338,6 +338,18 @@ public class PathManagerService {
     }
 
     /**
+     * Like {@link #findById(UUID)} but eagerly initializes the version history and each version's
+     * journey locations, so callers (e.g. the deviation detector) can read them after the
+     * transaction closes.
+     */
+    @Transactional(readOnly = true)
+    public PmReferenceTrain findByIdWithVersions(UUID id) {
+        PmReferenceTrain train = findById(id);
+        train.getTrainVersions().forEach(version -> version.getJourneyLocations().size());
+        return train;
+    }
+
+    /**
      * Updates the planning status of a reference train, mirroring what RailOpt's rotation/resource
      * planning reports back. Orthogonal to the TTT path-process state.
      */

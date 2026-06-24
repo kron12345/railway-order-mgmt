@@ -265,6 +265,7 @@ public class OrderPositionPanel extends Div {
                 java.util.UUID pid = pos.getId();
                 row.enableSelection(selected -> toggleSelection(pid, selected));
             }
+            row.setDeviations(DeviationDetector.detect(pos, pmTrain, translator));
 
             // Linked businesses for this position (clickable chips → business detail).
             var linkedBusinesses =
@@ -314,7 +315,7 @@ public class OrderPositionPanel extends Div {
             return null;
         }
         try {
-            return pathManagerService.findById(pos.getPmReferenceTrainId());
+            return pathManagerService.findByIdWithVersions(pos.getPmReferenceTrainId());
         } catch (RuntimeException ex) {
             return null;
         }
