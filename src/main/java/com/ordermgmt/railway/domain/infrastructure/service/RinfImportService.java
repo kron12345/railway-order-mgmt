@@ -18,10 +18,12 @@ import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionOperations;
 
+import com.ordermgmt.railway.domain.infrastructure.event.RinfDataImportedEvent;
 import com.ordermgmt.railway.domain.infrastructure.model.ImportLog;
 import com.ordermgmt.railway.domain.infrastructure.model.OperationalPoint;
 import com.ordermgmt.railway.domain.infrastructure.model.SectionOfLine;
@@ -67,6 +69,7 @@ public class RinfImportService {
     private final SectionOfLineRepository solRepo;
     private final ImportLogRepository logRepo;
     private final TransactionOperations transactionOperations;
+    private final ApplicationEventPublisher eventPublisher;
 
     public List<ImportLog> getImportHistory() {
         return logRepo.findAllByOrderByStartedAtDesc();
@@ -90,6 +93,7 @@ public class RinfImportService {
             List<CSVRecord> records = parseCsv(csvStream);
             List<OperationalPoint> items = toOperationalPoints(records, country);
             int count = replaceOperationalPoints(items, country);
+            eventPublisher.publishEvent(new RinfDataImportedEvent("RINF_OP", country));
             return saveLog(
                     "RINF_OP",
                     country,
@@ -109,6 +113,7 @@ public class RinfImportService {
             List<CSVRecord> records = parseCsv(csvStream);
             List<SectionOfLine> items = toSectionsOfLine(records, country);
             int count = replaceSectionsOfLine(items, country);
+            eventPublisher.publishEvent(new RinfDataImportedEvent("RINF_SOL", country));
             return saveLog(
                     "RINF_SOL",
                     country,

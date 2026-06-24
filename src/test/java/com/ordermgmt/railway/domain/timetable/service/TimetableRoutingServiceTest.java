@@ -37,8 +37,10 @@ class TimetableRoutingServiceTest {
                                 section("SOL-2", "CH00002", "CH00003", 40_000D),
                                 section("SOL-3", "CH00001", "CH00003", 140_000D)));
 
+        RoutingGraphService routingGraphService =
+                new RoutingGraphService(operationalPointRepository, sectionOfLineRepository);
         TimetableRoutingService service =
-                new TimetableRoutingService(operationalPointRepository, sectionOfLineRepository);
+                new TimetableRoutingService(operationalPointRepository, routingGraphService);
 
         var route = service.calculateRoute(List.of(basel, bern));
 

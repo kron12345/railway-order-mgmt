@@ -6,7 +6,6 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -15,11 +14,9 @@ import java.util.Optional;
 import org.jgrapht.Graph;
 import org.jgrapht.alg.shortestpath.DijkstraShortestPath;
 import org.jgrapht.graph.DefaultWeightedEdge;
-import org.jgrapht.graph.SimpleWeightedGraph;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.context.event.EventListener;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -27,9 +24,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.ordermgmt.railway.domain.infrastructure.model.OperationalPoint;
-import com.ordermgmt.railway.domain.infrastructure.model.SectionOfLine;
 import com.ordermgmt.railway.domain.infrastructure.repository.OperationalPointRepository;
-import com.ordermgmt.railway.domain.infrastructure.repository.SectionOfLineRepository;
 import com.ordermgmt.railway.domain.timetable.model.RoutePointRole;
 import com.ordermgmt.railway.domain.timetable.model.TimetableRoutePoint;
 import com.ordermgmt.railway.domain.timetable.model.TimetableRouteResult;
@@ -49,15 +44,14 @@ public class TimetableRoutingService {
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
 
     private final OperationalPointRepository operationalPointRepository;
-    private final SectionOfLineRepository sectionOfLineRepository;
+    private final RoutingGraphService routingGraphService;
 
     /** Pre-loads the RINF routing graph and operational points into the cache at startup. */
     @EventListener(ApplicationReadyEvent.class)
     public void warmUpGraphCache() {
         log.info("Pre-loading RINF routing graph...");
         long start = System.currentTimeMillis();
-        loadOperationalPointsByUopid();
-        buildGraph();
+        routingGraphService.loadTopology();
         log.info("RINF routing graph loaded in {} ms", System.currentTimeMillis() - start);
     }
 
@@ -124,8 +118,9 @@ public class TimetableRoutingService {
             throw new IllegalArgumentException("At least origin and destination are required.");
         }
 
-        Map<String, OperationalPoint> pointsByUopid = loadOperationalPointsByUopid();
-        Graph<String, DefaultWeightedEdge> graph = buildGraph();
+        RoutingGraphService.RoutingTopology topology = routingGraphService.loadTopology();
+        Map<String, OperationalPoint> pointsByUopid = topology.pointsByUopid();
+        Graph<String, DefaultWeightedEdge> graph = topology.graph();
 
         List<String> fullPath = new ArrayList<>();
         List<Double> segmentLengths = new ArrayList<>();
@@ -189,7 +184,8 @@ public class TimetableRoutingService {
             return new TimetableRouteResult(List.of(), 0D);
         }
 
-        Map<String, OperationalPoint> pointsByUopid = loadOperationalPointsByUopid();
+        Map<String, OperationalPoint> pointsByUopid =
+                routingGraphService.loadTopology().pointsByUopid();
         List<TimetableRoutePoint> points = new ArrayList<>();
         double totalDistance = 0D;
         for (TimetableRowData row : rows) {
@@ -266,45 +262,6 @@ public class TimetableRoutingService {
         }
 
         return rows;
-    }
-
-    /** Builds the JGraphT routing graph from all sections of line (cached via Spring Cache). */
-    @Cacheable(value = "routingGraph", key = "'graph'")
-    public Graph<String, DefaultWeightedEdge> buildGraph() {
-        Map<String, OperationalPoint> pointsByUopid = loadOperationalPointsByUopid();
-        SimpleWeightedGraph<String, DefaultWeightedEdge> graph =
-                new SimpleWeightedGraph<>(DefaultWeightedEdge.class);
-
-        for (String uopid : pointsByUopid.keySet()) {
-            graph.addVertex(uopid);
-        }
-
-        for (SectionOfLine section : sectionOfLineRepository.findAll()) {
-            if (!pointsByUopid.containsKey(section.getStartOpUopid())
-                    || !pointsByUopid.containsKey(section.getEndOpUopid())) {
-                continue;
-            }
-            // Skip self-loops — SimpleWeightedGraph does not allow them
-            if (section.getStartOpUopid().equals(section.getEndOpUopid())) {
-                continue;
-            }
-            double length = section.getLengthMeters() != null ? section.getLengthMeters() : 0D;
-            DefaultWeightedEdge edge =
-                    graph.addEdge(section.getStartOpUopid(), section.getEndOpUopid());
-            if (edge != null) {
-                graph.setEdgeWeight(edge, length);
-            }
-        }
-        return graph;
-    }
-
-    @Cacheable(value = "operationalPointsByUopid", key = "'all'")
-    public Map<String, OperationalPoint> loadOperationalPointsByUopid() {
-        Map<String, OperationalPoint> pointsByUopid = new LinkedHashMap<>();
-        for (OperationalPoint point : operationalPointRepository.findAll()) {
-            pointsByUopid.put(point.getUopid(), point);
-        }
-        return pointsByUopid;
     }
 
     private PathSegment shortestPath(

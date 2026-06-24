@@ -15,6 +15,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionOperations;
@@ -35,6 +36,8 @@ class RinfImportServiceTest {
     @Mock private ImportLogRepository logRepo;
 
     @Mock private TransactionOperations transactionOperations;
+
+    @Mock private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks private RinfImportService importService;
 
