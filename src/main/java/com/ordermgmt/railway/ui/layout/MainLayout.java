@@ -169,6 +169,11 @@ public class MainLayout extends AppLayout
                         getTranslation("nav.r2pInbox"), "r2p-inbox", VaadinIcon.INBOX.create()));
         sideNav.addItem(
                 new SideNavItem(
+                        getTranslation("nav.offenePositionen"),
+                        "offene-positionen",
+                        VaadinIcon.EXCLAMATION_CIRCLE_O.create()));
+        sideNav.addItem(
+                new SideNavItem(
                         getTranslation("nav.businesses"),
                         "businesses",
                         VaadinIcon.BRIEFCASE.create()));
