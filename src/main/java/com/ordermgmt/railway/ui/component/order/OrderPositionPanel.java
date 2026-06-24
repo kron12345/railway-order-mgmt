@@ -8,6 +8,7 @@ import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.confirmdialog.ConfirmDialog;
+import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.H3;
 import com.vaadin.flow.component.html.Span;
@@ -175,7 +176,17 @@ public class OrderPositionPanel extends Div {
                     .set("border", "1px solid var(--rom-status-info)")
                     .set("background", "rgba(68,138,255,0.08)");
             addTrain.addClickListener(e -> openTimetableBuilder(null));
-            buttons.add(addService, addTrain);
+
+            Button addFromPm =
+                    new Button("+ " + t("position.fromPm"), VaadinIcon.DOWNLOAD.create());
+            addFromPm.addThemeVariants(ButtonVariant.LUMO_SMALL);
+            addFromPm
+                    .getStyle()
+                    .set("color", "var(--rom-text-secondary)")
+                    .set("border", "1px solid var(--rom-border)");
+            addFromPm.addClickListener(e -> openUnassignedTrainsDialog());
+
+            buttons.add(addService, addTrain, addFromPm);
         }
 
         HorizontalLayout header = new HorizontalLayout(title, buttons);
@@ -354,6 +365,71 @@ public class OrderPositionPanel extends Div {
             target += "?positionId=" + existing.getId();
         }
         UI.getCurrent().navigate(target);
+    }
+
+    /** Lists RailOpt reference trains not yet captured here and lets the user attach one. */
+    private void openUnassignedTrainsDialog() {
+        Dialog dialog = new Dialog();
+        dialog.setHeaderTitle(t("position.fromPm.title"));
+
+        VerticalLayout list = new VerticalLayout();
+        list.setPadding(false);
+        list.setSpacing(true);
+        list.setWidth("440px");
+
+        var trains = pathManagerService.findUnassignedTrains();
+        if (trains.isEmpty()) {
+            Span empty = new Span(t("position.fromPm.empty"));
+            empty.getStyle().set("color", "var(--rom-text-muted)").set("font-size", "13px");
+            list.add(empty);
+        } else {
+            for (PmReferenceTrain train : trains) {
+                Span info = new Span(unassignedLabel(train));
+                info.getStyle().set("font-size", "13px");
+                Button take =
+                        new Button(t("position.fromPm.capture"), VaadinIcon.DOWNLOAD.create());
+                take.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_PRIMARY);
+                take.addClickListener(e -> captureUnassignedTrain(train, dialog));
+
+                HorizontalLayout row = new HorizontalLayout(info, take);
+                row.setWidthFull();
+                row.setJustifyContentMode(FlexComponent.JustifyContentMode.BETWEEN);
+                row.setAlignItems(FlexComponent.Alignment.CENTER);
+                list.add(row);
+            }
+        }
+
+        dialog.add(list);
+        dialog.getFooter().add(new Button(t("common.cancel"), e -> dialog.close()));
+        dialog.open();
+    }
+
+    private void captureUnassignedTrain(PmReferenceTrain train, Dialog dialog) {
+        try {
+            pathManagerService.captureUnassignedTrainAsPosition(train.getId(), order.getId());
+            Notification.show(t("position.fromPm.captured"), 2500, Notification.Position.BOTTOM_END)
+                    .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+            dialog.close();
+            refreshPositions();
+        } catch (RuntimeException ex) {
+            Notification.show(t("common.errorGeneric"), 3000, Notification.Position.BOTTOM_END)
+                    .addThemeVariants(NotificationVariant.LUMO_ERROR);
+        }
+    }
+
+    private String unassignedLabel(PmReferenceTrain train) {
+        StringBuilder label = new StringBuilder();
+        label.append(
+                train.getOperationalTrainNumber() != null
+                        ? "OTN " + train.getOperationalTrainNumber()
+                        : train.getTridCore());
+        if (train.getCalendarStart() != null && train.getCalendarEnd() != null) {
+            label.append("  ·  ")
+                    .append(train.getCalendarStart())
+                    .append(" – ")
+                    .append(train.getCalendarEnd());
+        }
+        return label.toString();
     }
 
     /**

@@ -2,6 +2,7 @@ package com.ordermgmt.railway.domain.pathmanager.service;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -16,7 +17,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
+import com.ordermgmt.railway.domain.order.model.PositionType;
+import com.ordermgmt.railway.domain.order.repository.OrderPositionRepository;
+import com.ordermgmt.railway.domain.order.repository.OrderRepository;
 import com.ordermgmt.railway.domain.pathmanager.model.PathProcessState;
 import com.ordermgmt.railway.domain.pathmanager.model.PmJourneyLocation;
 import com.ordermgmt.railway.domain.pathmanager.model.PmPlanningStatus;
@@ -59,6 +64,8 @@ public class PathManagerService {
     private final PmTimetableYearRepository timetableYearRepository;
     private final IdentifierGenerator identifierGenerator;
     private final TttDraftBuilder tttDraftBuilder;
+    private final OrderRepository orderRepository;
+    private final OrderPositionRepository orderPositionRepository;
 
     @PersistenceContext private EntityManager entityManager;
 
@@ -86,6 +93,73 @@ public class PathManagerService {
         entityManager.createNativeQuery("DELETE FROM pm_routes").executeUpdate();
         entityManager.createNativeQuery("DELETE FROM pm_reference_trains").executeUpdate();
         entityManager.createNativeQuery("DELETE FROM timetable_archives").executeUpdate();
+    }
+
+    /** Reference trains in RailOpt not yet captured as an order position (Fahrplanmanager). */
+    @Transactional(readOnly = true)
+    public List<PmReferenceTrain> findUnassignedTrains() {
+        return referenceTrainRepository.findBySourcePositionIdIsNull();
+    }
+
+    /**
+     * Mock capture: turns an unassigned RailOpt reference train into a FAHRPLAN order position
+     * under the given order and back-links the train ({@code sourcePositionId}). Minimal demo
+     * mapping — OTN, von/nach (first/last journey location of the latest version) and validity
+     * (calendar).
+     *
+     * <p>Accepted mock limitation: unlike a position built via {@code
+     * TimetableArchiveService.saveTimetablePosition}, the captured position has no {@code
+     * TimetableArchive} and no CAPACITY {@code ResourceNeed}, so "open timetable" simply returns to
+     * the order (handled gracefully in {@code TimetableArchiveView}) and the position is not
+     * TTT-orderable until enriched. Building the full archive from journey locations is out of
+     * scope for this demo mock.
+     */
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
+    public OrderPosition captureUnassignedTrainAsPosition(UUID trainId, UUID orderId) {
+        PmReferenceTrain train = referenceTrainRepository.findById(trainId).orElseThrow();
+        if (train.getSourcePositionId() != null) {
+            throw new IllegalStateException("Reference train is already assigned to a position");
+        }
+        Order order = orderRepository.findById(orderId).orElseThrow();
+
+        OrderPosition position = new OrderPosition();
+        position.setOrder(order);
+        position.setType(PositionType.FAHRPLAN);
+        position.setName(positionName(train));
+        position.setOperationalTrainNumber(train.getOperationalTrainNumber());
+        position.setPmReferenceTrainId(train.getId());
+        applyRouteFromTrain(position, train);
+        if (train.getCalendarStart() != null) {
+            position.setStart(train.getCalendarStart().atStartOfDay());
+        }
+        if (train.getCalendarEnd() != null) {
+            position.setEnd(train.getCalendarEnd().atStartOfDay());
+        }
+
+        OrderPosition saved = orderPositionRepository.save(position);
+        train.setSourcePositionId(saved.getId());
+        referenceTrainRepository.save(train);
+        return saved;
+    }
+
+    private String positionName(PmReferenceTrain train) {
+        String otn = train.getOperationalTrainNumber();
+        return otn != null && !otn.isBlank() ? "OTN " + otn : train.getTridCore();
+    }
+
+    private void applyRouteFromTrain(OrderPosition position, PmReferenceTrain train) {
+        List<PmJourneyLocation> locations =
+                train.getTrainVersions().stream()
+                        .max(Comparator.comparing(PmTrainVersion::getVersionNumber))
+                        .map(PmTrainVersion::getJourneyLocations)
+                        .orElseGet(List::of)
+                        .stream()
+                        .sorted(Comparator.comparing(PmJourneyLocation::getSequence))
+                        .toList();
+        if (!locations.isEmpty()) {
+            position.setFromLocation(locations.get(0).getPrimaryLocationName());
+            position.setToLocation(locations.get(locations.size() - 1).getPrimaryLocationName());
+        }
     }
 
     /**

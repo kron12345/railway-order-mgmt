@@ -18,4 +18,7 @@ public interface PmReferenceTrainRepository
     List<PmReferenceTrain> findByTimetableYearYearOrderByOperationalTrainNumberAsc(int year);
 
     List<PmReferenceTrain> findBySourcePositionId(UUID sourcePositionId);
+
+    /** Reference trains not yet captured as an order position ("nicht zugewiesen"). */
+    List<PmReferenceTrain> findBySourcePositionIdIsNull();
 }
