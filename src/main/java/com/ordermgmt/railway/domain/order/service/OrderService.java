@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -139,6 +140,21 @@ public class OrderService {
     @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
     public OrderPosition savePosition(OrderPosition position) {
         return positionRepository.save(position);
+    }
+
+    /** Bulk-sets the internal (Bearbeitungs-)status on several positions in one transaction. */
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
+    public int setPositionInternalStatusBulk(Set<UUID> positionIds, PositionStatus status) {
+        int updated = 0;
+        for (UUID id : positionIds) {
+            OrderPosition position = positionRepository.findById(id).orElse(null);
+            if (position != null && position.getInternalStatus() != status) {
+                position.setInternalStatus(status);
+                positionRepository.save(position);
+                updated++;
+            }
+        }
+        return updated;
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")

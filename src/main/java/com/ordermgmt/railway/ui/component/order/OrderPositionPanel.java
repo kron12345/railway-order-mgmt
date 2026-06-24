@@ -18,6 +18,8 @@ import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
+import com.vaadin.flow.component.select.Select;
+import com.vaadin.flow.component.select.SelectVariant;
 
 import com.ordermgmt.railway.domain.infrastructure.repository.OperationalPointRepository;
 import com.ordermgmt.railway.domain.infrastructure.repository.PredefinedTagRepository;
@@ -71,6 +73,11 @@ public class OrderPositionPanel extends Div {
     private FilterPanel<OrderPosition> filterPanel;
     private Predicate<OrderPosition> positionFilter = p -> true;
     private boolean ready = false;
+    private final java.util.Set<java.util.UUID> selectedPositionIds =
+            new java.util.LinkedHashSet<>();
+    private HorizontalLayout bulkBar;
+    private Span bulkCountLabel;
+    private Select<PositionStatus> bulkStatusSelect;
 
     public OrderPositionPanel(
             Order order,
@@ -109,6 +116,7 @@ public class OrderPositionPanel extends Div {
         filterPanel = buildFilterPanel();
         add(createHeader());
         add(filterPanel);
+        add(buildBulkBar());
 
         rowContainer.setPadding(false);
         rowContainer.setSpacing(false);
@@ -212,6 +220,8 @@ public class OrderPositionPanel extends Div {
         }
         rowContainer.removeAll();
         rows.clear();
+        selectedPositionIds.clear();
+        updateBulkBar();
         var positions =
                 orderService.findPositionsByOrderId(order.getId()).stream()
                         .filter(positionFilter)
@@ -251,6 +261,10 @@ public class OrderPositionPanel extends Div {
                             editable);
             rows.add(row);
             rowContainer.add(row);
+            if (editable) {
+                java.util.UUID pid = pos.getId();
+                row.enableSelection(selected -> toggleSelection(pid, selected));
+            }
 
             // Linked businesses for this position (clickable chips → business detail).
             var linkedBusinesses =
@@ -478,6 +492,70 @@ public class OrderPositionPanel extends Div {
         return pos.getPurchasePositions() != null
                 && pos.getPurchasePositions().stream()
                         .anyMatch(pp -> pp.getPurchaseStatus() == status);
+    }
+
+    private HorizontalLayout buildBulkBar() {
+        bulkCountLabel = new Span();
+        bulkStatusSelect = new Select<>();
+        bulkStatusSelect.setItems(PositionStatus.values());
+        bulkStatusSelect.setItemLabelGenerator(s -> t("position.status." + s.name()));
+        bulkStatusSelect.setPlaceholder(t("bulk.status.placeholder"));
+        bulkStatusSelect.addThemeVariants(SelectVariant.LUMO_SMALL);
+
+        Button apply = new Button(t("bulk.apply"), VaadinIcon.CHECK.create());
+        apply.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_PRIMARY);
+        apply.addClickListener(e -> applyBulkStatus());
+
+        bulkBar = new HorizontalLayout(bulkCountLabel, bulkStatusSelect, apply);
+        bulkBar.setAlignItems(FlexComponent.Alignment.CENTER);
+        bulkBar.setSpacing(true);
+        bulkBar.getStyle()
+                .set("margin", "4px 0 8px 0")
+                .set("padding", "6px 10px")
+                .set("background", "var(--rom-bg-card)")
+                .set("border", "1px solid var(--rom-border)")
+                .set("border-radius", "6px");
+        bulkBar.setVisible(false);
+        return bulkBar;
+    }
+
+    private void toggleSelection(java.util.UUID positionId, boolean selected) {
+        if (selected) {
+            selectedPositionIds.add(positionId);
+        } else {
+            selectedPositionIds.remove(positionId);
+        }
+        updateBulkBar();
+    }
+
+    private void updateBulkBar() {
+        if (bulkBar == null) {
+            return;
+        }
+        boolean anySelected = !selectedPositionIds.isEmpty();
+        bulkBar.setVisible(anySelected);
+        if (!anySelected) {
+            bulkStatusSelect.clear(); // don't carry a stale status into the next selection
+        }
+        bulkCountLabel.setText(
+                translator.apply("bulk.selected", new Object[] {selectedPositionIds.size()}));
+    }
+
+    private void applyBulkStatus() {
+        PositionStatus status = bulkStatusSelect.getValue();
+        if (status == null || selectedPositionIds.isEmpty()) {
+            return;
+        }
+        int n =
+                orderService.setPositionInternalStatusBulk(
+                        new java.util.HashSet<>(selectedPositionIds), status);
+        Notification.show(
+                        translator.apply("bulk.done", new Object[] {n}),
+                        2500,
+                        Notification.Position.BOTTOM_END)
+                .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+        selectedPositionIds.clear();
+        refreshPositions();
     }
 
     private String t(String key) {

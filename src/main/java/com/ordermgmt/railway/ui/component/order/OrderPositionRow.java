@@ -11,6 +11,7 @@ import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
+import com.vaadin.flow.component.checkbox.Checkbox;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.icon.VaadinIcon;
@@ -44,6 +45,7 @@ public class OrderPositionRow extends Div {
     private final Div calendarSlot = new Div();
     private boolean calendarOpen = false;
     private final Div bodySlot = new Div();
+    private final Checkbox selectCheckbox = new Checkbox();
     private final Button expandToggle = new Button(VaadinIcon.CHEVRON_DOWN.create());
     private boolean bodyExpanded = true;
     private final List<Supplier<Component>> lazyBody = new ArrayList<>();
@@ -164,7 +166,10 @@ public class OrderPositionRow extends Div {
         expandToggle.addClickListener(e -> setBodyExpanded(!bodyExpanded));
         expandToggle.setVisible(false); // shown once collapsible body content is added
 
-        HorizontalLayout row = new HorizontalLayout(expandToggle, info, actions);
+        selectCheckbox.setVisible(false);
+        selectCheckbox.getStyle().set("align-self", "center");
+
+        HorizontalLayout row = new HorizontalLayout(selectCheckbox, expandToggle, info, actions);
         row.setWidthFull();
         row.setAlignItems(FlexComponent.Alignment.START);
         row.getStyle().set("padding", "10px 12px").set("gap", "12px").set("cursor", "default");
@@ -387,6 +392,13 @@ public class OrderPositionRow extends Div {
 
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
+    }
+
+    /** Shows a selection checkbox (for mutator bulk actions) and reports each toggle. */
+    public void enableSelection(Consumer<Boolean> onToggle) {
+        selectCheckbox.setVisible(true);
+        selectCheckbox.addValueChangeListener(
+                e -> onToggle.accept(Boolean.TRUE.equals(e.getValue())));
     }
 
     /** Adds eagerly-built collapsible body content (e.g. cheap linked-business chips). */
