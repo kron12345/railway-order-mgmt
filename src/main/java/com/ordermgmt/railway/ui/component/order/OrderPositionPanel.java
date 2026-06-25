@@ -27,6 +27,7 @@ import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.order.model.PositionStatus;
 import com.ordermgmt.railway.domain.order.model.PositionType;
+import com.ordermgmt.railway.domain.order.model.PositionVariantType;
 import com.ordermgmt.railway.domain.order.model.PurchaseStatus;
 import com.ordermgmt.railway.domain.order.repository.PurchasePositionRepository;
 import com.ordermgmt.railway.domain.order.repository.ResourceCatalogItemRepository;
@@ -245,64 +246,118 @@ public class OrderPositionPanel extends Div {
                         businessService.findByLinkedOrderPositions(
                                 positions.stream().map(OrderPosition::getId).toList());
 
+        // Group expressions (Ausprägungen) under their parent train identity; top-level rows =
+        // ZUG identities + legacy flat positions. Children render indented beneath their parent.
+        java.util.Map<java.util.UUID, java.util.List<OrderPosition>> childrenByParent =
+                new java.util.LinkedHashMap<>();
+        java.util.List<OrderPosition> tops = new java.util.ArrayList<>();
         for (OrderPosition pos : positions) {
-            PmReferenceTrain pmTrain = resolveTrain(pos);
-            OrderPositionRow row =
-                    new OrderPositionRow(
-                            pos,
-                            pmTrain != null ? pmTrain.getProcessState() : null,
-                            pmTrain != null ? pmTrain.getPlanningStatus() : null,
-                            translator,
-                            this::openPositionForEdit,
-                            this::confirmDeletePosition,
-                            p -> respondToAlteration(p, true),
-                            p -> respondToAlteration(p, false),
-                            auditService,
-                            editable);
-            rows.add(row);
-            rowContainer.add(row);
-            if (editable) {
-                java.util.UUID pid = pos.getId();
-                row.enableSelection(selected -> toggleSelection(pid, selected));
+            if (pos.getVariantType() == PositionVariantType.AUSPRAEGUNG
+                    && pos.getVariantOf() != null) {
+                childrenByParent
+                        .computeIfAbsent(
+                                pos.getVariantOf().getId(), k -> new java.util.ArrayList<>())
+                        .add(pos);
+            } else {
+                tops.add(pos);
             }
-            row.setDeviations(DeviationDetector.detect(pos, pmTrain, translator));
-
-            // Linked businesses for this position (clickable chips → business detail).
-            var linkedBusinesses =
-                    businessesByPosition.getOrDefault(pos.getId(), java.util.List.of());
-            if (!linkedBusinesses.isEmpty()) {
-                var chips =
-                        new com.ordermgmt.railway.ui.component.business.BusinessChips(
-                                linkedBusinesses, this::t);
-                chips.getStyle().set("margin", "0 12px 6px 12px");
-                row.addBodyContent(chips);
-            }
-
-            // Resource panel — lazily built collapsible body. Its constructor loads resources, so
-            // a collapsed compact row pays no DB/UI build cost until the user expands it.
-            long resCount = pos.getResourceNeeds() != null ? pos.getResourceNeeds().size() : 0;
-            if (resCount > 0) {
-                row.addLazyBodyContent(
-                        () -> {
-                            ResourcePanel resourcePanel =
-                                    new ResourcePanel(
-                                            pos,
-                                            resourceNeedService,
-                                            purchaseOrderService,
-                                            catalogItemRepository,
-                                            purchasePositionRepository,
-                                            auditService,
-                                            businessService,
-                                            translator,
-                                            this::refreshPositions,
-                                            editable);
-                            resourcePanel.getStyle().set("margin", "0 12px 8px 12px");
-                            return resourcePanel;
-                        });
-            }
-
-            row.setBodyExpanded(allExpanded);
         }
+
+        java.util.Set<java.util.UUID> topIds = new java.util.HashSet<>();
+        for (OrderPosition top : tops) {
+            topIds.add(top.getId());
+        }
+        for (OrderPosition top : tops) {
+            boolean isZug = top.getVariantType() == PositionVariantType.ZUG;
+            // A ZUG identity is a container; its expressions carry the bookings, so it is not
+            // directly selectable for bulk actions. Legacy flat positions stay selectable.
+            renderPosition(top, businessesByPosition, false, !isZug);
+            for (OrderPosition child :
+                    childrenByParent.getOrDefault(top.getId(), java.util.List.of())) {
+                renderPosition(child, businessesByPosition, true, true);
+            }
+        }
+        // Expressions whose parent train was filtered out still match the filter themselves —
+        // render them standalone so a filter (e.g. on status) never hides a matching expression.
+        for (var entry : childrenByParent.entrySet()) {
+            if (!topIds.contains(entry.getKey())) {
+                for (OrderPosition orphan : entry.getValue()) {
+                    renderPosition(orphan, businessesByPosition, false, true);
+                }
+            }
+        }
+    }
+
+    /** Renders one position (train identity, expression, or legacy flat) into the container. */
+    private void renderPosition(
+            OrderPosition pos,
+            java.util.Map<
+                            java.util.UUID,
+                            java.util.List<com.ordermgmt.railway.domain.business.model.Business>>
+                    businessesByPosition,
+            boolean indented,
+            boolean selectable) {
+        PmReferenceTrain pmTrain = resolveTrain(pos);
+        OrderPositionRow row =
+                new OrderPositionRow(
+                        pos,
+                        pmTrain != null ? pmTrain.getProcessState() : null,
+                        pmTrain != null ? pmTrain.getPlanningStatus() : null,
+                        translator,
+                        this::openPositionForEdit,
+                        this::confirmDeletePosition,
+                        p -> respondToAlteration(p, true),
+                        p -> respondToAlteration(p, false),
+                        auditService,
+                        editable);
+        if (indented) {
+            row.getStyle()
+                    .set("margin-left", "22px")
+                    .set("border-left", "2px solid var(--rom-border)")
+                    .set("padding-left", "8px");
+        }
+        rows.add(row);
+        rowContainer.add(row);
+        if (editable && selectable) {
+            java.util.UUID pid = pos.getId();
+            row.enableSelection(selected -> toggleSelection(pid, selected));
+        }
+        row.setDeviations(DeviationDetector.detect(pos, pmTrain, translator));
+
+        // Linked businesses for this position (clickable chips → business detail).
+        var linkedBusinesses = businessesByPosition.getOrDefault(pos.getId(), java.util.List.of());
+        if (!linkedBusinesses.isEmpty()) {
+            var chips =
+                    new com.ordermgmt.railway.ui.component.business.BusinessChips(
+                            linkedBusinesses, this::t);
+            chips.getStyle().set("margin", "0 12px 6px 12px");
+            row.addBodyContent(chips);
+        }
+
+        // Resource panel — lazily built collapsible body. Its constructor loads resources, so a
+        // collapsed compact row pays no DB/UI build cost until the user expands it.
+        long resCount = pos.getResourceNeeds() != null ? pos.getResourceNeeds().size() : 0;
+        if (resCount > 0) {
+            row.addLazyBodyContent(
+                    () -> {
+                        ResourcePanel resourcePanel =
+                                new ResourcePanel(
+                                        pos,
+                                        resourceNeedService,
+                                        purchaseOrderService,
+                                        catalogItemRepository,
+                                        purchasePositionRepository,
+                                        auditService,
+                                        businessService,
+                                        translator,
+                                        this::refreshPositions,
+                                        editable);
+                        resourcePanel.getStyle().set("margin", "0 12px 8px 12px");
+                        return resourcePanel;
+                    });
+        }
+
+        row.setBodyExpanded(allExpanded);
     }
 
     /**
