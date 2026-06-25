@@ -174,6 +174,9 @@ public class MainLayout extends AppLayout
                         VaadinIcon.EXCLAMATION_CIRCLE_O.create()));
         sideNav.addItem(
                 new SideNavItem(
+                        getTranslation("nav.fristen"), "fristen", VaadinIcon.ALARM.create()));
+        sideNav.addItem(
+                new SideNavItem(
                         getTranslation("nav.businesses"),
                         "businesses",
                         VaadinIcon.BRIEFCASE.create()));
