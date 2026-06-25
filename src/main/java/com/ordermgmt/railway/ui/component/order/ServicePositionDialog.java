@@ -3,8 +3,6 @@ package com.ordermgmt.railway.ui.component.order;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalTime;
-import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -15,7 +13,6 @@ import com.vaadin.flow.component.ComponentEventListener;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.checkbox.CheckboxGroup;
-import com.vaadin.flow.component.combobox.ComboBox;
 import com.vaadin.flow.component.details.Details;
 import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.formlayout.FormLayout;
@@ -38,6 +35,7 @@ import com.ordermgmt.railway.domain.order.model.PositionStatus;
 import com.ordermgmt.railway.domain.order.model.PositionType;
 import com.ordermgmt.railway.domain.order.model.ValidityJsonCodec;
 import com.ordermgmt.railway.domain.order.service.OrderService;
+import com.ordermgmt.railway.ui.component.OperationalPointComboBox;
 import com.ordermgmt.railway.ui.component.ValidityCalendar;
 import com.ordermgmt.railway.ui.util.StringUtils;
 import com.ordermgmt.railway.ui.util.TagSelectionHelper;
@@ -54,14 +52,14 @@ public class ServicePositionDialog extends Dialog {
     private final OrderPosition position;
     private final boolean isNew;
     private final List<PredefinedTag> availableTags;
-    private final List<OperationalPoint> availableOperationalPoints = new ArrayList<>();
+    private final OperationalPointRepository opRepo;
     private final LinkedHashSet<String> unmatchedTags = new LinkedHashSet<>();
     private final TagSelectionHelper tagHelper;
 
     private final TextField name = new TextField();
     private final TextField serviceType = new TextField();
-    private final ComboBox<OperationalPoint> fromOp = new ComboBox<>();
-    private final ComboBox<OperationalPoint> toOp = new ComboBox<>();
+    private OperationalPointComboBox fromOp;
+    private OperationalPointComboBox toOp;
     private final TimePicker startTime = new TimePicker();
     private final TimePicker endTime = new TimePicker();
     private ValidityCalendar validityCalendar;
@@ -83,6 +81,7 @@ public class ServicePositionDialog extends Dialog {
         this.orderService = orderService;
         this.businessService = businessService;
         this.translator = translator;
+        this.opRepo = opRepo;
         this.isNew = existing == null;
         this.position = isNew ? new OrderPosition() : existing;
         this.availableTags = loadTags(tagRepo);
@@ -113,21 +112,16 @@ public class ServicePositionDialog extends Dialog {
         serviceType.setHelperText(t("position.serviceType.help"));
         serviceType.setWidthFull();
 
-        // OP-based location selection
-        availableOperationalPoints.clear();
-        availableOperationalPoints.addAll(opRepo.findAll());
-        availableOperationalPoints.sort(
-                Comparator.comparing(OperationalPoint::getName, String.CASE_INSENSITIVE_ORDER));
-
+        // OP-based location selection — lazy server search (never loads all ~19k points).
+        fromOp = new OperationalPointComboBox(opRepo);
         fromOp.setLabel(t("position.from"));
-        fromOp.setItems(availableOperationalPoints);
         fromOp.setItemLabelGenerator(this::opLabel);
         fromOp.setClearButtonVisible(true);
         fromOp.setHelperText(t("position.from.help"));
         fromOp.setWidthFull();
 
+        toOp = new OperationalPointComboBox(opRepo);
         toOp.setLabel(t("position.to"));
-        toOp.setItems(availableOperationalPoints);
         toOp.setItemLabelGenerator(this::opLabel);
         toOp.setClearButtonVisible(true);
         toOp.setHelperText(t("position.to.help"));
@@ -395,10 +389,7 @@ public class ServicePositionDialog extends Dialog {
         if (name == null || name.isBlank()) {
             return null;
         }
-        return availableOperationalPoints.stream()
-                .filter(op -> name.equalsIgnoreCase(op.getName()))
-                .findFirst()
-                .orElse(null);
+        return opRepo.findFirstByNameIgnoreCase(name).orElse(null);
     }
 
     // ── Events ────────────────────────────────────────────────────────
