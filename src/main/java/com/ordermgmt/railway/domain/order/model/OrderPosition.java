@@ -78,12 +78,23 @@ public class OrderPosition {
     @Column(length = 30)
     private PositionStatus internalStatus = PositionStatus.IN_BEARBEITUNG;
 
+    /** Parent train identity when this position is an expression (Ausprägung); null for a train. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "variant_of_id")
     private OrderPosition variantOf;
 
-    @Column(length = 30)
-    private String variantType;
+    /** Hierarchy role: ZUG (identity) or AUSPRAEGUNG (expression); null = legacy flat position. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "variant_type", length = 30)
+    private PositionVariantType variantType;
+
+    @org.hibernate.envers.NotAudited
+    @OneToMany(mappedBy = "variantOf")
+    private List<OrderPosition> children = new ArrayList<>();
+
+    @org.hibernate.envers.NotAudited
+    @OneToMany(mappedBy = "orderPosition", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<OrderPositionVersion> versions = new ArrayList<>();
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "merge_target_id")

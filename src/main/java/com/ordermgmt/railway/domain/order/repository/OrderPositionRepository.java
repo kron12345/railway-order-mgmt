@@ -10,12 +10,19 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
+import com.ordermgmt.railway.domain.order.model.PositionVariantType;
 
 /** Repository for order positions. */
 @Repository
 public interface OrderPositionRepository extends JpaRepository<OrderPosition, UUID> {
 
     List<OrderPosition> findByOrderId(UUID orderId);
+
+    /** Child expressions (Ausprägungen) of a train-identity position. */
+    List<OrderPosition> findByVariantOfId(UUID variantOfId);
+
+    /** Positions of a given hierarchy role (e.g. ZUG); pass null for legacy flat positions. */
+    List<OrderPosition> findByVariantType(PositionVariantType variantType);
 
     /** Positions carrying a given OTN — used to attach inbound R2P orders to an existing train. */
     List<OrderPosition> findByOperationalTrainNumber(String operationalTrainNumber);
