@@ -4,22 +4,15 @@ import java.util.List;
 import java.util.function.BiFunction;
 import java.util.function.Predicate;
 
-import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
-import com.vaadin.flow.component.confirmdialog.ConfirmDialog;
-import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.H3;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.icon.VaadinIcon;
-import com.vaadin.flow.component.notification.Notification;
-import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
-import com.vaadin.flow.component.select.Select;
-import com.vaadin.flow.component.select.SelectVariant;
 
 import com.ordermgmt.railway.domain.infrastructure.repository.OperationalPointRepository;
 import com.ordermgmt.railway.domain.infrastructure.repository.PredefinedTagRepository;
@@ -77,11 +70,8 @@ public class OrderPositionPanel extends Div {
     private FilterPanel<OrderPosition> filterPanel;
     private Predicate<OrderPosition> positionFilter = p -> true;
     private boolean ready = false;
-    private final java.util.Set<java.util.UUID> selectedPositionIds =
-            new java.util.LinkedHashSet<>();
-    private HorizontalLayout bulkBar;
-    private Span bulkCountLabel;
-    private Select<PositionStatus> bulkStatusSelect;
+    private PositionBulkBar bulkBar;
+    private OrderPositionActions actions;
     // Per-refresh batched lookups (set at the start of refreshPositions).
     private java.util.Map<java.util.UUID, java.util.List<OrderPositionVersion>> versionsByPosition =
             java.util.Map.of();
@@ -123,9 +113,20 @@ public class OrderPositionPanel extends Div {
                 .set("box-sizing", "border-box");
 
         filterPanel = buildFilterPanel();
+        bulkBar = new PositionBulkBar(orderService, translator, this::refreshPositions);
+        actions =
+                new OrderPositionActions(
+                        order,
+                        orderService,
+                        opRepo,
+                        tagRepo,
+                        businessService,
+                        purchaseOrderService,
+                        translator,
+                        this::refreshPositions);
         add(createHeader());
         add(filterPanel);
-        add(buildBulkBar());
+        add(bulkBar);
 
         rowContainer.setPadding(false);
         rowContainer.setSpacing(false);
@@ -183,7 +184,7 @@ public class OrderPositionPanel extends Div {
                     .getStyle()
                     .set("background", "var(--rom-accent)")
                     .set("color", "var(--rom-bg-primary)");
-            addService.addClickListener(e -> openServiceDialog(null));
+            addService.addClickListener(e -> actions.openServiceDialog(null));
 
             Button addTrain =
                     new Button("+ " + t("position.type.FAHRPLAN"), VaadinIcon.TRAIN.create());
@@ -192,7 +193,7 @@ public class OrderPositionPanel extends Div {
                     .set("color", "var(--rom-status-info)")
                     .set("border", "1px solid var(--rom-status-info)")
                     .set("background", "rgba(68,138,255,0.08)");
-            addTrain.addClickListener(e -> openTimetableBuilder(null));
+            addTrain.addClickListener(e -> actions.openTimetableBuilder(null));
 
             Button addFromPm =
                     new Button("+ " + t("position.fromPm"), VaadinIcon.DOWNLOAD.create());
@@ -201,7 +202,14 @@ public class OrderPositionPanel extends Div {
                     .getStyle()
                     .set("color", "var(--rom-text-secondary)")
                     .set("border", "1px solid var(--rom-border)");
-            addFromPm.addClickListener(e -> openUnassignedTrainsDialog());
+            addFromPm.addClickListener(
+                    e ->
+                            new UnassignedTrainsDialog(
+                                            pathManagerService,
+                                            order.getId(),
+                                            translator,
+                                            this::refreshPositions)
+                                    .open());
 
             buttons.add(addService, addTrain, addFromPm);
         }
@@ -229,8 +237,7 @@ public class OrderPositionPanel extends Div {
         }
         rowContainer.removeAll();
         rows.clear();
-        selectedPositionIds.clear();
-        updateBulkBar();
+        bulkBar.reset();
         var positions =
                 orderService.findPositionsByOrderId(order.getId()).stream()
                         .filter(positionFilter)
@@ -303,7 +310,7 @@ public class OrderPositionPanel extends Div {
                 addExpr.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
                 addExpr.getStyle().set("margin", "2px 0 10px 22px");
                 OrderPosition parent = top;
-                addExpr.addClickListener(e -> openExpressionDialog(parent));
+                addExpr.addClickListener(e -> actions.openExpressionDialog(parent));
                 rowContainer.add(addExpr);
             }
         }
@@ -316,40 +323,6 @@ public class OrderPositionPanel extends Div {
                 }
             }
         }
-    }
-
-    private void openExpressionDialog(OrderPosition parent) {
-        new ExpressionDialog(
-                        translator,
-                        draft -> {
-                            try {
-                                orderService.addExpression(parent.getId(), draft);
-                                Notification.show(
-                                                t("expression.added"),
-                                                2500,
-                                                Notification.Position.BOTTOM_END)
-                                        .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
-                                refreshPositions();
-                                return true;
-                            } catch (OrderService.ExpressionConflictException ex) {
-                                Notification.show(
-                                                translator.apply(
-                                                        "expression.conflict",
-                                                        new Object[] {ex.getConflictName()}),
-                                                4000,
-                                                Notification.Position.MIDDLE)
-                                        .addThemeVariants(NotificationVariant.LUMO_ERROR);
-                                return false;
-                            } catch (OrderService.PositionHasBookingsException ex) {
-                                Notification.show(
-                                                t("expression.hasBookings"),
-                                                4000,
-                                                Notification.Position.MIDDLE)
-                                        .addThemeVariants(NotificationVariant.LUMO_ERROR);
-                                return false;
-                            }
-                        })
-                .open();
     }
 
     /** Renders one position (train identity, expression, or legacy flat) into the container. */
@@ -368,10 +341,10 @@ public class OrderPositionPanel extends Div {
                         pmTrain != null ? pmTrain.getProcessState() : null,
                         pmTrain != null ? pmTrain.getPlanningStatus() : null,
                         translator,
-                        this::openPositionForEdit,
-                        this::confirmDeletePosition,
-                        p -> respondToAlteration(p, true),
-                        p -> respondToAlteration(p, false),
+                        actions::editPosition,
+                        actions::confirmDelete,
+                        p -> actions.respondToAlteration(p, true),
+                        p -> actions.respondToAlteration(p, false),
                         auditService,
                         editable);
         if (indented) {
@@ -384,7 +357,7 @@ public class OrderPositionPanel extends Div {
         rowContainer.add(row);
         if (editable && selectable) {
             java.util.UUID pid = pos.getId();
-            row.enableSelection(selected -> toggleSelection(pid, selected));
+            row.enableSelection(sel -> bulkBar.toggle(pid, sel));
         }
         // Deviations (order ↔ RailOpt) plus any open infrastructure alterations from the versions.
         java.util.List<String> deviations =
@@ -470,132 +443,6 @@ public class OrderPositionPanel extends Div {
         }
     }
 
-    private void respondToAlteration(OrderPosition pos, boolean accept) {
-        try {
-            purchaseOrderService.respondToAlteration(pos.getId(), accept);
-            Notification.show(
-                            t(accept ? "order.alteration.accepted" : "order.alteration.rejected"),
-                            2500,
-                            Notification.Position.BOTTOM_END)
-                    .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
-        } catch (RuntimeException ex) {
-            Notification.show(t("common.errorGeneric"), 3000, Notification.Position.BOTTOM_END)
-                    .addThemeVariants(NotificationVariant.LUMO_ERROR);
-        } finally {
-            refreshPositions();
-        }
-    }
-
-    private void openPositionForEdit(OrderPosition pos) {
-        if (pos.getType() == PositionType.LEISTUNG) {
-            openServiceDialog(pos);
-        } else {
-            openTimetableBuilder(pos);
-        }
-    }
-
-    private void openServiceDialog(OrderPosition existing) {
-        ServicePositionDialog dialog =
-                new ServicePositionDialog(
-                        order,
-                        existing,
-                        orderService,
-                        opRepo,
-                        tagRepo,
-                        businessService,
-                        translator);
-        dialog.addSaveListener(e -> refreshPositions());
-        dialog.open();
-    }
-
-    private void confirmDeletePosition(OrderPosition pos) {
-        ConfirmDialog dialog = new ConfirmDialog();
-        dialog.setHeader(t("common.delete") + ": " + pos.getName() + "?");
-        dialog.setCancelable(true);
-        dialog.setCancelText(t("common.cancel"));
-        dialog.setConfirmText(t("common.delete"));
-        dialog.setConfirmButtonTheme("error primary");
-        dialog.addConfirmListener(
-                e -> {
-                    orderService.deletePosition(pos.getId());
-                    refreshPositions();
-                });
-        dialog.open();
-    }
-
-    private void openTimetableBuilder(OrderPosition existing) {
-        String target = "orders/" + order.getId() + "/timetable-builder";
-        if (existing != null) {
-            target += "?positionId=" + existing.getId();
-        }
-        UI.getCurrent().navigate(target);
-    }
-
-    /** Lists RailOpt reference trains not yet captured here and lets the user attach one. */
-    private void openUnassignedTrainsDialog() {
-        Dialog dialog = new Dialog();
-        dialog.setHeaderTitle(t("position.fromPm.title"));
-
-        VerticalLayout list = new VerticalLayout();
-        list.setPadding(false);
-        list.setSpacing(true);
-        list.setWidth("440px");
-
-        var trains = pathManagerService.findUnassignedTrains();
-        if (trains.isEmpty()) {
-            Span empty = new Span(t("position.fromPm.empty"));
-            empty.getStyle().set("color", "var(--rom-text-muted)").set("font-size", "13px");
-            list.add(empty);
-        } else {
-            for (PmReferenceTrain train : trains) {
-                Span info = new Span(unassignedLabel(train));
-                info.getStyle().set("font-size", "13px");
-                Button take =
-                        new Button(t("position.fromPm.capture"), VaadinIcon.DOWNLOAD.create());
-                take.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_PRIMARY);
-                take.addClickListener(e -> captureUnassignedTrain(train, dialog));
-
-                HorizontalLayout row = new HorizontalLayout(info, take);
-                row.setWidthFull();
-                row.setJustifyContentMode(FlexComponent.JustifyContentMode.BETWEEN);
-                row.setAlignItems(FlexComponent.Alignment.CENTER);
-                list.add(row);
-            }
-        }
-
-        dialog.add(list);
-        dialog.getFooter().add(new Button(t("common.cancel"), e -> dialog.close()));
-        dialog.open();
-    }
-
-    private void captureUnassignedTrain(PmReferenceTrain train, Dialog dialog) {
-        try {
-            pathManagerService.captureUnassignedTrainAsPosition(train.getId(), order.getId());
-            Notification.show(t("position.fromPm.captured"), 2500, Notification.Position.BOTTOM_END)
-                    .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
-            dialog.close();
-            refreshPositions();
-        } catch (RuntimeException ex) {
-            Notification.show(t("common.errorGeneric"), 3000, Notification.Position.BOTTOM_END)
-                    .addThemeVariants(NotificationVariant.LUMO_ERROR);
-        }
-    }
-
-    private String unassignedLabel(PmReferenceTrain train) {
-        StringBuilder label = new StringBuilder();
-        label.append(
-                train.getOperationalTrainNumber() != null
-                        ? "OTN " + train.getOperationalTrainNumber()
-                        : train.getTridCore());
-        if (train.getCalendarStart() != null && train.getCalendarEnd() != null) {
-            label.append("  ·  ")
-                    .append(train.getCalendarStart())
-                    .append(" – ")
-                    .append(train.getCalendarEnd());
-        }
-        return label.toString();
-    }
-
     /**
      * Reusable, collapsible filter for this order's positions, by their Bestellpositions-status.
      */
@@ -642,70 +489,6 @@ public class OrderPositionPanel extends Div {
         return pos.getPurchasePositions() != null
                 && pos.getPurchasePositions().stream()
                         .anyMatch(pp -> pp.getPurchaseStatus() == status);
-    }
-
-    private HorizontalLayout buildBulkBar() {
-        bulkCountLabel = new Span();
-        bulkStatusSelect = new Select<>();
-        bulkStatusSelect.setItems(PositionStatus.values());
-        bulkStatusSelect.setItemLabelGenerator(s -> t("position.status." + s.name()));
-        bulkStatusSelect.setPlaceholder(t("bulk.status.placeholder"));
-        bulkStatusSelect.addThemeVariants(SelectVariant.LUMO_SMALL);
-
-        Button apply = new Button(t("bulk.apply"), VaadinIcon.CHECK.create());
-        apply.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_PRIMARY);
-        apply.addClickListener(e -> applyBulkStatus());
-
-        bulkBar = new HorizontalLayout(bulkCountLabel, bulkStatusSelect, apply);
-        bulkBar.setAlignItems(FlexComponent.Alignment.CENTER);
-        bulkBar.setSpacing(true);
-        bulkBar.getStyle()
-                .set("margin", "4px 0 8px 0")
-                .set("padding", "6px 10px")
-                .set("background", "var(--rom-bg-card)")
-                .set("border", "1px solid var(--rom-border)")
-                .set("border-radius", "6px");
-        bulkBar.setVisible(false);
-        return bulkBar;
-    }
-
-    private void toggleSelection(java.util.UUID positionId, boolean selected) {
-        if (selected) {
-            selectedPositionIds.add(positionId);
-        } else {
-            selectedPositionIds.remove(positionId);
-        }
-        updateBulkBar();
-    }
-
-    private void updateBulkBar() {
-        if (bulkBar == null) {
-            return;
-        }
-        boolean anySelected = !selectedPositionIds.isEmpty();
-        bulkBar.setVisible(anySelected);
-        if (!anySelected) {
-            bulkStatusSelect.clear(); // don't carry a stale status into the next selection
-        }
-        bulkCountLabel.setText(
-                translator.apply("bulk.selected", new Object[] {selectedPositionIds.size()}));
-    }
-
-    private void applyBulkStatus() {
-        PositionStatus status = bulkStatusSelect.getValue();
-        if (status == null || selectedPositionIds.isEmpty()) {
-            return;
-        }
-        int n =
-                orderService.setPositionInternalStatusBulk(
-                        new java.util.HashSet<>(selectedPositionIds), status);
-        Notification.show(
-                        translator.apply("bulk.done", new Object[] {n}),
-                        2500,
-                        Notification.Position.BOTTOM_END)
-                .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
-        selectedPositionIds.clear();
-        refreshPositions();
     }
 
     private String t(String key) {
