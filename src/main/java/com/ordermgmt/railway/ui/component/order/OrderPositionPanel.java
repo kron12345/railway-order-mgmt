@@ -292,7 +292,8 @@ public class OrderPositionPanel extends Div {
             boolean isZug = top.getVariantType() == PositionVariantType.ZUG;
             // A ZUG identity is a container; its expressions carry the bookings, so it is not
             // directly selectable for bulk actions. Legacy flat positions stay selectable.
-            OrderPositionRow topRow = renderPosition(top, businessesByPosition, false, !isZug);
+            // A ZUG is a header above its expression cards; a flat position is itself one card.
+            OrderPositionRow topRow = renderPosition(top, businessesByPosition, !isZug, !isZug);
             java.util.List<OrderPositionVersion> trainChanges = new java.util.ArrayList<>();
             for (OrderPosition child :
                     childrenByParent.getOrDefault(top.getId(), java.util.List.of())) {
@@ -323,7 +324,7 @@ public class OrderPositionPanel extends Div {
         for (var entry : childrenByParent.entrySet()) {
             if (!topIds.contains(entry.getKey())) {
                 for (OrderPosition orphan : entry.getValue()) {
-                    renderPosition(orphan, businessesByPosition, false, true);
+                    renderPosition(orphan, businessesByPosition, true, true);
                 }
             }
         }
@@ -336,7 +337,7 @@ public class OrderPositionPanel extends Div {
                             java.util.UUID,
                             java.util.List<com.ordermgmt.railway.domain.business.model.Business>>
                     businessesByPosition,
-            boolean indented,
+            boolean card,
             boolean selectable) {
         PmReferenceTrain pmTrain = resolveTrain(pos);
         OrderPositionRow row =
@@ -351,11 +352,14 @@ public class OrderPositionPanel extends Div {
                         p -> actions.respondToAlteration(p, false),
                         auditService,
                         editable);
-        if (indented) {
+        if (card) {
+            // Expressions (and legacy flat positions) render as full-width cards, no indent.
             row.getStyle()
-                    .set("margin-left", "22px")
-                    .set("border-left", "2px solid var(--rom-border)")
-                    .set("padding-left", "8px");
+                    .set("border", "1px solid var(--rom-border)")
+                    .set("border-radius", "6px")
+                    .set("margin", "6px 0")
+                    .set("overflow", "hidden")
+                    .set("background", "var(--rom-bg-card)");
         }
         rows.add(row);
         rowContainer.add(row);

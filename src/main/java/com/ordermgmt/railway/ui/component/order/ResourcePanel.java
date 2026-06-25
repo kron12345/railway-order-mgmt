@@ -1,5 +1,6 @@
 package com.ordermgmt.railway.ui.component.order;
 
+import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -22,6 +23,7 @@ import com.ordermgmt.railway.domain.order.model.PurchasePosition;
 import com.ordermgmt.railway.domain.order.model.PurchaseStatus;
 import com.ordermgmt.railway.domain.order.model.ResourceNeed;
 import com.ordermgmt.railway.domain.order.model.ResourceType;
+import com.ordermgmt.railway.domain.order.model.ValidityJsonCodec;
 import com.ordermgmt.railway.domain.order.repository.PurchasePositionRepository;
 import com.ordermgmt.railway.domain.order.repository.ResourceCatalogItemRepository;
 import com.ordermgmt.railway.domain.order.service.AuditService;
@@ -191,6 +193,20 @@ public class ResourcePanel extends Div {
 
         if (rn.getQuantity() != null && rn.getQuantity() > 1) {
             info.add(ResourceBadges.small("x" + rn.getQuantity(), "var(--rom-text-secondary)"));
+        }
+
+        // Per-demand Verkehrstage (day count) + von/nach route, when set.
+        List<LocalDate> days = ValidityJsonCodec.fromJson(rn.getValidity());
+        if (!days.isEmpty()) {
+            info.add(
+                    ResourceBadges.small(
+                            days.size() + " " + tr("resource.days"), "var(--rom-text-secondary)"));
+        }
+        if (rn.getFromLocation() != null || rn.getToLocation() != null) {
+            info.add(
+                    ResourceBadges.small(
+                            nz(rn.getFromLocation()) + " → " + nz(rn.getToLocation()),
+                            "var(--rom-status-info)"));
         }
 
         // Audit history button
@@ -436,6 +452,10 @@ public class ResourcePanel extends Div {
     }
 
     // --- Badge helpers ---
+
+    private static String nz(String s) {
+        return s == null || s.isBlank() ? "…" : s;
+    }
 
     private Span createTypeBadge(ResourceNeed rn) {
         String label = tr("resource.type." + rn.getResourceType().name());
