@@ -279,8 +279,10 @@ public class OrderService {
                 occupied.putIfAbsent(day, sibling.getName());
             }
         }
-        return new VerkehrstageContext(
-                min, max, occupied, ValidityJsonCodec.fromJson(expr.getValidity()));
+        // Pre-fill the edited expression's own effective days (validity, or weekday-derived when
+        // unset) — symmetric with the sibling occupancy above, so opening the picker never shows an
+        // empty selection for a weekday-template expression and a save can't silently drop it.
+        return new VerkehrstageContext(min, max, occupied, effectiveDays(expr));
     }
 
     /**
