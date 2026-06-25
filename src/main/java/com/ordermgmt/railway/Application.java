@@ -5,6 +5,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.data.envers.repository.support.EnversRevisionRepositoryFactoryBean;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 import com.vaadin.flow.component.dependency.JsModule;
 import com.vaadin.flow.component.page.AppShellConfigurator;
@@ -14,6 +15,7 @@ import com.vaadin.flow.theme.Theme;
 /** Spring Boot and Vaadin bootstrap entry point. */
 @SpringBootApplication
 @EnableCaching
+@EnableScheduling
 @Push
 @Theme("order-mgmt")
 @JsModule("./theme-loader.ts")

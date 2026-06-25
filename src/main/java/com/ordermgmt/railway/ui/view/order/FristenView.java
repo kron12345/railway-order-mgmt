@@ -21,10 +21,12 @@ import com.vaadin.flow.router.Route;
 
 import com.ordermgmt.railway.domain.order.model.FristRegel;
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
+import com.ordermgmt.railway.domain.order.service.FristAutoOrderService;
 import com.ordermgmt.railway.domain.order.service.FristService;
 import com.ordermgmt.railway.domain.order.service.FristService.AutoBusiness;
 import com.ordermgmt.railway.domain.order.service.FristService.FristEntry;
 import com.ordermgmt.railway.domain.order.service.FristService.Status;
+import com.ordermgmt.railway.infrastructure.keycloak.CurrentUserHelper;
 import com.ordermgmt.railway.ui.component.StatusBadge;
 import com.ordermgmt.railway.ui.layout.MainLayout;
 
@@ -34,13 +36,61 @@ import com.ordermgmt.railway.ui.layout.MainLayout;
 @PermitAll
 public class FristenView extends VerticalLayout {
 
-    public FristenView(FristService fristService) {
+    private final FristService fristService;
+    private final FristAutoOrderService autoOrderService;
+    private Integer lastFired;
+
+    public FristenView(FristService fristService, FristAutoOrderService autoOrderService) {
+        this.fristService = fristService;
+        this.autoOrderService = autoOrderService;
         setWidthFull();
         setPadding(true);
+        build();
+    }
+
+    /**
+     * Builds (or rebuilds in place) the whole view; called again after a manual rule evaluation.
+     */
+    private void build() {
+        removeAll();
 
         H2 title = new H2(getTranslation("fristen.title"));
-        title.getStyle().set("margin", "0 0 var(--lumo-space-m) 0");
-        add(title);
+        title.getStyle().set("margin", "0");
+
+        Button evaluate =
+                new Button(getTranslation("fristen.evaluate.button"), VaadinIcon.PLAY.create());
+        evaluate.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_PRIMARY);
+        // Triggering auto-orders is a mutating action → mutators only (the @Scheduled path is
+        // system).
+        evaluate.setVisible(CurrentUserHelper.hasAnyRole("ADMIN", "DISPATCHER"));
+        evaluate.addClickListener(
+                e -> {
+                    lastFired = autoOrderService.runOnce();
+                    build(); // refresh counts in place with an inline result banner
+                });
+
+        HorizontalLayout header = new HorizontalLayout(title, evaluate);
+        header.setWidthFull();
+        header.setAlignItems(FlexComponent.Alignment.CENTER);
+        header.setJustifyContentMode(FlexComponent.JustifyContentMode.BETWEEN);
+        header.getStyle().set("margin-bottom", "var(--lumo-space-m)");
+        add(header);
+
+        if (lastFired != null) {
+            Span result = new Span(getTranslation("fristen.evaluate.result", lastFired));
+            result.getStyle()
+                    .set("display", "inline-block")
+                    .set(
+                            "background",
+                            "color-mix(in srgb, var(--rom-status-active) 12%, transparent)")
+                    .set("color", "var(--rom-status-active)")
+                    .set("border", "1px solid var(--rom-status-active)")
+                    .set("border-radius", "4px")
+                    .set("padding", "4px 10px")
+                    .set("font-size", "13px")
+                    .set("margin-bottom", "var(--lumo-space-s)");
+            add(result);
+        }
 
         FristService.Overview overview = fristService.overview();
         add(buildAutoBusinessSection(overview.businesses()));
@@ -61,9 +111,17 @@ public class FristenView extends VerticalLayout {
                                     + " ("
                                     + group.size()
                                     + ")"));
-            group.forEach(e -> add(entryRow(e)));
+            int limit = Math.min(group.size(), MAX_PER_GROUP);
+            for (int i = 0; i < limit; i++) {
+                add(entryRow(group.get(i)));
+            }
+            if (group.size() > limit) {
+                add(emptyHint(getTranslation("fristen.more", group.size() - limit)));
+            }
         }
     }
+
+    private static final int MAX_PER_GROUP = 25;
 
     private Component buildAutoBusinessSection(List<AutoBusiness> autos) {
         Div section = new Div();
