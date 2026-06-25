@@ -112,5 +112,13 @@ Je Slice: Compile/Spotless/ArchUnit + Commit + Codex + E2E. Danach zurück zur P
 
 - Verkehrstage-Default beim Anlegen: leeres Set vs. „alle noch freien Tage" vorbelegt?
 - Kürzt das Umverteilen auch, wenn dadurch eine Geschwister-Ausprägung **0 Tage** hätte → löschen oder
-  blocken?
+  blocken? **(A-S4 Ist-Stand: erlaubt — die Geschwister-Ausprägung bleibt mit `validity=null` / 0 Tagen
+  bestehen; der Dialog verhindert nur das Speichern der *aktiven* Ausprägung mit 0 Tagen. Codex-P2,
+  bewusst zurückgestellt bis Produkt-Entscheid löschen-vs-blocken-vs-warnen.)**
+- **Versionsnummern-Race** (A-S4, Codex/Review-P3, zurückgestellt): `recordDayHandover` bildet die
+  nächste Versionsnummer per `max+1` ohne Lock — wie das bestehende Muster (`PathProcessEngine`
+  .createVersionFromLatest). Bei gleichzeitiger Umverteilung auf **dieselbe** Geschwister-Ausprägung
+  kann die Unique-Constraint greifen; die ganze Operation ist eine atomare `@Transactional`-Einheit
+  (sauberer Rollback, keine Korruption, seltener Mehrbenutzer-Transient). Fix später: DB-Sequenz oder
+  pessimistischer Lock.
 - Builder-Kind-Modus: komplette Trasse vorbefüllt editierbar, oder nur Zeiten/Fahrzeug (Route gesperrt)?

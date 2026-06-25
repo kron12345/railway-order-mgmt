@@ -275,7 +275,7 @@ public class OrderService {
             if (sibling.getId().equals(expressionId)) {
                 continue;
             }
-            for (LocalDate day : ValidityJsonCodec.fromJson(sibling.getValidity())) {
+            for (LocalDate day : effectiveDays(sibling)) {
                 occupied.putIfAbsent(day, sibling.getName());
             }
         }
@@ -299,7 +299,9 @@ public class OrderService {
                 if (sibling.getId().equals(expressionId)) {
                     continue;
                 }
-                List<LocalDate> siblingDays = ValidityJsonCodec.fromJson(sibling.getValidity());
+                // Fall back to the weekday template when a sibling has no explicit date-set yet, so
+                // a day it logically runs is still protected (and materialised on hand-over).
+                List<LocalDate> siblingDays = effectiveDays(sibling);
                 List<LocalDate> given =
                         siblingDays.stream().filter(claimed::contains).sorted().toList();
                 if (given.isEmpty()) {
@@ -354,7 +356,35 @@ public class OrderService {
         return set;
     }
 
+    /**
+     * The operating days a position actually occupies: its explicit validity date-set, or — when
+     * that is unset — the days derived from its weekday template within its own range. Lets the
+     * picker and disjointness account for siblings created with only a weekday pattern (no date-set
+     * yet); on hand-over those derived days get materialised into an explicit date-set.
+     */
+    private static List<LocalDate> effectiveDays(OrderPosition position) {
+        List<LocalDate> fromValidity = ValidityJsonCodec.fromJson(position.getValidity());
+        if (!fromValidity.isEmpty()) {
+            return fromValidity;
+        }
+        Set<DayOfWeek> dows = Weekdays.parse(position.getWeekdays());
+        if (dows.isEmpty() || position.getStart() == null || position.getEnd() == null) {
+            return List.of();
+        }
+        List<LocalDate> days = new java.util.ArrayList<>();
+        LocalDate end = position.getEnd().toLocalDate();
+        for (LocalDate d = position.getStart().toLocalDate(); !d.isAfter(end); d = d.plusDays(1)) {
+            if (dows.contains(d.getDayOfWeek())) {
+                days.add(d);
+            }
+        }
+        return days;
+    }
+
     private static final DateTimeFormatter DAY_FMT = DateTimeFormatter.ofPattern("dd.MM.yyyy");
+
+    /** Max length of the persisted change summary (OrderPositionVersion.changeSummary column). */
+    private static final int SUMMARY_MAX = 500;
 
     /** Records on the shortened sibling that it handed Verkehrstage to another expression. */
     private void recordDayHandover(
@@ -371,8 +401,21 @@ public class OrderService {
         version.setOrderPosition(sibling);
         version.setVersionNumber(next);
         version.setSource(PositionChangeSource.MODIFICATION);
-        String dayList = givenDays.stream().map(DAY_FMT::format).collect(Collectors.joining(", "));
-        version.setChangeSummary("Verkehrstag(e) " + dayList + " abgegeben an " + claimant);
+        // Many days would overflow the 500-char column, so summarise long runs as a count + range.
+        String dayList =
+                givenDays.size() <= 8
+                        ? givenDays.stream().map(DAY_FMT::format).collect(Collectors.joining(", "))
+                        : givenDays.size()
+                                + " Tage ("
+                                + DAY_FMT.format(givenDays.get(0))
+                                + "–"
+                                + DAY_FMT.format(givenDays.get(givenDays.size() - 1))
+                                + ")";
+        String summary = "Verkehrstag(e) " + dayList + " abgegeben an " + claimant;
+        if (summary.length() > SUMMARY_MAX) {
+            summary = summary.substring(0, SUMMARY_MAX - 1) + "…";
+        }
+        version.setChangeSummary(summary);
         versionRepository.save(version);
     }
 
