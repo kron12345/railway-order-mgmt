@@ -8,6 +8,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
@@ -15,10 +16,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
+import com.ordermgmt.railway.domain.order.model.OrderPositionVersion;
+import com.ordermgmt.railway.domain.order.model.PositionOtnHistory;
 import com.ordermgmt.railway.domain.order.model.PositionStatus;
 import com.ordermgmt.railway.domain.order.model.ProcessStatus;
 import com.ordermgmt.railway.domain.order.repository.OrderPositionRepository;
+import com.ordermgmt.railway.domain.order.repository.OrderPositionVersionRepository;
 import com.ordermgmt.railway.domain.order.repository.OrderRepository;
+import com.ordermgmt.railway.domain.order.repository.PositionOtnHistoryRepository;
 
 import lombok.RequiredArgsConstructor;
 
@@ -30,6 +35,8 @@ public class OrderService {
 
     private final OrderRepository orderRepository;
     private final OrderPositionRepository positionRepository;
+    private final OrderPositionVersionRepository versionRepository;
+    private final PositionOtnHistoryRepository otnHistoryRepository;
 
     @Transactional(readOnly = true)
     public List<Order> findAllWithPositions() {
@@ -140,6 +147,26 @@ public class OrderService {
     @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
     public OrderPosition savePosition(OrderPosition position) {
         return positionRepository.save(position);
+    }
+
+    /** Batched version trail per position (Map keyed by position id) — avoids one query per row. */
+    @Transactional(readOnly = true)
+    public Map<UUID, List<OrderPositionVersion>> findVersionsByPositions(List<UUID> positionIds) {
+        if (positionIds.isEmpty()) {
+            return Map.of();
+        }
+        return versionRepository.findByOrderPositionIdIn(positionIds).stream()
+                .collect(Collectors.groupingBy(v -> v.getOrderPosition().getId()));
+    }
+
+    /** Batched OTN history per position (Map keyed by position id). */
+    @Transactional(readOnly = true)
+    public Map<UUID, List<PositionOtnHistory>> findOtnHistoryByPositions(List<UUID> positionIds) {
+        if (positionIds.isEmpty()) {
+            return Map.of();
+        }
+        return otnHistoryRepository.findByOrderPositionIdIn(positionIds).stream()
+                .collect(Collectors.groupingBy(h -> h.getOrderPosition().getId()));
     }
 
     /** Bulk-sets the internal (Bearbeitungs-)status on several positions in one transaction. */

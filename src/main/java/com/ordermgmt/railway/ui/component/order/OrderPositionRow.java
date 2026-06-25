@@ -410,6 +410,26 @@ public class OrderPositionRow extends Div {
         summaryHeader.add(badge);
     }
 
+    /**
+     * Adds a muted "war: …" chip listing the train's past OTNs, so a renamed train stays findable.
+     */
+    public void setOtnHistory(List<String> pastOtns) {
+        if (pastOtns == null || pastOtns.isEmpty() || summaryHeader == null) {
+            return;
+        }
+        Span chip =
+                new Span(
+                        translator.apply(
+                                "position.otnWas", new Object[] {String.join(", ", pastOtns)}));
+        chip.getStyle()
+                .set("font-size", "11px")
+                .set("color", "var(--rom-text-muted)")
+                .set("border", "1px dashed var(--rom-border)")
+                .set("border-radius", "3px")
+                .set("padding", "1px 6px");
+        summaryHeader.add(chip);
+    }
+
     /** Shows a selection checkbox (for mutator bulk actions) and reports each toggle. */
     public void enableSelection(Consumer<Boolean> onToggle) {
         selectCheckbox.setVisible(true);

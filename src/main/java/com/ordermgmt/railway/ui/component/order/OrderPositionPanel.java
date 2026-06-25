@@ -25,6 +25,9 @@ import com.ordermgmt.railway.domain.infrastructure.repository.OperationalPointRe
 import com.ordermgmt.railway.domain.infrastructure.repository.PredefinedTagRepository;
 import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
+import com.ordermgmt.railway.domain.order.model.OrderPositionVersion;
+import com.ordermgmt.railway.domain.order.model.PositionChangeSource;
+import com.ordermgmt.railway.domain.order.model.PositionOtnHistory;
 import com.ordermgmt.railway.domain.order.model.PositionStatus;
 import com.ordermgmt.railway.domain.order.model.PositionType;
 import com.ordermgmt.railway.domain.order.model.PositionVariantType;
@@ -79,6 +82,11 @@ public class OrderPositionPanel extends Div {
     private HorizontalLayout bulkBar;
     private Span bulkCountLabel;
     private Select<PositionStatus> bulkStatusSelect;
+    // Per-refresh batched lookups (set at the start of refreshPositions).
+    private java.util.Map<java.util.UUID, java.util.List<OrderPositionVersion>> versionsByPosition =
+            java.util.Map.of();
+    private java.util.Map<java.util.UUID, java.util.List<PositionOtnHistory>> otnByPosition =
+            java.util.Map.of();
 
     public OrderPositionPanel(
             Order order,
@@ -246,6 +254,12 @@ public class OrderPositionPanel extends Div {
                         businessService.findByLinkedOrderPositions(
                                 positions.stream().map(OrderPosition::getId).toList());
 
+        // Batched version trail + OTN history for all positions (one query each, not per row).
+        java.util.List<java.util.UUID> posIds =
+                positions.stream().map(OrderPosition::getId).toList();
+        versionsByPosition = orderService.findVersionsByPositions(posIds);
+        otnByPosition = orderService.findOtnHistoryByPositions(posIds);
+
         // Group expressions (Ausprägungen) under their parent train identity; top-level rows =
         // ZUG identities + legacy flat positions. Children render indented beneath their parent.
         java.util.Map<java.util.UUID, java.util.List<OrderPosition>> childrenByParent =
@@ -271,10 +285,17 @@ public class OrderPositionPanel extends Div {
             boolean isZug = top.getVariantType() == PositionVariantType.ZUG;
             // A ZUG identity is a container; its expressions carry the bookings, so it is not
             // directly selectable for bulk actions. Legacy flat positions stay selectable.
-            renderPosition(top, businessesByPosition, false, !isZug);
+            OrderPositionRow topRow = renderPosition(top, businessesByPosition, false, !isZug);
+            java.util.List<OrderPositionVersion> trainChanges = new java.util.ArrayList<>();
             for (OrderPosition child :
                     childrenByParent.getOrDefault(top.getId(), java.util.List.of())) {
                 renderPosition(child, businessesByPosition, true, true);
+                trainChanges.addAll(
+                        versionsByPosition.getOrDefault(child.getId(), java.util.List.of()));
+            }
+            // Train-level Änderungs-Feed: aggregate every expression change under the ZUG.
+            if (isZug && !trainChanges.isEmpty()) {
+                topRow.addBodyContent(new VersionFeed(trainChanges, translator));
             }
         }
         // Expressions whose parent train was filtered out still match the filter themselves —
@@ -289,7 +310,7 @@ public class OrderPositionPanel extends Div {
     }
 
     /** Renders one position (train identity, expression, or legacy flat) into the container. */
-    private void renderPosition(
+    private OrderPositionRow renderPosition(
             OrderPosition pos,
             java.util.Map<
                             java.util.UUID,
@@ -322,7 +343,31 @@ public class OrderPositionPanel extends Div {
             java.util.UUID pid = pos.getId();
             row.enableSelection(selected -> toggleSelection(pid, selected));
         }
-        row.setDeviations(DeviationDetector.detect(pos, pmTrain, translator));
+        // Deviations (order ↔ RailOpt) plus any open infrastructure alterations from the versions.
+        java.util.List<String> deviations =
+                new java.util.ArrayList<>(DeviationDetector.detect(pos, pmTrain, translator));
+        java.util.List<OrderPositionVersion> versions =
+                versionsByPosition.getOrDefault(pos.getId(), java.util.List.of());
+        java.time.LocalDate today = java.time.LocalDate.now();
+        for (OrderPositionVersion v : versions) {
+            // Only still-relevant alterations earn a ⚠; expired ones stay in the feed as history.
+            boolean active = v.getValidTo() == null || !v.getValidTo().isBefore(today);
+            if (v.getSource() == PositionChangeSource.ALTERATION && active) {
+                deviations.add(
+                        translator.apply(
+                                "version.alterationFlag", new Object[] {v.getChangeSummary()}));
+            }
+        }
+        row.setDeviations(deviations);
+
+        // OTN history chip: past numbers, so a renamed train stays recognizable.
+        java.util.List<String> pastOtns =
+                otnByPosition.getOrDefault(pos.getId(), java.util.List.of()).stream()
+                        .filter(h -> h.getValidTo() != null)
+                        .map(PositionOtnHistory::getOtn)
+                        .distinct()
+                        .toList();
+        row.setOtnHistory(pastOtns);
 
         // Linked businesses for this position (clickable chips → business detail).
         var linkedBusinesses = businessesByPosition.getOrDefault(pos.getId(), java.util.List.of());
@@ -332,6 +377,11 @@ public class OrderPositionPanel extends Div {
                             linkedBusinesses, this::t);
             chips.getStyle().set("margin", "0 12px 6px 12px");
             row.addBodyContent(chips);
+        }
+
+        // Per-expression change feed in the body (cheap; only when there are versions).
+        if (!versions.isEmpty()) {
+            row.addBodyContent(new VersionFeed(versions, translator));
         }
 
         // Resource panel — lazily built collapsible body. Its constructor loads resources, so a
@@ -358,6 +408,7 @@ public class OrderPositionPanel extends Div {
         }
 
         row.setBodyExpanded(allExpanded);
+        return row;
     }
 
     /**

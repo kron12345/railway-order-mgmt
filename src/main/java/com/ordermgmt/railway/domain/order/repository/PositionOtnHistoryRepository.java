@@ -1,5 +1,6 @@
 package com.ordermgmt.railway.domain.order.repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -16,4 +17,7 @@ public interface PositionOtnHistoryRepository extends JpaRepository<PositionOtnH
 
     /** Positions that ever carried this OTN — keeps a renamed train findable by its old number. */
     List<PositionOtnHistory> findByOtn(String otn);
+
+    /** Batched load for a set of positions (avoids one query per row). */
+    List<PositionOtnHistory> findByOrderPositionIdIn(Collection<UUID> orderPositionIds);
 }

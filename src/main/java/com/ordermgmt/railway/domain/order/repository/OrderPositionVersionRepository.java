@@ -1,5 +1,6 @@
 package com.ordermgmt.railway.domain.order.repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -13,4 +14,7 @@ import com.ordermgmt.railway.domain.order.model.OrderPositionVersion;
 public interface OrderPositionVersionRepository extends JpaRepository<OrderPositionVersion, UUID> {
 
     List<OrderPositionVersion> findByOrderPositionIdOrderByVersionNumberAsc(UUID orderPositionId);
+
+    /** Batched load for a set of positions (avoids one query per row). */
+    List<OrderPositionVersion> findByOrderPositionIdIn(Collection<UUID> orderPositionIds);
 }
