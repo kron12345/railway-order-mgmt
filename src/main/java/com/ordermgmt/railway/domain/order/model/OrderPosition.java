@@ -88,6 +88,10 @@ public class OrderPosition {
     @Column(name = "variant_type", length = 30)
     private PositionVariantType variantType;
 
+    /** Verkehrstage of an expression as comma-separated ISO weekday numbers (1=Mon..7=Sun). */
+    @Column(length = 20)
+    private String weekdays;
+
     @org.hibernate.envers.NotAudited
     @OneToMany(mappedBy = "variantOf")
     private List<OrderPosition> children = new ArrayList<>();

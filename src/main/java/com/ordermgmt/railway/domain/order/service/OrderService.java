@@ -1,6 +1,7 @@
 package com.ordermgmt.railway.domain.order.service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -19,7 +20,10 @@ import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.order.model.OrderPositionVersion;
 import com.ordermgmt.railway.domain.order.model.PositionOtnHistory;
 import com.ordermgmt.railway.domain.order.model.PositionStatus;
+import com.ordermgmt.railway.domain.order.model.PositionType;
+import com.ordermgmt.railway.domain.order.model.PositionVariantType;
 import com.ordermgmt.railway.domain.order.model.ProcessStatus;
+import com.ordermgmt.railway.domain.order.model.Weekdays;
 import com.ordermgmt.railway.domain.order.repository.OrderPositionRepository;
 import com.ordermgmt.railway.domain.order.repository.OrderPositionVersionRepository;
 import com.ordermgmt.railway.domain.order.repository.OrderRepository;
@@ -147,6 +151,82 @@ public class OrderService {
     @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
     public OrderPosition savePosition(OrderPosition position) {
         return positionRepository.save(position);
+    }
+
+    /** Data for a new expression (Ausprägung) under a train identity. */
+    public record ExpressionDraft(
+            String name,
+            String otn,
+            String weekdays,
+            String fromLocation,
+            String toLocation,
+            LocalDateTime start,
+            LocalDateTime end) {}
+
+    /** Thrown when a flat position that already has bookings is split into expressions. */
+    public static class PositionHasBookingsException extends IllegalStateException {}
+
+    /** Thrown when a new expression shares Verkehrstage with a sibling on overlapping dates. */
+    public static class ExpressionConflictException extends IllegalStateException {
+        private final String conflictName;
+
+        public ExpressionConflictException(String conflictName) {
+            this.conflictName = conflictName;
+        }
+
+        public String getConflictName() {
+            return conflictName;
+        }
+    }
+
+    /**
+     * Adds an expression (Ausprägung) under a train identity. Promotes a flat position to a ZUG the
+     * first time an expression is added. Enforces Verkehrstage disjointness: no sibling may share a
+     * weekday on overlapping dates (TTT: not two paths with the same TRID at the same time).
+     */
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
+    public OrderPosition addExpression(UUID parentId, ExpressionDraft draft) {
+        OrderPosition parent = positionRepository.findById(parentId).orElseThrow();
+        if (parent.getVariantType() == null) {
+            // A flat position's own bookings hang on it directly; splitting it into expressions
+            // would orphan them. Require a fresh/identity position (no bookings) to split.
+            boolean hasBookings =
+                    (parent.getPurchasePositions() != null
+                                    && !parent.getPurchasePositions().isEmpty())
+                            || (parent.getResourceNeeds() != null
+                                    && !parent.getResourceNeeds().isEmpty());
+            if (hasBookings) {
+                throw new PositionHasBookingsException();
+            }
+            parent.setVariantType(PositionVariantType.ZUG);
+            positionRepository.save(parent);
+        }
+        for (OrderPosition sibling : positionRepository.findByVariantOfId(parentId)) {
+            if (Weekdays.overlaps(sibling.getWeekdays(), draft.weekdays())
+                    && datesOverlap(sibling, draft.start(), draft.end())) {
+                throw new ExpressionConflictException(sibling.getName());
+            }
+        }
+        OrderPosition child = new OrderPosition();
+        child.setOrder(parent.getOrder());
+        child.setVariantOf(parent);
+        child.setVariantType(PositionVariantType.AUSPRAEGUNG);
+        child.setType(PositionType.FAHRPLAN);
+        child.setName(draft.name());
+        child.setOperationalTrainNumber(draft.otn());
+        child.setWeekdays(draft.weekdays());
+        child.setFromLocation(draft.fromLocation());
+        child.setToLocation(draft.toLocation());
+        child.setStart(draft.start());
+        child.setEnd(draft.end());
+        return positionRepository.save(child);
+    }
+
+    private static boolean datesOverlap(OrderPosition a, LocalDateTime start, LocalDateTime end) {
+        if (a.getStart() == null || a.getEnd() == null || start == null || end == null) {
+            return true; // unknown range → assume overlap (conservative)
+        }
+        return !a.getEnd().isBefore(start) && !end.isBefore(a.getStart());
     }
 
     /** Batched version trail per position (Map keyed by position id) — avoids one query per row. */

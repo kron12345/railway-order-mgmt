@@ -297,6 +297,15 @@ public class OrderPositionPanel extends Div {
             if (isZug && !trainChanges.isEmpty()) {
                 topRow.addBodyContent(new VersionFeed(trainChanges, translator));
             }
+            // Add an expression (Ausprägung) under any FAHRPLAN train (promotes a flat one to ZUG).
+            if (editable && top.getType() == PositionType.FAHRPLAN) {
+                Button addExpr = new Button(t("expression.add.button"), VaadinIcon.PLUS.create());
+                addExpr.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
+                addExpr.getStyle().set("margin", "2px 0 10px 22px");
+                OrderPosition parent = top;
+                addExpr.addClickListener(e -> openExpressionDialog(parent));
+                rowContainer.add(addExpr);
+            }
         }
         // Expressions whose parent train was filtered out still match the filter themselves —
         // render them standalone so a filter (e.g. on status) never hides a matching expression.
@@ -307,6 +316,40 @@ public class OrderPositionPanel extends Div {
                 }
             }
         }
+    }
+
+    private void openExpressionDialog(OrderPosition parent) {
+        new ExpressionDialog(
+                        translator,
+                        draft -> {
+                            try {
+                                orderService.addExpression(parent.getId(), draft);
+                                Notification.show(
+                                                t("expression.added"),
+                                                2500,
+                                                Notification.Position.BOTTOM_END)
+                                        .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+                                refreshPositions();
+                                return true;
+                            } catch (OrderService.ExpressionConflictException ex) {
+                                Notification.show(
+                                                translator.apply(
+                                                        "expression.conflict",
+                                                        new Object[] {ex.getConflictName()}),
+                                                4000,
+                                                Notification.Position.MIDDLE)
+                                        .addThemeVariants(NotificationVariant.LUMO_ERROR);
+                                return false;
+                            } catch (OrderService.PositionHasBookingsException ex) {
+                                Notification.show(
+                                                t("expression.hasBookings"),
+                                                4000,
+                                                Notification.Position.MIDDLE)
+                                        .addThemeVariants(NotificationVariant.LUMO_ERROR);
+                                return false;
+                            }
+                        })
+                .open();
     }
 
     /** Renders one position (train identity, expression, or legacy flat) into the container. */
