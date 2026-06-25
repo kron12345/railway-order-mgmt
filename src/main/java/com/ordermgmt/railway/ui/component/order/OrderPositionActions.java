@@ -128,6 +128,19 @@ class OrderPositionActions {
                 .open();
     }
 
+    /**
+     * Whether a position can be split into expressions. Mirrors {@link OrderService#addExpression}:
+     * a flat position that already has bookings cannot be promoted, so the UI disables the action
+     * up front instead of failing after the dialog. A train identity (typed) is always splittable.
+     */
+    static boolean canSplit(OrderPosition pos) {
+        if (pos.getVariantType() != null) {
+            return true; // a train identity is already split-ready
+        }
+        // Only real purchase orders block a split (a CAPACITY resource need does not).
+        return pos.getPurchasePositions() == null || pos.getPurchasePositions().isEmpty();
+    }
+
     void respondToAlteration(OrderPosition pos, boolean accept) {
         try {
             purchaseOrderService.respondToAlteration(pos.getId(), accept);

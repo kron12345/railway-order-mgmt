@@ -284,10 +284,10 @@ public class OrderPositionPanel extends Div {
             }
         }
 
-        java.util.Set<java.util.UUID> topIds = new java.util.HashSet<>();
-        for (OrderPosition top : tops) {
-            topIds.add(top.getId());
-        }
+        java.util.Set<java.util.UUID> topIds =
+                tops.stream()
+                        .map(OrderPosition::getId)
+                        .collect(java.util.stream.Collectors.toSet());
         for (OrderPosition top : tops) {
             boolean isZug = top.getVariantType() == PositionVariantType.ZUG;
             // A ZUG identity is a container; its expressions carry the bookings, so it is not
@@ -309,8 +309,12 @@ public class OrderPositionPanel extends Div {
                 Button addExpr = new Button(t("expression.add.button"), VaadinIcon.PLUS.create());
                 addExpr.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
                 addExpr.getStyle().set("margin", "2px 0 10px 22px");
-                OrderPosition parent = top;
-                addExpr.addClickListener(e -> actions.openExpressionDialog(parent));
+                if (OrderPositionActions.canSplit(top)) {
+                    addExpr.addClickListener(e -> actions.openExpressionDialog(top));
+                } else {
+                    addExpr.setEnabled(false); // flat position with bookings can't be split
+                    addExpr.setTooltipText(t("expression.hasBookings"));
+                }
                 rowContainer.add(addExpr);
             }
         }

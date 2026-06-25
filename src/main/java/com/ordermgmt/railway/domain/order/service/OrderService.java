@@ -188,14 +188,11 @@ public class OrderService {
     public OrderPosition addExpression(UUID parentId, ExpressionDraft draft) {
         OrderPosition parent = positionRepository.findById(parentId).orElseThrow();
         if (parent.getVariantType() == null) {
-            // A flat position's own bookings hang on it directly; splitting it into expressions
-            // would orphan them. Require a fresh/identity position (no bookings) to split.
-            boolean hasBookings =
-                    (parent.getPurchasePositions() != null
-                                    && !parent.getPurchasePositions().isEmpty())
-                            || (parent.getResourceNeeds() != null
-                                    && !parent.getResourceNeeds().isEmpty());
-            if (hasBookings) {
+            // A flat position's own purchase orders hang on it directly; splitting it would orphan
+            // them, so only a position without real bookings may be promoted. (An intrinsic
+            // CAPACITY
+            // resource need — the timetable link every FAHRPLAN position carries — does not count.)
+            if (parent.getPurchasePositions() != null && !parent.getPurchasePositions().isEmpty()) {
                 throw new PositionHasBookingsException();
             }
             parent.setVariantType(PositionVariantType.ZUG);
