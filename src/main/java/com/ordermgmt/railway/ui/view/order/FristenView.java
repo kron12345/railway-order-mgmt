@@ -19,8 +19,10 @@ import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 
+import com.ordermgmt.railway.domain.order.model.FristRegel;
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.order.service.FristService;
+import com.ordermgmt.railway.domain.order.service.FristService.AutoBusiness;
 import com.ordermgmt.railway.domain.order.service.FristService.FristEntry;
 import com.ordermgmt.railway.domain.order.service.FristService.Status;
 import com.ordermgmt.railway.ui.component.StatusBadge;
@@ -40,7 +42,10 @@ public class FristenView extends VerticalLayout {
         title.getStyle().set("margin", "0 0 var(--lumo-space-m) 0");
         add(title);
 
-        List<FristEntry> entries = fristService.evaluate();
+        FristService.Overview overview = fristService.overview();
+        add(buildAutoBusinessSection(overview.businesses()));
+
+        List<FristEntry> entries = overview.entries();
         if (entries.isEmpty()) {
             add(emptyHint(getTranslation("fristen.empty")));
             return;
@@ -58,6 +63,40 @@ public class FristenView extends VerticalLayout {
                                     + ")"));
             group.forEach(e -> add(entryRow(e)));
         }
+    }
+
+    private Component buildAutoBusinessSection(List<AutoBusiness> autos) {
+        Div section = new Div();
+        section.setWidthFull();
+        section.add(sectionHeader(getTranslation("fristen.auto.title")));
+        if (autos.isEmpty()) {
+            section.add(emptyHint(getTranslation("fristen.empty")));
+            return section;
+        }
+        for (AutoBusiness ab : autos) {
+            FristRegel r = ab.regel();
+            String summary =
+                    "⚙ "
+                            + r.getName()
+                            + "  ·  "
+                            + getTranslation("fristen.auto.members", ab.total())
+                            + (ab.overdue() > 0
+                                    ? "  ·  " + getTranslation("fristen.auto.overdue", ab.overdue())
+                                    : "")
+                            + (ab.dueSoon() > 0
+                                    ? "  ·  " + getTranslation("fristen.auto.dueSoon", ab.dueSoon())
+                                    : "");
+            Span label = new Span(summary);
+            label.getStyle().set("font-size", "13px");
+            StatusBadge action =
+                    new StatusBadge(
+                            getTranslation("fristen.action." + r.getAction().name()),
+                            r.getAction() == FristRegel.Action.AUTO_BESTELLEN
+                                    ? StatusBadge.StatusType.INFO
+                                    : StatusBadge.StatusType.NEUTRAL);
+            section.add(row(label, action));
+        }
+        return section;
     }
 
     private Component entryRow(FristEntry e) {

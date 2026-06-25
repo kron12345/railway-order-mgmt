@@ -4,8 +4,11 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,8 +42,35 @@ public class FristService {
     public record FristEntry(
             OrderPosition position, FristRegel regel, LocalDate deadline, Status status) {}
 
+    /** A rule seen as an automatic business: its dynamic members plus an urgency breakdown. */
+    public record AutoBusiness(FristRegel regel, int total, long overdue, long dueSoon) {}
+
+    /** One evaluation: the per-position entries and the per-rule automatic-business summary. */
+    public record Overview(List<FristEntry> entries, List<AutoBusiness> businesses) {}
+
     public List<FristRegel> rules() {
         return regelRepository.findAll();
+    }
+
+    /** Evaluates deadlines once and derives both the entry list and the automatic businesses. */
+    public Overview overview() {
+        List<FristEntry> entries = evaluate();
+        return new Overview(entries, summarize(entries));
+    }
+
+    private List<AutoBusiness> summarize(List<FristEntry> entries) {
+        Map<UUID, List<FristEntry>> byRule = new LinkedHashMap<>();
+        for (FristEntry e : entries) {
+            byRule.computeIfAbsent(e.regel().getId(), k -> new ArrayList<>()).add(e);
+        }
+        List<AutoBusiness> result = new ArrayList<>();
+        for (FristRegel rule : regelRepository.findByEnabledTrue()) {
+            List<FristEntry> rEntries = byRule.getOrDefault(rule.getId(), List.of());
+            long overdue = rEntries.stream().filter(e -> e.status() == Status.UEBERFAELLIG).count();
+            long dueSoon = rEntries.stream().filter(e -> e.status() == Status.FAELLIG_BALD).count();
+            result.add(new AutoBusiness(rule, rEntries.size(), overdue, dueSoon));
+        }
+        return result;
     }
 
     /** All deadline entries for enabled rules, sorted by deadline (most urgent first). */
