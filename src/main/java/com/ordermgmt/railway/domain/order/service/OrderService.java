@@ -1,8 +1,13 @@
 package com.ordermgmt.railway.domain.order.service;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.EnumMap;
+import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -18,11 +23,13 @@ import org.springframework.transaction.annotation.Transactional;
 import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.order.model.OrderPositionVersion;
+import com.ordermgmt.railway.domain.order.model.PositionChangeSource;
 import com.ordermgmt.railway.domain.order.model.PositionOtnHistory;
 import com.ordermgmt.railway.domain.order.model.PositionStatus;
 import com.ordermgmt.railway.domain.order.model.PositionType;
 import com.ordermgmt.railway.domain.order.model.PositionVariantType;
 import com.ordermgmt.railway.domain.order.model.ProcessStatus;
+import com.ordermgmt.railway.domain.order.model.ValidityJsonCodec;
 import com.ordermgmt.railway.domain.order.model.Weekdays;
 import com.ordermgmt.railway.domain.order.repository.OrderPositionRepository;
 import com.ordermgmt.railway.domain.order.repository.OrderPositionVersionRepository;
@@ -224,6 +231,149 @@ public class OrderService {
             return true; // unknown range → assume overlap (conservative)
         }
         return !a.getEnd().isBefore(start) && !end.isBefore(a.getStart());
+    }
+
+    /** Picker context for an expression's Verkehrstage: calendar bounds, occupied days, current. */
+    public record VerkehrstageContext(
+            LocalDate min,
+            LocalDate max,
+            Map<LocalDate, String> occupied,
+            List<LocalDate> current) {}
+
+    /**
+     * Builds the Verkehrstage-Picker context for an expression: calendar bounds from its train's
+     * window plus the days already taken by sibling expressions (date → owning expression name), so
+     * the picker can mark them and offer reassignment.
+     */
+    @Transactional(readOnly = true)
+    public VerkehrstageContext verkehrstageContext(UUID expressionId) {
+        OrderPosition expr = positionRepository.findById(expressionId).orElseThrow();
+        OrderPosition parent = expr.getVariantOf();
+
+        List<OrderPosition> siblings =
+                parent != null ? positionRepository.findByVariantOfId(parent.getId()) : List.of();
+
+        // Span the whole train window (parent + this expression + every sibling) so a day owned by
+        // a sibling outside this expression's own range is still visible and reassignable.
+        List<OrderPosition> windowSources = new java.util.ArrayList<>(siblings);
+        windowSources.add(expr);
+        if (parent != null) {
+            windowSources.add(parent);
+        }
+        OrderPosition[] sources = windowSources.toArray(new OrderPosition[0]);
+        LocalDate min = earliestStart(sources);
+        LocalDate max = latestEnd(sources);
+        if (min == null) {
+            min = LocalDate.now();
+        }
+        if (max == null || max.isBefore(min)) {
+            max = min.plusYears(1);
+        }
+
+        Map<LocalDate, String> occupied = new HashMap<>();
+        for (OrderPosition sibling : siblings) {
+            if (sibling.getId().equals(expressionId)) {
+                continue;
+            }
+            for (LocalDate day : ValidityJsonCodec.fromJson(sibling.getValidity())) {
+                occupied.putIfAbsent(day, sibling.getName());
+            }
+        }
+        return new VerkehrstageContext(
+                min, max, occupied, ValidityJsonCodec.fromJson(expr.getValidity()));
+    }
+
+    /**
+     * Sets an expression's Verkehrstage (date-set). Any day newly claimed from a sibling is removed
+     * there and recorded as a {@code MODIFICATION} version on that sibling — so disjointness is
+     * enforced date-precisely by reassignment instead of a hard reject.
+     */
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
+    public void setExpressionVerkehrstage(UUID expressionId, List<LocalDate> days) {
+        OrderPosition expr = positionRepository.findById(expressionId).orElseThrow();
+        Set<LocalDate> claimed = new HashSet<>(days);
+
+        OrderPosition parent = expr.getVariantOf();
+        if (parent != null) {
+            for (OrderPosition sibling : positionRepository.findByVariantOfId(parent.getId())) {
+                if (sibling.getId().equals(expressionId)) {
+                    continue;
+                }
+                List<LocalDate> siblingDays = ValidityJsonCodec.fromJson(sibling.getValidity());
+                List<LocalDate> given =
+                        siblingDays.stream().filter(claimed::contains).sorted().toList();
+                if (given.isEmpty()) {
+                    continue; // this sibling keeps all its days
+                }
+                List<LocalDate> kept =
+                        siblingDays.stream().filter(d -> !claimed.contains(d)).sorted().toList();
+                sibling.setValidity(kept.isEmpty() ? null : ValidityJsonCodec.toJson(kept));
+                sibling.setWeekdays(Weekdays.format(weekdaysOf(kept)));
+                positionRepository.save(sibling);
+                recordDayHandover(sibling, expr.getName(), given);
+            }
+        }
+
+        List<LocalDate> sorted = days.stream().sorted().toList();
+        expr.setValidity(sorted.isEmpty() ? null : ValidityJsonCodec.toJson(sorted));
+        expr.setWeekdays(Weekdays.format(weekdaysOf(sorted)));
+        positionRepository.save(expr);
+    }
+
+    private static LocalDate earliestStart(OrderPosition... positions) {
+        LocalDate min = null;
+        for (OrderPosition p : positions) {
+            if (p != null && p.getStart() != null) {
+                LocalDate d = p.getStart().toLocalDate();
+                if (min == null || d.isBefore(min)) {
+                    min = d;
+                }
+            }
+        }
+        return min;
+    }
+
+    private static LocalDate latestEnd(OrderPosition... positions) {
+        LocalDate max = null;
+        for (OrderPosition p : positions) {
+            if (p != null && p.getEnd() != null) {
+                LocalDate d = p.getEnd().toLocalDate();
+                if (max == null || d.isAfter(max)) {
+                    max = d;
+                }
+            }
+        }
+        return max;
+    }
+
+    private static Set<DayOfWeek> weekdaysOf(List<LocalDate> days) {
+        Set<DayOfWeek> set = EnumSet.noneOf(DayOfWeek.class);
+        for (LocalDate d : days) {
+            set.add(d.getDayOfWeek());
+        }
+        return set;
+    }
+
+    private static final DateTimeFormatter DAY_FMT = DateTimeFormatter.ofPattern("dd.MM.yyyy");
+
+    /** Records on the shortened sibling that it handed Verkehrstage to another expression. */
+    private void recordDayHandover(
+            OrderPosition sibling, String claimant, List<LocalDate> givenDays) {
+        int next =
+                versionRepository
+                                .findByOrderPositionIdOrderByVersionNumberAsc(sibling.getId())
+                                .stream()
+                                .mapToInt(OrderPositionVersion::getVersionNumber)
+                                .max()
+                                .orElse(0)
+                        + 1;
+        OrderPositionVersion version = new OrderPositionVersion();
+        version.setOrderPosition(sibling);
+        version.setVersionNumber(next);
+        version.setSource(PositionChangeSource.MODIFICATION);
+        String dayList = givenDays.stream().map(DAY_FMT::format).collect(Collectors.joining(", "));
+        version.setChangeSummary("Verkehrstag(e) " + dayList + " abgegeben an " + claimant);
+        versionRepository.save(version);
     }
 
     /** Batched version trail per position (Map keyed by position id) — avoids one query per row. */

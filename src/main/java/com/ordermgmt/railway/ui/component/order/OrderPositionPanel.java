@@ -360,6 +360,13 @@ public class OrderPositionPanel extends Div {
                     .set("margin", "6px 0")
                     .set("overflow", "hidden")
                     .set("background", "var(--rom-bg-card)");
+            // Verkehrstage editor on each FAHRPLAN card (expression or flat) — set/reassign days.
+            if (editable && pos.getType() == PositionType.FAHRPLAN) {
+                row.addActionChip(
+                        t("position.action.verkehrstage"),
+                        VaadinIcon.CALENDAR_O,
+                        () -> actions.openVerkehrstageDialog(pos));
+            }
         }
         rows.add(row);
         rowContainer.add(row);

@@ -51,6 +51,7 @@ public class OrderPositionRow extends Div {
     private final List<Supplier<Component>> lazyBody = new ArrayList<>();
     private boolean lazyBuilt = false;
     private HorizontalLayout summaryHeader;
+    private HorizontalLayout actionRow;
 
     public OrderPositionRow(
             OrderPosition position,
@@ -156,9 +157,9 @@ public class OrderPositionRow extends Div {
         delBtn.addClickListener(e -> onDelete.accept(position));
         delBtn.setVisible(editable);
 
-        HorizontalLayout actions = new HorizontalLayout(calBtn, viewBtn, histBtn, editBtn, delBtn);
-        actions.setSpacing(true);
-        actions.setAlignItems(FlexComponent.Alignment.START);
+        actionRow = new HorizontalLayout(calBtn, viewBtn, histBtn, editBtn, delBtn);
+        actionRow.setSpacing(true);
+        actionRow.setAlignItems(FlexComponent.Alignment.START);
 
         expandToggle.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
         expandToggle.addClassNames("op-action", "op-action--icon");
@@ -170,13 +171,26 @@ public class OrderPositionRow extends Div {
         selectCheckbox.setVisible(false);
         selectCheckbox.getStyle().set("align-self", "center");
 
-        HorizontalLayout row = new HorizontalLayout(selectCheckbox, expandToggle, info, actions);
+        HorizontalLayout row = new HorizontalLayout(selectCheckbox, expandToggle, info, actionRow);
         row.setWidthFull();
         row.setAlignItems(FlexComponent.Alignment.START);
         row.getStyle().set("padding", "10px 12px").set("gap", "12px").set("cursor", "default");
         row.expand(info);
 
         return row;
+    }
+
+    /** Inserts an extra action chip (e.g. Verkehrstage) before the edit/delete buttons. */
+    public void addActionChip(String label, VaadinIcon icon, Runnable onClick) {
+        if (!editable || actionRow == null) {
+            return;
+        }
+        Button btn = new Button(label, icon.create());
+        btn.addThemeVariants(ButtonVariant.LUMO_SMALL);
+        btn.addClassName("op-action");
+        btn.addClickListener(e -> onClick.run());
+        int idx = Math.max(0, actionRow.getComponentCount() - 2); // before edit + delete
+        actionRow.addComponentAtIndex(idx, btn);
     }
 
     private Div createInfoBlock(BiFunction<String, Object[], String> t) {

@@ -7,6 +7,7 @@ import java.time.format.TextStyle;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -35,6 +36,7 @@ public class ValidityCalendar extends Div {
     private final LocalDate minDate;
     private final LocalDate maxDate;
     private final Set<LocalDate> selectedDates = new LinkedHashSet<>();
+    private final Map<LocalDate, String> occupiedDates = new HashMap<>();
     private final Map<LocalDate, Div> cellMap = new LinkedHashMap<>();
     private final Span countLabel = new Span();
     private boolean compact = false;
@@ -90,6 +92,23 @@ public class ValidityCalendar extends Div {
         }
         updateAllCells();
         updateCount();
+    }
+
+    /**
+     * Marks days already taken by sibling expressions: each occupied day gets a distinct style and
+     * a tooltip naming its owner. Occupied days stay selectable — picking one signals a hand-over.
+     */
+    public void setOccupiedDates(Map<LocalDate, String> occupied) {
+        occupiedDates.clear();
+        if (occupied != null) {
+            occupied.forEach(
+                    (date, owner) -> {
+                        if (!date.isBefore(minDate) && !date.isAfter(maxDate)) {
+                            occupiedDates.put(date, owner);
+                        }
+                    });
+        }
+        updateAllCells();
     }
 
     // --- Toolbar: weekday buttons + bulk actions ---
@@ -526,29 +545,37 @@ public class ValidityCalendar extends Div {
 
     private void updateCell(LocalDate date) {
         Div cell = cellMap.get(date);
-        if (cell == null) return;
-        if (selectedDates.contains(date)) {
-            applySelectedStyle(cell);
-        } else {
-            applyUnselectedStyle(cell);
+        if (cell != null) {
+            styleCell(date, cell);
         }
     }
 
     private void updateAllCells() {
-        cellMap.forEach(
-                (date, cell) -> {
-                    if (selectedDates.contains(date)) {
-                        applySelectedStyle(cell);
-                    } else {
-                        applyUnselectedStyle(cell);
-                    }
-                });
+        cellMap.forEach(this::styleCell);
+    }
+
+    /** Selected wins (accent); else occupied-by-sibling (amber + tooltip); else plain. */
+    private void styleCell(LocalDate date, Div cell) {
+        if (selectedDates.contains(date)) {
+            applySelectedStyle(cell);
+        } else if (occupiedDates.containsKey(date)) {
+            applyOccupiedStyle(cell);
+        } else {
+            applyUnselectedStyle(cell);
+        }
+        String owner = occupiedDates.get(date);
+        if (owner != null) {
+            cell.getElement().setAttribute("title", "Belegt: " + owner);
+        } else {
+            cell.getElement().removeAttribute("title");
+        }
     }
 
     private void applySelectedStyle(Div cell) {
         cell.getStyle()
                 .set("color", "var(--rom-bg-primary)")
                 .set("background", "var(--rom-accent)")
+                .set("border", "1px solid transparent")
                 .set("font-weight", "700");
     }
 
@@ -556,7 +583,17 @@ public class ValidityCalendar extends Div {
         cell.getStyle()
                 .set("color", "var(--rom-text-secondary)")
                 .set("background", "var(--rom-bg-primary)")
+                .set("border", "1px solid transparent")
                 .set("font-weight", "600");
+    }
+
+    /** A day already owned by a sibling expression — amber, dashed, still clickable. */
+    private void applyOccupiedStyle(Div cell) {
+        cell.getStyle()
+                .set("color", "#b45309")
+                .set("background", "rgba(245, 158, 11, 0.18)")
+                .set("border", "1px dashed #f59e0b")
+                .set("font-weight", "700");
     }
 
     private void updateCount() {

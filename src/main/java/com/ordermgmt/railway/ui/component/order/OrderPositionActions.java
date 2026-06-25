@@ -94,6 +94,28 @@ class OrderPositionActions {
         UI.getCurrent().navigate(target);
     }
 
+    /** Opens the Verkehrstage editor for an expression: pick days, reassign from siblings. */
+    void openVerkehrstageDialog(OrderPosition expr) {
+        OrderService.VerkehrstageContext ctx = orderService.verkehrstageContext(expr.getId());
+        new ExpressionVerkehrstageDialog(
+                        tr("verkehrstage.dialog.title") + " · " + expr.getName(),
+                        ctx.min(),
+                        ctx.max(),
+                        ctx.current(),
+                        ctx.occupied(),
+                        t,
+                        days -> {
+                            orderService.setExpressionVerkehrstage(expr.getId(), days);
+                            Notification.show(
+                                            tr("verkehrstage.saved"),
+                                            2500,
+                                            Notification.Position.BOTTOM_END)
+                                    .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+                            onRefresh.run();
+                        })
+                .open();
+    }
+
     void openExpressionDialog(OrderPosition parent) {
         new ExpressionDialog(
                         t,
