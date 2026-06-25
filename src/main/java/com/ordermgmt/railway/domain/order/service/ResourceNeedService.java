@@ -164,6 +164,17 @@ public class ResourceNeedService {
         resourceNeedRepository.deleteById(resourceNeedId);
     }
 
+    /** Sets a demand's own Verkehrstage (validity date-set) and von/nach route (FAHRPLAN). */
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
+    public void updateVerkehrstageAndRoute(
+            UUID needId, String validity, String fromLocation, String toLocation) {
+        ResourceNeed need = resourceNeedRepository.findById(needId).orElseThrow();
+        need.setValidity(validity);
+        need.setFromLocation(fromLocation);
+        need.setToLocation(toLocation);
+        resourceNeedRepository.save(need);
+    }
+
     /** Returns all resource needs for a given order position with catalog items eagerly loaded. */
     @Transactional(readOnly = true)
     public List<ResourceNeed> getResourcesForPosition(UUID positionId) {

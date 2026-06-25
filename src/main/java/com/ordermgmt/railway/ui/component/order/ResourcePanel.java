@@ -15,6 +15,7 @@ import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 
+import com.ordermgmt.railway.domain.infrastructure.repository.OperationalPointRepository;
 import com.ordermgmt.railway.domain.order.model.CoverageType;
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.order.model.PurchasePosition;
@@ -42,6 +43,7 @@ public class ResourcePanel extends Div {
     private final PurchaseOrderService purchaseOrderService;
     private final ResourceCatalogItemRepository catalogItemRepository;
     private final PurchasePositionRepository purchasePositionRepository;
+    private final OperationalPointRepository opRepo;
     private final AuditService auditService;
     private final com.ordermgmt.railway.domain.business.service.BusinessService businessService;
     private final BiFunction<String, Object[], String> translator;
@@ -66,6 +68,7 @@ public class ResourcePanel extends Div {
             PurchaseOrderService purchaseOrderService,
             ResourceCatalogItemRepository catalogItemRepository,
             PurchasePositionRepository purchasePositionRepository,
+            OperationalPointRepository opRepo,
             AuditService auditService,
             com.ordermgmt.railway.domain.business.service.BusinessService businessService,
             BiFunction<String, Object[], String> translator,
@@ -76,6 +79,7 @@ public class ResourcePanel extends Div {
         this.purchaseOrderService = purchaseOrderService;
         this.catalogItemRepository = catalogItemRepository;
         this.purchasePositionRepository = purchasePositionRepository;
+        this.opRepo = opRepo;
         this.auditService = auditService;
         this.businessService = businessService;
         this.translator = translator;
@@ -349,6 +353,7 @@ public class ResourcePanel extends Div {
                                     position,
                                     resourceNeedService,
                                     catalogItemRepository,
+                                    opRepo,
                                     translator);
                     dialog.addSaveListener(ev -> loadResources());
                     dialog.open();

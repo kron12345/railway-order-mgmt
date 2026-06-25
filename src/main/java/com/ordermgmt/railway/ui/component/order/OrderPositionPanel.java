@@ -417,6 +417,7 @@ public class OrderPositionPanel extends Div {
                                         purchaseOrderService,
                                         catalogItemRepository,
                                         purchasePositionRepository,
+                                        opRepo,
                                         auditService,
                                         businessService,
                                         translator,
