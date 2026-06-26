@@ -18,6 +18,7 @@ import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.order.model.PositionType;
 import com.ordermgmt.railway.domain.order.model.PositionVariantType;
 import com.ordermgmt.railway.domain.order.model.PurchaseStatus;
+import com.ordermgmt.railway.domain.order.model.ValidityJsonCodec;
 import com.ordermgmt.railway.domain.order.model.Weekdays;
 import com.ordermgmt.railway.domain.order.repository.FristRegelRepository;
 import com.ordermgmt.railway.domain.order.repository.OrderPositionRepository;
@@ -79,6 +80,7 @@ public class FristService {
         List<OrderPosition> bookable =
                 positionRepository.findByType(PositionType.FAHRPLAN).stream()
                         .filter(p -> p.getVariantType() != PositionVariantType.ZUG)
+                        .filter(this::hasOperatingDays)
                         .toList();
         LocalDate today = LocalDate.now();
         List<FristEntry> entries = new ArrayList<>();
@@ -101,6 +103,16 @@ public class FristService {
         }
         entries.sort(Comparator.comparing(FristEntry::deadline));
         return entries;
+    }
+
+    /**
+     * An expression is a deadline candidate only once it is actually scheduled — it has operating
+     * days, either an explicit validity date-set or a weekday template. A freshly cloned, not-yet-
+     * assigned expression (A-S5) has neither and must not surface a phantom deadline.
+     */
+    private boolean hasOperatingDays(OrderPosition pos) {
+        return !ValidityJsonCodec.fromJson(pos.getValidity()).isEmpty()
+                || !Weekdays.parse(pos.getWeekdays()).isEmpty();
     }
 
     private boolean isMember(FristRegel rule, OrderPosition pos) {

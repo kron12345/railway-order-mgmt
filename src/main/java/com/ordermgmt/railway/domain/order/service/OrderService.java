@@ -190,11 +190,11 @@ public class OrderService {
         child.setOperationalTrainNumber(parent.getOperationalTrainNumber());
         child.setFromLocation(parent.getFromLocation());
         child.setToLocation(parent.getToLocation());
-        child.setStart(parent.getStart());
-        child.setEnd(parent.getEnd());
-        // Deliberately NOT cloning validity/weekdays: siblings must be date-disjoint, so a new
-        // expression starts with no Verkehrstage and the user assigns them via the picker (A-S4),
-        // which enforces disjointness. Cloning them would create an overlapping sibling.
+        // Deliberately NOT cloning validity/weekdays/start/end: siblings must be date-disjoint, so
+        // a
+        // new expression starts fully unscheduled (no Verkehrstage, no date range) and the user
+        // assigns days via the picker (A-S4, enforces disjointness) or the builder. Cloning them
+        // would create an overlapping sibling and a phantom deadline before any day is assigned.
         child.setServiceType(parent.getServiceType());
         child.setComment(parent.getComment());
         child.setTags(parent.getTags());
@@ -202,10 +202,17 @@ public class OrderService {
         return positionRepository.save(child);
     }
 
-    /** Parent name + " (Kopie)" suffix, clamped to the 255-char name column. */
+    /**
+     * Parent name + " (Kopie)" suffix, clamping the base so the suffix survives the 255-char limit.
+     */
     private static String copyName(String parentName) {
-        String name = (parentName == null ? "" : parentName) + " (Kopie)";
-        return name.length() <= 255 ? name : name.substring(0, 255);
+        String suffix = " (Kopie)";
+        String base = parentName == null ? "" : parentName;
+        int maxBase = 255 - suffix.length();
+        if (base.length() > maxBase) {
+            base = base.substring(0, maxBase);
+        }
+        return base + suffix;
     }
 
     /** Picker context for an expression's Verkehrstage: calendar bounds, occupied days, current. */
