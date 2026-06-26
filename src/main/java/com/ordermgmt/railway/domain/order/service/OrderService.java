@@ -2,7 +2,6 @@ package com.ordermgmt.railway.domain.order.service;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.EnumMap;
 import java.util.EnumSet;
@@ -26,7 +25,6 @@ import com.ordermgmt.railway.domain.order.model.OrderPositionVersion;
 import com.ordermgmt.railway.domain.order.model.PositionChangeSource;
 import com.ordermgmt.railway.domain.order.model.PositionOtnHistory;
 import com.ordermgmt.railway.domain.order.model.PositionStatus;
-import com.ordermgmt.railway.domain.order.model.PositionType;
 import com.ordermgmt.railway.domain.order.model.PositionVariantType;
 import com.ordermgmt.railway.domain.order.model.ProcessStatus;
 import com.ordermgmt.railway.domain.order.model.ValidityJsonCodec;
@@ -160,77 +158,47 @@ public class OrderService {
         return positionRepository.save(position);
     }
 
-    /** Data for a new expression (Ausprägung) under a train identity. */
-    public record ExpressionDraft(
-            String name,
-            String otn,
-            String weekdays,
-            String fromLocation,
-            String toLocation,
-            LocalDateTime start,
-            LocalDateTime end) {}
-
     /** Thrown when a flat position that already has bookings is split into expressions. */
     public static class PositionHasBookingsException extends IllegalStateException {}
 
-    /** Thrown when a new expression shares Verkehrstage with a sibling on overlapping dates. */
-    public static class ExpressionConflictException extends IllegalStateException {
-        private final String conflictName;
-
-        public ExpressionConflictException(String conflictName) {
-            this.conflictName = conflictName;
-        }
-
-        public String getConflictName() {
-            return conflictName;
-        }
-    }
-
     /**
-     * Adds an expression (Ausprägung) under a train identity. Promotes a flat position to a ZUG the
-     * first time an expression is added. Enforces Verkehrstage disjointness: no sibling may share a
-     * weekday on overlapping dates (TTT: not two paths with the same TRID at the same time).
+     * Creates a new expression (Ausprägung) as a clone of its parent train identity: copies the
+     * parent's route/metadata so the type-appropriate editor (Fahrplan-Builder for FAHRPLAN,
+     * service dialog for LEISTUNG) opens pre-filled and the user only edits the deviation. Promotes
+     * a flat position to a ZUG on the first split. The timetable archive (FAHRPLAN) is cloned
+     * separately by the caller ({@code TimetableArchiveService.cloneArchiveTo}) to avoid an
+     * order→timetable cycle.
      */
     @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
-    public OrderPosition addExpression(UUID parentId, ExpressionDraft draft) {
+    public OrderPosition addExpressionFromParent(UUID parentId) {
         OrderPosition parent = positionRepository.findById(parentId).orElseThrow();
         if (parent.getVariantType() == null) {
             // A flat position's own purchase orders hang on it directly; splitting it would orphan
-            // them, so only a position without real bookings may be promoted. (An intrinsic
-            // CAPACITY
-            // resource need — the timetable link every FAHRPLAN position carries — does not count.)
+            // them, so only a position without real bookings may be promoted.
             if (parent.getPurchasePositions() != null && !parent.getPurchasePositions().isEmpty()) {
                 throw new PositionHasBookingsException();
             }
             parent.setVariantType(PositionVariantType.ZUG);
             positionRepository.save(parent);
         }
-        for (OrderPosition sibling : positionRepository.findByVariantOfId(parentId)) {
-            if (Weekdays.overlaps(sibling.getWeekdays(), draft.weekdays())
-                    && datesOverlap(sibling, draft.start(), draft.end())) {
-                throw new ExpressionConflictException(sibling.getName());
-            }
-        }
         OrderPosition child = new OrderPosition();
         child.setOrder(parent.getOrder());
         child.setVariantOf(parent);
         child.setVariantType(PositionVariantType.AUSPRAEGUNG);
-        child.setType(PositionType.FAHRPLAN);
-        child.setName(draft.name());
-        child.setOperationalTrainNumber(draft.otn());
-        child.setWeekdays(draft.weekdays());
-        child.setFromLocation(draft.fromLocation());
-        child.setToLocation(draft.toLocation());
-        child.setStart(draft.start());
-        child.setEnd(draft.end());
+        child.setType(parent.getType());
+        child.setName(parent.getName() + " (Kopie)");
+        child.setOperationalTrainNumber(parent.getOperationalTrainNumber());
+        child.setFromLocation(parent.getFromLocation());
+        child.setToLocation(parent.getToLocation());
+        child.setStart(parent.getStart());
+        child.setEnd(parent.getEnd());
+        child.setValidity(parent.getValidity());
+        child.setWeekdays(parent.getWeekdays());
+        child.setServiceType(parent.getServiceType());
+        child.setComment(parent.getComment());
+        child.setTags(parent.getTags());
+        child.setInternalStatus(PositionStatus.IN_BEARBEITUNG);
         return positionRepository.save(child);
-    }
-
-    private static boolean datesOverlap(OrderPosition a, LocalDateTime start, LocalDateTime end) {
-        if (a.getStart() == null || a.getEnd() == null || start == null || end == null) {
-            return true; // unknown range → assume overlap (conservative)
-        }
-        return !a.getEnd().isBefore(start) && !end.isBefore(a.getStart());
     }
 
     /** Picker context for an expression's Verkehrstage: calendar bounds, occupied days, current. */

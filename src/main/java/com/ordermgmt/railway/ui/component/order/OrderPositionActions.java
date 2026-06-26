@@ -15,6 +15,7 @@ import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.order.model.PositionType;
 import com.ordermgmt.railway.domain.order.service.OrderService;
 import com.ordermgmt.railway.domain.order.service.PurchaseOrderService;
+import com.ordermgmt.railway.domain.timetable.service.TimetableArchiveService;
 
 /**
  * Position-level actions for the position panel: create/edit a service or timetable position,
@@ -25,6 +26,7 @@ class OrderPositionActions {
 
     private final Order order;
     private final OrderService orderService;
+    private final TimetableArchiveService timetableArchiveService;
     private final OperationalPointRepository opRepo;
     private final PredefinedTagRepository tagRepo;
     private final BusinessService businessService;
@@ -35,6 +37,7 @@ class OrderPositionActions {
     OrderPositionActions(
             Order order,
             OrderService orderService,
+            TimetableArchiveService timetableArchiveService,
             OperationalPointRepository opRepo,
             PredefinedTagRepository tagRepo,
             BusinessService businessService,
@@ -43,6 +46,7 @@ class OrderPositionActions {
             Runnable onRefresh) {
         this.order = order;
         this.orderService = orderService;
+        this.timetableArchiveService = timetableArchiveService;
         this.opRepo = opRepo;
         this.tagRepo = tagRepo;
         this.businessService = businessService;
@@ -116,44 +120,34 @@ class OrderPositionActions {
                 .open();
     }
 
-    void openExpressionDialog(OrderPosition parent) {
-        new ExpressionDialog(
-                        t,
-                        draft -> {
-                            try {
-                                orderService.addExpression(parent.getId(), draft);
-                                Notification.show(
-                                                tr("expression.added"),
-                                                2500,
-                                                Notification.Position.BOTTOM_END)
-                                        .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
-                                onRefresh.run();
-                                return true;
-                            } catch (OrderService.ExpressionConflictException ex) {
-                                Notification.show(
-                                                t.apply(
-                                                        "expression.conflict",
-                                                        new Object[] {ex.getConflictName()}),
-                                                4000,
-                                                Notification.Position.MIDDLE)
-                                        .addThemeVariants(NotificationVariant.LUMO_ERROR);
-                                return false;
-                            } catch (OrderService.PositionHasBookingsException ex) {
-                                Notification.show(
-                                                tr("expression.hasBookings"),
-                                                4000,
-                                                Notification.Position.MIDDLE)
-                                        .addThemeVariants(NotificationVariant.LUMO_ERROR);
-                                return false;
-                            }
-                        })
-                .open();
+    /**
+     * Creates a new expression as a clone of the parent train identity and opens the
+     * type-appropriate editor pre-filled: the Fahrplan-Builder for FAHRPLAN (with the parent's
+     * timetable archive cloned), the service dialog for LEISTUNG. Replaces the former generic
+     * expression dialog.
+     */
+    void openAddExpression(OrderPosition parent) {
+        OrderPosition child;
+        try {
+            child = orderService.addExpressionFromParent(parent.getId());
+        } catch (OrderService.PositionHasBookingsException ex) {
+            Notification.show(tr("expression.hasBookings"), 4000, Notification.Position.MIDDLE)
+                    .addThemeVariants(NotificationVariant.LUMO_ERROR);
+            return;
+        }
+        if (parent.getType() == PositionType.FAHRPLAN) {
+            timetableArchiveService.cloneArchiveTo(parent.getId(), child.getId());
+            openTimetableBuilder(child); // edit-mode on the freshly cloned child
+        } else {
+            openServiceDialog(child); // edit-mode on the freshly cloned child
+        }
     }
 
     /**
-     * Whether a position can be split into expressions. Mirrors {@link OrderService#addExpression}:
-     * a flat position that already has bookings cannot be promoted, so the UI disables the action
-     * up front instead of failing after the dialog. A train identity (typed) is always splittable.
+     * Whether a position can be split into expressions. Mirrors {@link
+     * OrderService#addExpressionFromParent}: a flat position that already has bookings cannot be
+     * promoted, so the UI disables the action up front. A train identity (typed) is always
+     * splittable.
      */
     static boolean canSplit(OrderPosition pos) {
         if (pos.getVariantType() != null) {

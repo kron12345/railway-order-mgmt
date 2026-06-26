@@ -45,6 +45,8 @@ public class OrderPositionPanel extends Div {
 
     private final Order order;
     private final OrderService orderService;
+    private final com.ordermgmt.railway.domain.timetable.service.TimetableArchiveService
+            timetableArchiveService;
     private final OperationalPointRepository opRepo;
     private final PredefinedTagRepository tagRepo;
     private final PathManagerService pathManagerService;
@@ -81,6 +83,8 @@ public class OrderPositionPanel extends Div {
     public OrderPositionPanel(
             Order order,
             OrderService orderService,
+            com.ordermgmt.railway.domain.timetable.service.TimetableArchiveService
+                    timetableArchiveService,
             OperationalPointRepository opRepo,
             PredefinedTagRepository tagRepo,
             PathManagerService pathManagerService,
@@ -93,6 +97,7 @@ public class OrderPositionPanel extends Div {
             BiFunction<String, Object[], String> translator) {
         this.order = order;
         this.orderService = orderService;
+        this.timetableArchiveService = timetableArchiveService;
         this.opRepo = opRepo;
         this.tagRepo = tagRepo;
         this.pathManagerService = pathManagerService;
@@ -118,6 +123,7 @@ public class OrderPositionPanel extends Div {
                 new OrderPositionActions(
                         order,
                         orderService,
+                        timetableArchiveService,
                         opRepo,
                         tagRepo,
                         businessService,
@@ -311,7 +317,7 @@ public class OrderPositionPanel extends Div {
                 addExpr.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
                 addExpr.getStyle().set("margin", "2px 0 10px 22px");
                 if (OrderPositionActions.canSplit(top)) {
-                    addExpr.addClickListener(e -> actions.openExpressionDialog(top));
+                    addExpr.addClickListener(e -> actions.openAddExpression(top));
                 } else {
                     addExpr.setEnabled(false); // flat position with bookings can't be split
                     addExpr.setTooltipText(t("expression.hasBookings"));

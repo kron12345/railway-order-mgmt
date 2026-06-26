@@ -8,6 +8,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -82,6 +83,31 @@ public class TimetableArchiveService {
 
     public List<TimetableActivityOption> activityOptions() {
         return TimetableActivityCatalog.all();
+    }
+
+    /**
+     * Clones the source position's timetable archive onto the target (a freshly created
+     * expression), linking the copy via the target's CAPACITY resource need so the builder opens
+     * pre-filled. No-op when the source has no archive (e.g. a seeded position never built in the
+     * editor).
+     */
+    public void cloneArchiveTo(UUID sourceId, UUID targetId) {
+        OrderPosition source = orderPositionRepository.findById(sourceId).orElseThrow();
+        Optional<TimetableArchive> sourceArchive = findArchive(source);
+        if (sourceArchive.isEmpty()) {
+            return;
+        }
+        TimetableArchive src = sourceArchive.get();
+        TimetableArchive copy = new TimetableArchive();
+        copy.setTimetableType(src.getTimetableType());
+        copy.setOperationalTrainNumber(src.getOperationalTrainNumber());
+        copy.setRouteSummary(src.getRouteSummary());
+        copy.setTableData(src.getTableData());
+        copy = timetableArchiveRepository.save(copy);
+
+        OrderPosition target = orderPositionRepository.findById(targetId).orElseThrow();
+        ensureCapacityResourceNeed(target).setLinkedFahrplanId(copy.getId());
+        orderPositionRepository.save(target);
     }
 
     public OrderPosition saveTimetablePosition(

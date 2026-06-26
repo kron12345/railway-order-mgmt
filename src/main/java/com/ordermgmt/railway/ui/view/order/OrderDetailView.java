@@ -66,6 +66,8 @@ public class OrderDetailView extends VerticalLayout {
     private final PurchasePositionRepository purchasePositionRepository;
     private final AuditService auditService;
     private final com.ordermgmt.railway.domain.business.service.BusinessService businessService;
+    private final com.ordermgmt.railway.domain.timetable.service.TimetableArchiveService
+            timetableArchiveService;
     private Order order;
     private boolean isNew;
 
@@ -83,8 +85,11 @@ public class OrderDetailView extends VerticalLayout {
             ResourceCatalogItemRepository catalogItemRepository,
             PurchasePositionRepository purchasePositionRepository,
             AuditService auditService,
-            com.ordermgmt.railway.domain.business.service.BusinessService businessService) {
+            com.ordermgmt.railway.domain.business.service.BusinessService businessService,
+            com.ordermgmt.railway.domain.timetable.service.TimetableArchiveService
+                    timetableArchiveService) {
         this.orderService = orderService;
+        this.timetableArchiveService = timetableArchiveService;
         this.customerRepository = customerRepository;
         this.predefinedTagRepository = predefinedTagRepository;
         this.opRepo = opRepo;
@@ -183,6 +188,7 @@ public class OrderDetailView extends VerticalLayout {
                 new OrderPositionPanel(
                         order,
                         orderService,
+                        timetableArchiveService,
                         opRepo,
                         predefinedTagRepository,
                         pathManagerService,
