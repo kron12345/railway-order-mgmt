@@ -27,7 +27,6 @@ import com.ordermgmt.railway.domain.infrastructure.repository.PredefinedTagRepos
 import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.domain.order.model.OrderType;
 import com.ordermgmt.railway.domain.order.model.ProcessStatus;
-import com.ordermgmt.railway.domain.order.repository.PurchasePositionRepository;
 import com.ordermgmt.railway.domain.order.repository.ResourceCatalogItemRepository;
 import com.ordermgmt.railway.domain.order.service.AuditService;
 import com.ordermgmt.railway.domain.order.service.OrderService;
@@ -63,7 +62,6 @@ public class OrderDetailView extends VerticalLayout {
     private final ResourceNeedService resourceNeedService;
     private final PurchaseOrderService purchaseOrderService;
     private final ResourceCatalogItemRepository catalogItemRepository;
-    private final PurchasePositionRepository purchasePositionRepository;
     private final AuditService auditService;
     private final com.ordermgmt.railway.domain.business.service.BusinessService businessService;
     private final com.ordermgmt.railway.domain.timetable.service.TimetableArchiveService
@@ -83,7 +81,6 @@ public class OrderDetailView extends VerticalLayout {
             ResourceNeedService resourceNeedService,
             PurchaseOrderService purchaseOrderService,
             ResourceCatalogItemRepository catalogItemRepository,
-            PurchasePositionRepository purchasePositionRepository,
             AuditService auditService,
             com.ordermgmt.railway.domain.business.service.BusinessService businessService,
             com.ordermgmt.railway.domain.timetable.service.TimetableArchiveService
@@ -97,7 +94,6 @@ public class OrderDetailView extends VerticalLayout {
         this.resourceNeedService = resourceNeedService;
         this.purchaseOrderService = purchaseOrderService;
         this.catalogItemRepository = catalogItemRepository;
-        this.purchasePositionRepository = purchasePositionRepository;
         this.businessService = businessService;
         this.auditService = auditService;
         setPadding(false);
@@ -195,7 +191,6 @@ public class OrderDetailView extends VerticalLayout {
                         resourceNeedService,
                         purchaseOrderService,
                         catalogItemRepository,
-                        purchasePositionRepository,
                         auditService,
                         businessService,
                         this::getTranslation);

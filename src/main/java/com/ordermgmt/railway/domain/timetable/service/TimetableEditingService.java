@@ -8,7 +8,6 @@ import java.util.List;
 
 import org.springframework.stereotype.Service;
 
-import com.ordermgmt.railway.domain.infrastructure.model.OperationalPoint;
 import com.ordermgmt.railway.domain.infrastructure.repository.OperationalPointRepository;
 import com.ordermgmt.railway.domain.timetable.model.RoutePointRole;
 import com.ordermgmt.railway.domain.timetable.model.TimeConstraintMode;
@@ -433,17 +432,12 @@ public class TimetableEditingService {
     }
 
     /**
-     * Whether this row's data is sent in the TTT Path Request. True for halts (always exported as
-     * JourneyLocationTypeCode 02), origin and destination (always exported), and pass-through rows
-     * the user added explicitly (via in step 1, or "add stop" in step 2 — JourneyLocation TypeCode
-     * 04). Auto-routed waypoints from path calculation return false.
+     * Whether this row's data is sent in the TTT Path Request. Delegates to {@link
+     * TttDraftBuilder#isExportedToTtt} — the same rule the actual export uses — so the UI's
+     * exported-indicator and the export can never disagree (e.g. a user-marked TTT-relevant row).
      */
     public boolean isExportedToTtt(TimetableRowData row) {
-        if (row == null) return false;
-        if (Boolean.TRUE.equals(row.getHalt())) return true;
-        if (row.getRoutePointRole() == RoutePointRole.ORIGIN
-                || row.getRoutePointRole() == RoutePointRole.DESTINATION) return true;
-        return Boolean.TRUE.equals(row.getManuallyAdded());
+        return TttDraftBuilder.isExportedToTtt(row);
     }
 
     /** Returns true when at least one arrival-side constraint field has a user-entered value. */
@@ -889,40 +883,6 @@ public class TimetableEditingService {
 
     // ── Backwards-compatible legacy entry points ───────────────────────────
 
-    /**
-     * Legacy single-direction propagator kept for callers that have not migrated to the
-     * snapshot-based {@link #propagate(List, int, TimeSnapshot, TimePropagationMode)}. Treats
-     * {@code isArrival=true} as a backwards push (matching the new semantics) — the previous
-     * behaviour propagated arrival changes forward, which the user reported as inconsistent.
-     */
-    public void propagateTimeChange(
-            List<TimetableRowData> rows,
-            int changedIndex,
-            boolean isArrival,
-            LocalTime newTime,
-            TimePropagationMode mode) {
-        if (changedIndex < 0 || changedIndex >= rows.size() || newTime == null) return;
-        TimetableRowData row = rows.get(changedIndex);
-        LocalTime oldTime =
-                isArrival
-                        ? parseTime(row.getEstimatedArrival())
-                        : parseTime(row.getEstimatedDeparture());
-
-        if (isArrival) {
-            row.setEstimatedArrival(newTime.format(HH_MM));
-            row.setArrivalExact(newTime.format(HH_MM));
-        } else {
-            row.setEstimatedDeparture(newTime.format(HH_MM));
-            row.setDepartureExact(newTime.format(HH_MM));
-        }
-        if (oldTime == null) return;
-        long delta = Duration.between(oldTime, newTime).toMinutes();
-        if (delta == 0) return;
-
-        if (isArrival) propagateBackward(rows, changedIndex, delta, mode, oldTime, newTime);
-        else propagateForward(rows, changedIndex, delta, mode, oldTime, newTime);
-    }
-
     public LocalTime resolveRelativeTime(String input, LocalTime baseTime) {
         if (input == null || baseTime == null) return null;
         String trimmed = input.trim();
@@ -1212,52 +1172,5 @@ public class TimetableEditingService {
     private static <T> T firstNonNull(T... values) {
         for (T v : values) if (v != null) return v;
         return null;
-    }
-
-    /** Replace the legacy {@code OperationalPoint} insertStop overload with the row-based one. */
-    public void insertStop(
-            List<TimetableRowData> rows,
-            int insertIndex,
-            OperationalPoint operationalPoint,
-            String activityCode) {
-        TimetableRowData newRow = new TimetableRowData();
-        newRow.setUopid(operationalPoint.getUopid());
-        newRow.setName(operationalPoint.getName());
-        newRow.setCountry(operationalPoint.getCountry());
-        newRow.setRoutePointRole(RoutePointRole.VIA);
-        newRow.setJourneyLocationType("INTERMEDIATE");
-        newRow.setHalt(true);
-        newRow.setActivityCode(activityCode);
-        newRow.setManuallyAdded(true);
-        // Caller is now expected to fill arrival/departure before calling the new
-        // insertStop(... newRow ...) overload, but the old overload is still used
-        // by code paths that have not migrated yet — fall back to interpolation.
-        if (insertIndex > 0 && insertIndex <= rows.size()) {
-            interpolateTimes(
-                    newRow,
-                    rows.get(insertIndex - 1),
-                    insertIndex < rows.size() ? rows.get(insertIndex) : null);
-        }
-        rows.add(insertIndex, newRow);
-        resequence(rows);
-    }
-
-    private void interpolateTimes(
-            TimetableRowData newRow, TimetableRowData before, TimetableRowData after) {
-        LocalTime depBefore = parseTime(before.getEstimatedDeparture());
-        if (depBefore == null) depBefore = parseTime(before.getEstimatedArrival());
-        LocalTime arrAfter = after != null ? parseTime(after.getEstimatedArrival()) : null;
-        if (arrAfter == null && after != null) arrAfter = parseTime(after.getEstimatedDeparture());
-        if (depBefore != null && arrAfter != null) {
-            long midMinutes = Duration.between(depBefore, arrAfter).toMinutes() / 2;
-            LocalTime mid = depBefore.plusMinutes(midMinutes);
-            newRow.setEstimatedArrival(mid.format(HH_MM));
-            int dwell = newRow.getDwellMinutes() != null ? newRow.getDwellMinutes() : 2;
-            newRow.setEstimatedDeparture(mid.plusMinutes(dwell).format(HH_MM));
-        } else if (depBefore != null) {
-            LocalTime est = depBefore.plusMinutes(10);
-            newRow.setEstimatedArrival(est.format(HH_MM));
-            newRow.setEstimatedDeparture(est.plusMinutes(2).format(HH_MM));
-        }
     }
 }

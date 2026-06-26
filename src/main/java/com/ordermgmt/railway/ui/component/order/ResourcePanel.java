@@ -24,7 +24,6 @@ import com.ordermgmt.railway.domain.order.model.PurchaseStatus;
 import com.ordermgmt.railway.domain.order.model.ResourceNeed;
 import com.ordermgmt.railway.domain.order.model.ResourceType;
 import com.ordermgmt.railway.domain.order.model.ValidityJsonCodec;
-import com.ordermgmt.railway.domain.order.repository.PurchasePositionRepository;
 import com.ordermgmt.railway.domain.order.repository.ResourceCatalogItemRepository;
 import com.ordermgmt.railway.domain.order.service.AuditService;
 import com.ordermgmt.railway.domain.order.service.PurchaseOrderService;
@@ -44,7 +43,6 @@ public class ResourcePanel extends Div {
     private final ResourceNeedService resourceNeedService;
     private final PurchaseOrderService purchaseOrderService;
     private final ResourceCatalogItemRepository catalogItemRepository;
-    private final PurchasePositionRepository purchasePositionRepository;
     private final OperationalPointRepository opRepo;
     private final AuditService auditService;
     private final com.ordermgmt.railway.domain.business.service.BusinessService businessService;
@@ -64,12 +62,15 @@ public class ResourcePanel extends Div {
                     java.util.List<com.ordermgmt.railway.domain.business.model.Business>>
             purchaseBizMap = java.util.Map.of();
 
+    /** Purchases grouped by resource-need id, built once per render from the loaded collection. */
+    private java.util.Map<java.util.UUID, List<PurchasePosition>> purchasesByNeed =
+            java.util.Map.of();
+
     public ResourcePanel(
             OrderPosition position,
             ResourceNeedService resourceNeedService,
             PurchaseOrderService purchaseOrderService,
             ResourceCatalogItemRepository catalogItemRepository,
-            PurchasePositionRepository purchasePositionRepository,
             OperationalPointRepository opRepo,
             AuditService auditService,
             com.ordermgmt.railway.domain.business.service.BusinessService businessService,
@@ -80,7 +81,6 @@ public class ResourcePanel extends Div {
         this.resourceNeedService = resourceNeedService;
         this.purchaseOrderService = purchaseOrderService;
         this.catalogItemRepository = catalogItemRepository;
-        this.purchasePositionRepository = purchasePositionRepository;
         this.opRepo = opRepo;
         this.auditService = auditService;
         this.businessService = businessService;
@@ -117,6 +117,17 @@ public class ResourcePanel extends Div {
                 ppIds.isEmpty()
                         ? java.util.Map.of()
                         : businessService.findByLinkedPurchasePositions(ppIds);
+
+        // Group the position's already-loaded purchases by resource-need id (getId() on the lazy
+        // ResourceNeed proxy is the FK — no extra SQL), so per-row lookup is in-memory not a query.
+        purchasesByNeed =
+                position.getPurchasePositions() == null
+                        ? java.util.Map.of()
+                        : position.getPurchasePositions().stream()
+                                .filter(pp -> pp.getResourceNeed() != null)
+                                .collect(
+                                        java.util.stream.Collectors.groupingBy(
+                                                pp -> pp.getResourceNeed().getId()));
 
         List<ResourceNeed> resources =
                 resourceNeedService.getResourcesForPosition(position.getId());
@@ -424,7 +435,12 @@ public class ResourcePanel extends Div {
                                     buildRouteLabel(),
                                     purchaseOrderService,
                                     translator);
-                    dialog.addSaveListener(ev -> loadResources());
+                    // reloadAll() (not loadResources()) so the parent re-fetches the position from
+                    // the DB — a newly created purchase is added in a separate tx and is NOT in
+                    // this
+                    // panel's detached purchasePositions snapshot. Mirrors the status-action
+                    // buttons.
+                    dialog.addSaveListener(ev -> reloadAll());
                     dialog.open();
                 });
         return btn;
@@ -437,7 +453,7 @@ public class ResourcePanel extends Div {
     }
 
     private List<PurchasePosition> findPurchasesForNeed(ResourceNeed rn) {
-        return purchasePositionRepository.findByResourceNeedId(rn.getId());
+        return purchasesByNeed.getOrDefault(rn.getId(), List.of());
     }
 
     private void openResourceHistory(ResourceNeed rn) {

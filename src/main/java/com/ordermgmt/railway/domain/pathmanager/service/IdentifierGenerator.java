@@ -29,15 +29,4 @@ public class IdentifierGenerator {
     public String initialVariant() {
         return "01";
     }
-
-    /**
-     * Increments a two-digit variant code (e.g., "01" -> "02").
-     *
-     * @param currentVariant the current variant code
-     * @return the next variant code
-     */
-    public String nextVariant(String currentVariant) {
-        int current = Integer.parseInt(currentVariant);
-        return String.format("%02d", current + 1);
-    }
 }

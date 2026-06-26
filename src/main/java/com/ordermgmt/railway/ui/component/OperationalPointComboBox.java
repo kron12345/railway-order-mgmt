@@ -38,10 +38,9 @@ public class OperationalPointComboBox extends ComboBox<OperationalPoint> {
                                     query.getPage(),
                                     query.getPageSize(),
                                     Sort.by("name").ascending().and(Sort.by("uopid").ascending()));
-                    return repo
-                            .findByNameContainingIgnoreCaseOrUopidContainingIgnoreCase(
-                                    filter, filter, pageable)
-                            .stream();
+                    // searchByNameOrUopid returns only the page content (no SELECT COUNT over the
+                    // ~19,300 OPs every keystroke) — a ComboBox lazy fetch never needs the total.
+                    return repo.searchByNameOrUopid(filter, pageable).stream();
                 });
     }
 }

@@ -15,14 +15,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.ordermgmt.railway.domain.pathmanager.model.PathAction;
 import com.ordermgmt.railway.domain.pathmanager.model.PathProcessState;
-import com.ordermgmt.railway.domain.pathmanager.model.PathProcessType;
 import com.ordermgmt.railway.domain.pathmanager.model.PmJourneyLocation;
 import com.ordermgmt.railway.domain.pathmanager.model.PmProcessStep;
 import com.ordermgmt.railway.domain.pathmanager.model.PmReferenceTrain;
 import com.ordermgmt.railway.domain.pathmanager.model.PmTimetableYear;
 import com.ordermgmt.railway.domain.pathmanager.model.PmTrainVersion;
 import com.ordermgmt.railway.domain.pathmanager.model.ProcessStepResult;
-import com.ordermgmt.railway.domain.pathmanager.model.TtrPhase;
 import com.ordermgmt.railway.domain.pathmanager.model.VersionType;
 import com.ordermgmt.railway.domain.pathmanager.repository.PmProcessStepRepository;
 import com.ordermgmt.railway.domain.pathmanager.repository.PmReferenceTrainRepository;
@@ -178,38 +176,6 @@ public class PathProcessEngine {
 
         step = processStepRepository.save(step);
         return new ProcessStepResult(step, newState, newVersion);
-    }
-
-    /**
-     * Resolves the current TTR phase for the given reference train.
-     *
-     * @param referenceTrainId the reference train ID
-     * @return the current TTR phase, or {@code null} if the year has no dates
-     */
-    @Transactional(readOnly = true)
-    public TtrPhase resolvePhaseForTrain(UUID referenceTrainId) {
-        PmReferenceTrain train = loadTrain(referenceTrainId);
-        PmTimetableYear year = train.getTimetableYear();
-        if (year == null || year.getStartDate() == null) {
-            return null;
-        }
-        return ttrPhaseResolver.resolvePhase(year, LocalDate.now());
-    }
-
-    /**
-     * Resolves the TTT process type for the given reference train based on the current TTR phase.
-     *
-     * @param referenceTrainId the reference train ID
-     * @return the process type, or {@code null} if ordering is not yet possible
-     */
-    @Transactional(readOnly = true)
-    public PathProcessType resolveProcessTypeForTrain(UUID referenceTrainId) {
-        PmReferenceTrain train = loadTrain(referenceTrainId);
-        PmTimetableYear year = train.getTimetableYear();
-        if (year == null || year.getStartDate() == null) {
-            return null;
-        }
-        return ttrPhaseResolver.resolveProcessType(year, LocalDate.now());
     }
 
     private boolean isDraftOfferAllowed(PmReferenceTrain train) {

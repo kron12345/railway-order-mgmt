@@ -8,7 +8,6 @@ import org.springframework.data.repository.history.RevisionRepository;
 import org.springframework.stereotype.Repository;
 
 import com.ordermgmt.railway.domain.rollingstock.model.RollingStockItem;
-import com.ordermgmt.railway.domain.rollingstock.model.VehicleCategory;
 
 /**
  * JPA repository for {@link RollingStockItem}. Combines standard CRUD with {@link
@@ -19,11 +18,6 @@ import com.ordermgmt.railway.domain.rollingstock.model.VehicleCategory;
 public interface RollingStockRepository
         extends JpaRepository<RollingStockItem, UUID>,
                 RevisionRepository<RollingStockItem, UUID, Long> {
-
-    List<RollingStockItem> findByActiveTrueOrderByDesignationAsc();
-
-    List<RollingStockItem> findByVehicleCategoryAndActiveTrueOrderByDesignationAsc(
-            VehicleCategory category);
 
     List<RollingStockItem> findAllByOrderByDesignationAsc();
 }

@@ -25,7 +25,6 @@ import com.ordermgmt.railway.domain.order.model.PositionStatus;
 import com.ordermgmt.railway.domain.order.model.PositionType;
 import com.ordermgmt.railway.domain.order.model.PositionVariantType;
 import com.ordermgmt.railway.domain.order.model.PurchaseStatus;
-import com.ordermgmt.railway.domain.order.repository.PurchasePositionRepository;
 import com.ordermgmt.railway.domain.order.repository.ResourceCatalogItemRepository;
 import com.ordermgmt.railway.domain.order.service.AuditService;
 import com.ordermgmt.railway.domain.order.service.OrderService;
@@ -53,7 +52,6 @@ public class OrderPositionPanel extends Div {
     private final ResourceNeedService resourceNeedService;
     private final PurchaseOrderService purchaseOrderService;
     private final ResourceCatalogItemRepository catalogItemRepository;
-    private final PurchasePositionRepository purchasePositionRepository;
     private final AuditService auditService;
     private final com.ordermgmt.railway.domain.business.service.BusinessService businessService;
     private final BiFunction<String, Object[], String> translator;
@@ -91,7 +89,6 @@ public class OrderPositionPanel extends Div {
             ResourceNeedService resourceNeedService,
             PurchaseOrderService purchaseOrderService,
             ResourceCatalogItemRepository catalogItemRepository,
-            PurchasePositionRepository purchasePositionRepository,
             AuditService auditService,
             com.ordermgmt.railway.domain.business.service.BusinessService businessService,
             BiFunction<String, Object[], String> translator) {
@@ -104,7 +101,6 @@ public class OrderPositionPanel extends Div {
         this.resourceNeedService = resourceNeedService;
         this.purchaseOrderService = purchaseOrderService;
         this.catalogItemRepository = catalogItemRepository;
-        this.purchasePositionRepository = purchasePositionRepository;
         this.auditService = auditService;
         this.businessService = businessService;
         this.translator = translator;
@@ -433,7 +429,6 @@ public class OrderPositionPanel extends Div {
                                         resourceNeedService,
                                         purchaseOrderService,
                                         catalogItemRepository,
-                                        purchasePositionRepository,
                                         opRepo,
                                         auditService,
                                         businessService,

@@ -16,6 +16,7 @@ import org.springframework.stereotype.Repository;
 import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.domain.order.model.PositionStatus;
 import com.ordermgmt.railway.domain.order.model.ProcessStatus;
+import com.ordermgmt.railway.dto.order.CommandPaletteRow;
 import com.ordermgmt.railway.dto.order.OrderListItem;
 
 /** Repository for orders and their revision history. */
@@ -34,6 +35,17 @@ public interface OrderRepository
     /** (processStatus, count) buckets for the dashboard — one aggregate instead of a table scan. */
     @Query("SELECT o.processStatus, COUNT(o) FROM Order o GROUP BY o.processStatus")
     List<Object[]> countByProcessStatusGrouped();
+
+    /**
+     * Flat (order, position) rows for the ⌃K command palette — only the searchable labels, via a
+     * left join, so the positions/purchase/resource collections are never initialized.
+     */
+    @Query(
+            "select new com.ordermgmt.railway.dto.order.CommandPaletteRow("
+                    + "o.id, o.orderNumber, o.name, c.name, p.id, p.name) "
+                    + "from Order o left join o.customer c left join o.positions p "
+                    + "order by o.orderNumber")
+    List<CommandPaletteRow> findCommandPaletteRows();
 
     /** Non-final orders whose validity ends on/before the horizon (critical-deadline KPI). */
     @Query(

@@ -312,7 +312,9 @@ public class PathManagerService {
                 trainVersionRepository.findByReferenceTrainIdOrderByVersionNumberDesc(
                         train.getId());
         if (!versions.isEmpty()) {
-            PmTrainVersion version = versions.getLast();
+            // Versions are ordered newest-first (…OrderByVersionNumberDesc), so the latest is the
+            // FIRST element — getLast() would overwrite the oldest version on every re-sync.
+            PmTrainVersion version = versions.getFirst();
             journeyLocationRepository.deleteAll(version.getJourneyLocations());
             version.getJourneyLocations().clear();
             Map<Integer, TttJourneyLocationDraft> draftBySequence =

@@ -54,10 +54,6 @@ public interface BusinessRepository extends JpaRepository<Business, UUID> {
     @Query("SELECT DISTINCT b FROM Business b JOIN b.orderPositions op WHERE op.id = :opId")
     List<Business> findByLinkedOrderPositionId(UUID opId);
 
-    /** All businesses linked to the given PurchasePosition via the M2M join table. */
-    @Query("SELECT DISTINCT b FROM Business b JOIN b.purchasePositions pp WHERE pp.id = :ppId")
-    List<Business> findByLinkedPurchasePositionId(UUID ppId);
-
     /** (orderPositionId, business) pairs for a batch of positions — one query instead of N. */
     @Query("SELECT op.id, b FROM Business b JOIN b.orderPositions op WHERE op.id IN :opIds")
     List<Object[]> findBusinessesByOrderPositionIds(@Param("opIds") Collection<UUID> opIds);

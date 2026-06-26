@@ -13,6 +13,4 @@ import com.ordermgmt.railway.domain.pathmanager.model.PmProcessStep;
 public interface PmProcessStepRepository extends JpaRepository<PmProcessStep, UUID> {
 
     List<PmProcessStep> findByReferenceTrainIdOrderByCreatedAtDesc(UUID referenceTrainId);
-
-    List<PmProcessStep> findByPathRequestIdOrderByCreatedAtDesc(UUID pathRequestId);
 }

@@ -3,7 +3,6 @@ package com.ordermgmt.railway.domain.business.service;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 
 import jakarta.persistence.EntityNotFoundException;
@@ -54,6 +53,13 @@ public class BusinessService {
         this.purchasePositionRepository = purchasePositionRepository;
     }
 
+    /** Load a business by id or throw — the single find-or-throw used by all mutators/readers. */
+    private Business requireBusiness(UUID id) {
+        return businessRepository
+                .findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Business not found: " + id));
+    }
+
     /** Creates a new business in the given status. */
     @PreAuthorize(MUTATION_ROLES)
     @Transactional
@@ -100,11 +106,7 @@ public class BusinessService {
             LocalDate validTo,
             LocalDate dueDate,
             String tags) {
-        Business business =
-                businessRepository
-                        .findById(id)
-                        .orElseThrow(
-                                () -> new EntityNotFoundException("Business not found: " + id));
+        Business business = requireBusiness(id);
         business.setTitle(title);
         business.setDescription(description);
         business.setAssignmentType(assignmentType);
@@ -126,11 +128,7 @@ public class BusinessService {
     @Transactional
     public Business setAssignee(
             UUID id, com.ordermgmt.railway.domain.business.model.AssignmentType type, String name) {
-        Business business =
-                businessRepository
-                        .findById(id)
-                        .orElseThrow(
-                                () -> new EntityNotFoundException("Business not found: " + id));
+        Business business = requireBusiness(id);
         String newType = type == null ? null : type.name();
         String currentType = business.getAssignmentType();
         String currentName = business.getAssignmentName();
@@ -151,11 +149,7 @@ public class BusinessService {
     @PreAuthorize(MUTATION_ROLES)
     @Transactional
     public Business setStatus(UUID id, BusinessStatus newStatus) {
-        Business business =
-                businessRepository
-                        .findById(id)
-                        .orElseThrow(
-                                () -> new EntityNotFoundException("Business not found: " + id));
+        Business business = requireBusiness(id);
         if (!business.getStatus().canTransitionTo(newStatus)) {
             throw new IllegalArgumentException(
                     "Transition not allowed: " + business.getStatus() + " -> " + newStatus);
@@ -164,27 +158,11 @@ public class BusinessService {
         return businessRepository.save(business);
     }
 
-    /** Get valid target statuses for the given business. */
-    public Set<BusinessStatus> getValidTransitions(UUID id) {
-        Business business =
-                businessRepository
-                        .findById(id)
-                        .orElseThrow(
-                                () -> new EntityNotFoundException("Business not found: " + id));
-        return business.getStatus().nextTargets();
-    }
-
     /** Link the business to an order position (many-to-many). */
     @PreAuthorize(MUTATION_ROLES)
     @Transactional
     public void linkOrderPosition(UUID businessId, UUID orderPositionId) {
-        Business business =
-                businessRepository
-                        .findById(businessId)
-                        .orElseThrow(
-                                () ->
-                                        new EntityNotFoundException(
-                                                "Business not found: " + businessId));
+        Business business = requireBusiness(businessId);
         OrderPosition position =
                 orderPositionRepository
                         .findById(orderPositionId)
@@ -200,13 +178,7 @@ public class BusinessService {
     @PreAuthorize(MUTATION_ROLES)
     @Transactional
     public void unlinkOrderPosition(UUID businessId, UUID orderPositionId) {
-        Business business =
-                businessRepository
-                        .findById(businessId)
-                        .orElseThrow(
-                                () ->
-                                        new EntityNotFoundException(
-                                                "Business not found: " + businessId));
+        Business business = requireBusiness(businessId);
         business.getOrderPositions().removeIf(p -> p.getId().equals(orderPositionId));
         businessRepository.save(business);
     }
@@ -244,13 +216,7 @@ public class BusinessService {
     /** Get all linked order positions for a business. */
     @Transactional(readOnly = true)
     public List<OrderPosition> getLinkedOrderPositions(UUID businessId) {
-        Business business =
-                businessRepository
-                        .findById(businessId)
-                        .orElseThrow(
-                                () ->
-                                        new EntityNotFoundException(
-                                                "Business not found: " + businessId));
+        Business business = requireBusiness(businessId);
         // Force initialization of lazy associations referenced by the UI.
         for (OrderPosition op : business.getOrderPositions()) {
             Hibernate.initialize(op.getOrder());
@@ -304,13 +270,7 @@ public class BusinessService {
     @PreAuthorize(MUTATION_ROLES)
     @Transactional
     public void linkPurchasePosition(UUID businessId, UUID purchasePositionId) {
-        Business business =
-                businessRepository
-                        .findById(businessId)
-                        .orElseThrow(
-                                () ->
-                                        new EntityNotFoundException(
-                                                "Business not found: " + businessId));
+        Business business = requireBusiness(businessId);
         PurchasePosition position =
                 purchasePositionRepository
                         .findById(purchasePositionId)
@@ -329,26 +289,14 @@ public class BusinessService {
     @PreAuthorize(MUTATION_ROLES)
     @Transactional
     public void unlinkPurchasePosition(UUID businessId, UUID purchasePositionId) {
-        Business business =
-                businessRepository
-                        .findById(businessId)
-                        .orElseThrow(
-                                () ->
-                                        new EntityNotFoundException(
-                                                "Business not found: " + businessId));
+        Business business = requireBusiness(businessId);
         business.getPurchasePositions().removeIf(p -> p.getId().equals(purchasePositionId));
         businessRepository.save(business);
     }
 
     @Transactional(readOnly = true)
     public List<PurchasePosition> getLinkedPurchasePositions(UUID businessId) {
-        Business business =
-                businessRepository
-                        .findById(businessId)
-                        .orElseThrow(
-                                () ->
-                                        new EntityNotFoundException(
-                                                "Business not found: " + businessId));
+        Business business = requireBusiness(businessId);
         for (PurchasePosition pp : business.getPurchasePositions()) {
             OrderPosition op = pp.getOrderPosition();
             if (op != null) {
@@ -396,13 +344,7 @@ public class BusinessService {
     @Transactional
     public BusinessDocument addDocument(
             UUID businessId, String filename, String contentType, byte[] data) {
-        Business business =
-                businessRepository
-                        .findById(businessId)
-                        .orElseThrow(
-                                () ->
-                                        new EntityNotFoundException(
-                                                "Business not found: " + businessId));
+        Business business = requireBusiness(businessId);
         BusinessDocument doc = new BusinessDocument();
         doc.setBusiness(business);
         doc.setFilename(filename);
@@ -426,13 +368,7 @@ public class BusinessService {
     @PreAuthorize(MUTATION_ROLES)
     @Transactional
     public void removeDocument(UUID businessId, UUID documentId) {
-        Business business =
-                businessRepository
-                        .findById(businessId)
-                        .orElseThrow(
-                                () ->
-                                        new EntityNotFoundException(
-                                                "Business not found: " + businessId));
+        Business business = requireBusiness(businessId);
         business.getDocuments().removeIf(d -> d.getId().equals(documentId));
         businessRepository.save(business);
     }
@@ -440,13 +376,7 @@ public class BusinessService {
     /** Get all documents for a business. */
     @Transactional(readOnly = true)
     public List<BusinessDocument> getDocuments(UUID businessId) {
-        Business business =
-                businessRepository
-                        .findById(businessId)
-                        .orElseThrow(
-                                () ->
-                                        new EntityNotFoundException(
-                                                "Business not found: " + businessId));
+        Business business = requireBusiness(businessId);
         return new java.util.ArrayList<>(business.getDocuments());
     }
 
@@ -512,11 +442,6 @@ public class BusinessService {
         return businessRepository.findByLinkedOrderPositionId(orderPositionId);
     }
 
-    @Transactional(readOnly = true)
-    public List<Business> findByLinkedPurchasePosition(UUID purchasePositionId) {
-        return businessRepository.findByLinkedPurchasePositionId(purchasePositionId);
-    }
-
     /** Batched linked-business lookup for many positions at once (avoids one query per row). */
     @Transactional(readOnly = true)
     public java.util.Map<UUID, List<Business>> findByLinkedOrderPositions(
@@ -545,35 +470,5 @@ public class BusinessService {
     @Transactional(readOnly = true)
     public List<Business> findByLinkedOrder(UUID orderId) {
         return businessRepository.findByLinkedOrderId(orderId);
-    }
-
-    @Transactional(readOnly = true)
-    public List<Business> listSortedByValidTo() {
-        return businessRepository.findAll().stream()
-                .sorted(
-                        (a, b) -> {
-                            // First compare by priority: IN_BEARBEITUNG > FREIGEGEBEN >
-                            // UEBERARBEITEN
-                            int priorityDiff =
-                                    Integer.compare(
-                                            priorityOf(a.getStatus()), priorityOf(b.getStatus()));
-                            if (priorityDiff != 0) return priorityDiff;
-                            // Then by validTo (null at the end)
-                            if (a.getValidTo() == null && b.getValidTo() == null) return 0;
-                            if (a.getValidTo() == null) return 1;
-                            if (b.getValidTo() == null) return -1;
-                            return a.getValidTo().compareTo(b.getValidTo());
-                        })
-                .toList();
-    }
-
-    private int priorityOf(BusinessStatus status) {
-        return switch (status) {
-            case IN_BEARBEITUNG -> 1;
-            case FREIGEGEBEN -> 2;
-            case UEBERARBEITEN -> 3;
-            case ABGESCHLOSSEN -> 4;
-            case ANNULLIERT -> 5;
-        };
     }
 }

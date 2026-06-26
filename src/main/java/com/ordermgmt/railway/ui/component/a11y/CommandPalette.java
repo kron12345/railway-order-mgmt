@@ -101,55 +101,35 @@ public class CommandPalette extends Dialog {
 
     private void loadItems(OrderService orderService, BusinessService businessService) {
         all.clear();
-        // Orders + their positions.
-        orderService
-                .findAllWithPositions()
-                .forEach(
-                        o -> {
-                            String label =
-                                    (o.getOrderNumber() == null ? "—" : o.getOrderNumber())
-                                            + " "
-                                            + (o.getName() == null ? "" : o.getName());
-                            all.add(
-                                    new Item(
-                                            "Auftrag",
-                                            label,
-                                            o.getCustomer() != null
-                                                            && o.getCustomer().getName() != null
-                                                    ? o.getCustomer().getName()
-                                                    : "",
-                                            "orders/" + o.getId(),
-                                            label.toLowerCase(Locale.ROOT)));
-                            if (o.getPositions() != null) {
-                                o.getPositions()
-                                        .forEach(
-                                                p -> {
-                                                    String pLabel =
-                                                            p.getName() == null ? "—" : p.getName();
-                                                    all.add(
-                                                            new Item(
-                                                                    "Position",
-                                                                    pLabel,
-                                                                    o.getOrderNumber() == null
-                                                                            ? ""
-                                                                            : o.getOrderNumber(),
-                                                                    "orders/"
-                                                                            + o.getId()
-                                                                            + "/positions/"
-                                                                            + p.getId(),
-                                                                    (pLabel
-                                                                                    + " "
-                                                                                    + (o
-                                                                                                            .getOrderNumber()
-                                                                                                    == null
-                                                                                            ? ""
-                                                                                            : o
-                                                                                                    .getOrderNumber()))
-                                                                            .toLowerCase(
-                                                                                    Locale.ROOT)));
-                                                });
-                            }
-                        });
+        // Orders + their positions, from a flat projection (one row per order/position; no entity
+        // collections are initialized). An order may appear on several rows -> add it once.
+        java.util.Set<java.util.UUID> seenOrders = new java.util.HashSet<>();
+        for (var row : orderService.commandPaletteRows()) {
+            String orderNumber = row.orderNumber() == null ? "" : row.orderNumber();
+            if (seenOrders.add(row.orderId())) {
+                String label =
+                        (orderNumber.isEmpty() ? "—" : orderNumber)
+                                + " "
+                                + (row.orderName() == null ? "" : row.orderName());
+                all.add(
+                        new Item(
+                                "Auftrag",
+                                label,
+                                row.customerName() == null ? "" : row.customerName(),
+                                "orders/" + row.orderId(),
+                                label.toLowerCase(Locale.ROOT)));
+            }
+            if (row.positionId() != null) {
+                String pLabel = row.positionName() == null ? "—" : row.positionName();
+                all.add(
+                        new Item(
+                                "Position",
+                                pLabel,
+                                orderNumber,
+                                "orders/" + row.orderId() + "/positions/" + row.positionId(),
+                                (pLabel + " " + orderNumber).toLowerCase(Locale.ROOT)));
+            }
+        }
         businessService
                 .listAll()
                 .forEach(

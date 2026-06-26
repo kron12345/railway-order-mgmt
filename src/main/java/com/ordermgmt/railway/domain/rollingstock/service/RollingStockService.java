@@ -8,7 +8,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.ordermgmt.railway.domain.rollingstock.model.RollingStockItem;
-import com.ordermgmt.railway.domain.rollingstock.model.VehicleCategory;
 import com.ordermgmt.railway.domain.rollingstock.repository.RollingStockRepository;
 
 /**
@@ -28,16 +27,6 @@ public class RollingStockService {
     @Transactional(readOnly = true)
     public List<RollingStockItem> findAll() {
         return repository.findAllByOrderByDesignationAsc();
-    }
-
-    @Transactional(readOnly = true)
-    public List<RollingStockItem> findActive() {
-        return repository.findByActiveTrueOrderByDesignationAsc();
-    }
-
-    @Transactional(readOnly = true)
-    public List<RollingStockItem> findByCategory(VehicleCategory category) {
-        return repository.findByVehicleCategoryAndActiveTrueOrderByDesignationAsc(category);
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")

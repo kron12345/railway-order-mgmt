@@ -22,7 +22,6 @@ import com.vaadin.flow.router.Route;
 import com.vaadin.flow.router.RouteAlias;
 
 import com.ordermgmt.railway.domain.business.service.BusinessService;
-import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.domain.order.model.PositionStatus;
 import com.ordermgmt.railway.domain.order.model.ProcessStatus;
 import com.ordermgmt.railway.domain.order.repository.OrderPositionRepository;
@@ -221,11 +220,9 @@ public class OrderOverviewView extends VerticalLayout implements BeforeEnterObse
             UI.getCurrent().navigate("orders");
             return;
         }
-        Order order = orderService.findById(orderId).orElse(null);
-        if (order == null) {
-            UI.getCurrent().navigate("orders");
-            return;
-        }
+        // No pre-load existence check: the aggregate branch validates via OrderDetailView.setMode
+        // (false -> redirect) and the position sub-route via OrderPositionDetailView (missing ->
+        // redirect), so loading the order here too would just be a second identical query.
         shell.setSelectedId(orderId);
 
         // Sub-route: single position detail.

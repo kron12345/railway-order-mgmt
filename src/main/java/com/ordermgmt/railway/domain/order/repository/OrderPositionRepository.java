@@ -19,9 +19,14 @@ public interface OrderPositionRepository extends JpaRepository<OrderPosition, UU
     List<OrderPosition> findByOrderId(UUID orderId);
 
     /**
-     * All positions of a type (e.g. FAHRPLAN), with the owning order fetched for deadline display.
+     * All positions of a type (e.g. FAHRPLAN), with the owning order AND purchase positions fetched
+     * — deadline evaluation reads both per position, so fetching them avoids an N+1 over purchases.
      */
-    @Query("SELECT op FROM OrderPosition op LEFT JOIN FETCH op.order WHERE op.type = :type")
+    @Query(
+            "SELECT DISTINCT op FROM OrderPosition op "
+                    + "LEFT JOIN FETCH op.order "
+                    + "LEFT JOIN FETCH op.purchasePositions "
+                    + "WHERE op.type = :type")
     List<OrderPosition> findByType(
             @Param("type") com.ordermgmt.railway.domain.order.model.PositionType type);
 

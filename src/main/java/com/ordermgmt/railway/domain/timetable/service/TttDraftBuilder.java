@@ -161,7 +161,13 @@ public class TttDraftBuilder {
         return Boolean.TRUE.equals(row.getUserEnteredDwell()) && row.getDwellMinutes() != null;
     }
 
-    private boolean isExportedToTtt(TimetableRowData row) {
+    /**
+     * Single source of truth for "does this row export to TTT": a halt, a user-marked TTT-relevant
+     * row, the route origin/destination, or a manually added point. Used both by the actual export
+     * (here) and the UI's exported-indicator (TimetableEditingService delegates to this) so they
+     * can never diverge.
+     */
+    public static boolean isExportedToTtt(TimetableRowData row) {
         if (row == null) return false;
         if (Boolean.TRUE.equals(row.getHalt())) return true;
         if (Boolean.TRUE.equals(row.getTttRelevant())) return true;

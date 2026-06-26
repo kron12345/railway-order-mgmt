@@ -54,11 +54,12 @@ public class OrderService {
     private final OrderPositionVersionRepository versionRepository;
     private final PositionOtnHistoryRepository otnHistoryRepository;
 
+    /**
+     * Flat (order, position) label rows for the ⌃K command palette — no collection initialization.
+     */
     @Transactional(readOnly = true)
-    public List<Order> findAllWithPositions() {
-        List<Order> orders = orderRepository.findAll();
-        initializePositions(orders);
-        return orders;
+    public List<com.ordermgmt.railway.dto.order.CommandPaletteRow> commandPaletteRows() {
+        return orderRepository.findCommandPaletteRows();
     }
 
     @Transactional(readOnly = true)
@@ -142,8 +143,14 @@ public class OrderService {
      * edit-save.
      */
     private void requireCostCenterIfReleased(Order order) {
-        if (order.getInternalStatus() == PositionStatus.FREIGEGEBEN
-                && (order.getCostCenter() == null || order.getCostCenter().isBlank())) {
+        requireCostCenter(order.getInternalStatus(), order.getCostCenter());
+    }
+
+    /**
+     * SOB §5.7 invariant in one place: a FREIGEGEBEN order must carry a Kostenträger/PSP-Element.
+     */
+    private void requireCostCenter(PositionStatus status, String costCenter) {
+        if (status == PositionStatus.FREIGEGEBEN && (costCenter == null || costCenter.isBlank())) {
             throw new CostCenterRequiredException();
         }
     }
@@ -178,10 +185,7 @@ public class OrderService {
         if (order.getInternalStatus() == status) {
             return order;
         }
-        if (status == PositionStatus.FREIGEGEBEN
-                && (order.getCostCenter() == null || order.getCostCenter().isBlank())) {
-            throw new CostCenterRequiredException();
-        }
+        requireCostCenter(status, order.getCostCenter());
         order.setInternalStatus(status);
         return orderRepository.save(order);
     }
