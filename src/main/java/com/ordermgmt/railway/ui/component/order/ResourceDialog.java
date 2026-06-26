@@ -169,6 +169,18 @@ public class ResourceDialog extends Dialog {
 
                     try {
                         List<LocalDate> days = calendar.getSelectedDates();
+                        if (!operatingDays.isEmpty() && days.isEmpty()) {
+                            // The position is scheduled, so the calendar was pre-filled with all
+                            // its
+                            // days; an empty selection is a mistake (an unscheduled position still
+                            // allows empty = all). Mirror the Verkehrstage editor's guard.
+                            Notification.show(
+                                            tr("verkehrstage.empty"),
+                                            3000,
+                                            Notification.Position.MIDDLE)
+                                    .addThemeVariants(NotificationVariant.LUMO_ERROR);
+                            return;
+                        }
                         String validity = days.isEmpty() ? null : ValidityJsonCodec.toJson(days);
                         String fromLoc =
                                 isFahrplan && fromOp.getValue() != null
