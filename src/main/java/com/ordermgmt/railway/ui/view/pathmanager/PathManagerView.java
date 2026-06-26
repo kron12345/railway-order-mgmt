@@ -7,7 +7,6 @@ import java.util.stream.Stream;
 
 import jakarta.annotation.security.RolesAllowed;
 
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
 import com.vaadin.flow.component.AttachEvent;
@@ -52,6 +51,7 @@ import com.ordermgmt.railway.ui.component.pathmanager.ProcessSimulationPanel;
 import com.ordermgmt.railway.ui.component.pathmanager.TrainHeaderPanel;
 import com.ordermgmt.railway.ui.component.pathmanager.TreeNode;
 import com.ordermgmt.railway.ui.layout.MainLayout;
+import com.ordermgmt.railway.ui.support.OffsetPageable;
 
 /** Main view for the Path Manager module with tree hierarchy and detail panels. */
 @Route(value = "pathmanager", layout = MainLayout.class)
@@ -597,10 +597,9 @@ public class PathManagerView extends VerticalLayout implements BeforeEnterObserv
         };
     }
 
-    /** The TreeGrid's offset/limit as a Spring page request (offset is page-aligned for grids). */
+    /** The TreeGrid's exact offset/limit as a Pageable (honors non-page-aligned offsets). */
     private static Pageable pageOf(HierarchicalQuery<TreeNode, Void> query) {
-        int limit = Math.max(1, query.getLimit());
-        return PageRequest.of(query.getOffset() / limit, limit);
+        return new OffsetPageable(query.getOffset(), Math.max(1, query.getLimit()));
     }
 
     private void refreshTree() {
