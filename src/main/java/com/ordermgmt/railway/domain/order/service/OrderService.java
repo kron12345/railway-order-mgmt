@@ -186,19 +186,26 @@ public class OrderService {
         child.setVariantOf(parent);
         child.setVariantType(PositionVariantType.AUSPRAEGUNG);
         child.setType(parent.getType());
-        child.setName(parent.getName() + " (Kopie)");
+        child.setName(copyName(parent.getName()));
         child.setOperationalTrainNumber(parent.getOperationalTrainNumber());
         child.setFromLocation(parent.getFromLocation());
         child.setToLocation(parent.getToLocation());
         child.setStart(parent.getStart());
         child.setEnd(parent.getEnd());
-        child.setValidity(parent.getValidity());
-        child.setWeekdays(parent.getWeekdays());
+        // Deliberately NOT cloning validity/weekdays: siblings must be date-disjoint, so a new
+        // expression starts with no Verkehrstage and the user assigns them via the picker (A-S4),
+        // which enforces disjointness. Cloning them would create an overlapping sibling.
         child.setServiceType(parent.getServiceType());
         child.setComment(parent.getComment());
         child.setTags(parent.getTags());
         child.setInternalStatus(PositionStatus.IN_BEARBEITUNG);
         return positionRepository.save(child);
+    }
+
+    /** Parent name + " (Kopie)" suffix, clamped to the 255-char name column. */
+    private static String copyName(String parentName) {
+        String name = (parentName == null ? "" : parentName) + " (Kopie)";
+        return name.length() <= 255 ? name : name.substring(0, 255);
     }
 
     /** Picker context for an expression's Verkehrstage: calendar bounds, occupied days, current. */
