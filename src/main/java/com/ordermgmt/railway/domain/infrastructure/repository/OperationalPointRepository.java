@@ -8,6 +8,8 @@ import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import com.ordermgmt.railway.domain.infrastructure.model.OperationalPoint;
@@ -36,6 +38,17 @@ public interface OperationalPointRepository extends JpaRepository<OperationalPoi
             double minLat, double maxLat, double minLon, double maxLon, Pageable pageable);
 
     long countByNameContainingIgnoreCaseOrUopidContainingIgnoreCase(String name, String uopid);
+
+    /**
+     * Paged name/UOPID search returning only the page content (no embedded count) — the fetch half
+     * of a lazy grid; pair with {@link #countByNameContainingIgnoreCaseOrUopidContainingIgnoreCase}
+     * for the count half. The Pageable carries the grid's server-side sort.
+     */
+    @Query(
+            "select op from OperationalPoint op "
+                    + "where lower(op.name) like lower(concat('%', :q, '%')) "
+                    + "or lower(op.uopid) like lower(concat('%', :q, '%'))")
+    List<OperationalPoint> searchByNameOrUopid(@Param("q") String q, Pageable pageable);
 
     long countByCountry(String country);
 
