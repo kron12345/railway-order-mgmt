@@ -29,6 +29,12 @@ public interface OperationalPointRepository extends JpaRepository<OperationalPoi
     Page<OperationalPoint> findByNameContainingIgnoreCaseOrUopidContainingIgnoreCase(
             String name, String uopid, Pageable pageable);
 
+    /**
+     * Operational points within a lat/lon bounding box — the map's viewport working set (capped).
+     */
+    List<OperationalPoint> findByLatitudeBetweenAndLongitudeBetween(
+            double minLat, double maxLat, double minLon, double maxLon, Pageable pageable);
+
     long countByNameContainingIgnoreCaseOrUopidContainingIgnoreCase(String name, String uopid);
 
     long countByCountry(String country);

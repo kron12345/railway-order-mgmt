@@ -50,8 +50,8 @@ public class TimetableMap extends Div {
         getElement().callJsFunction("clearRoute");
     }
 
-    /** Renders all operational points as small background markers on the map. */
-    public void setAllOperationalPoints(List<OperationalPoint> ops) {
+    /** Renders the given operational points (the current viewport's set) as background markers. */
+    public void setBackgroundOperationalPoints(List<OperationalPoint> ops) {
         JsonArray jsonOps = Json.createArray();
         int idx = 0;
         for (OperationalPoint op : ops) {
@@ -78,5 +78,35 @@ public class TimetableMap extends Div {
                             }
                         })
                 .addEventData("event.detail.uopid");
+    }
+
+    /**
+     * Registers a callback that fires (debounced) when the map's viewport changes — its bounds
+     * drive a server-side fetch of just the operational points in view, so the background never
+     * loads all ~19,300 points up front.
+     */
+    public void addBoundsChangedListener(BoundsListener listener) {
+        getElement()
+                .addEventListener(
+                        "bounds-changed",
+                        event -> {
+                            var d = event.getEventData();
+                            listener.onBoundsChanged(
+                                    d.getNumber("event.detail.south"),
+                                    d.getNumber("event.detail.west"),
+                                    d.getNumber("event.detail.north"),
+                                    d.getNumber("event.detail.east"),
+                                    (int) d.getNumber("event.detail.zoom"));
+                        })
+                .addEventData("event.detail.south")
+                .addEventData("event.detail.west")
+                .addEventData("event.detail.north")
+                .addEventData("event.detail.east")
+                .addEventData("event.detail.zoom");
+    }
+
+    /** Viewport bounds callback: south/west/north/east in degrees, plus the current zoom level. */
+    public interface BoundsListener {
+        void onBoundsChanged(double south, double west, double north, double east, int zoom);
     }
 }

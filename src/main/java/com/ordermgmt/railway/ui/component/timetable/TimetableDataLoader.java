@@ -4,13 +4,17 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.textfield.TextArea;
 import com.vaadin.flow.component.textfield.TextField;
 
 import com.ordermgmt.railway.domain.infrastructure.model.OperationalPoint;
+import com.ordermgmt.railway.domain.infrastructure.repository.OperationalPointRepository;
 import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.timetable.model.RoutePointRole;
@@ -29,17 +33,17 @@ public class TimetableDataLoader {
 
     private final TimetableArchiveService archiveService;
     private final TimetableRoutingService routingService;
-    private final Map<String, OperationalPoint> operationalPointsByUopid;
+    private final OperationalPointRepository opRepo;
     private final Component translationSource;
 
     public TimetableDataLoader(
             TimetableArchiveService archiveService,
             TimetableRoutingService routingService,
-            Map<String, OperationalPoint> operationalPointsByUopid,
+            OperationalPointRepository opRepo,
             Component translationSource) {
         this.archiveService = archiveService;
         this.routingService = routingService;
-        this.operationalPointsByUopid = operationalPointsByUopid;
+        this.opRepo = opRepo;
         this.translationSource = translationSource;
     }
 
@@ -111,19 +115,30 @@ public class TimetableDataLoader {
         if (rows.isEmpty()) {
             return;
         }
+        // Working set: resolve only the OPs this position's rows reference (not all ~19k).
+        Set<String> uopids =
+                rows.stream()
+                        .map(TimetableRowData::getUopid)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet());
+        Map<String, OperationalPoint> byUopid =
+                opRepo.findByUopidIn(uopids).stream()
+                        .collect(
+                                Collectors.toMap(
+                                        OperationalPoint::getUopid, op -> op, (a, b) -> a));
         List<TimetableRouteStep.ViaData> vias = new ArrayList<>();
         for (TimetableRowData row : rows) {
             if (row.getRoutePointRole() == RoutePointRole.VIA) {
                 vias.add(
                         new TimetableRouteStep.ViaData(
-                                operationalPointsByUopid.get(row.getUopid()),
+                                byUopid.get(row.getUopid()),
                                 Boolean.TRUE.equals(row.getHalt()),
                                 row.getActivityCode()));
             }
         }
         routeStep.prefillFrom(
-                operationalPointsByUopid.get(rows.getFirst().getUopid()),
-                operationalPointsByUopid.get(rows.getLast().getUopid()),
+                byUopid.get(rows.getFirst().getUopid()),
+                byUopid.get(rows.getLast().getUopid()),
                 vias);
     }
 

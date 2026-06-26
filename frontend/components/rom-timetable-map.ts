@@ -175,6 +175,7 @@ class RomTimetableMap extends HTMLElement {
   private bgMarkers: any[] = [];
   private overlay?: any;
   private resizeObserver?: ResizeObserver;
+  private boundsDebounce?: number;
 
   connectedCallback() {
     injectMapStyles();
@@ -201,13 +202,43 @@ class RomTimetableMap extends HTMLElement {
           '&copy; <a href="https://osm.org/copyright">OSM</a> &amp; <a href="https://carto.com/">CARTO</a>',
         )
         .addTo(this.map);
+
+      // Viewport-lazy background OPs: tell the server which bounds are visible so it can fetch
+      // only the operational points in view (never all ~19k up front).
+      this.map.on('moveend', () => this.scheduleEmitBounds());
     }
 
     // Re-register observer on every attach (fixes re-attach after step switch)
     this.resizeObserver?.disconnect();
     this.resizeObserver = new ResizeObserver(() => this.map?.invalidateSize());
     this.resizeObserver.observe(this);
-    requestAnimationFrame(() => this.map?.invalidateSize());
+    requestAnimationFrame(() => {
+      this.map?.invalidateSize();
+      this.scheduleEmitBounds(); // initial viewport load (listeners are registered by now)
+    });
+  }
+
+  private scheduleEmitBounds() {
+    if (this.boundsDebounce) window.clearTimeout(this.boundsDebounce);
+    this.boundsDebounce = window.setTimeout(() => this.emitBounds(), 300);
+  }
+
+  private emitBounds() {
+    if (!this.map) return;
+    const b = this.map.getBounds();
+    this.dispatchEvent(
+      new CustomEvent('bounds-changed', {
+        detail: {
+          south: b.getSouth(),
+          west: b.getWest(),
+          north: b.getNorth(),
+          east: b.getEast(),
+          zoom: this.map.getZoom(),
+        },
+        bubbles: true,
+        composed: true,
+      }),
+    );
   }
 
   disconnectedCallback() {

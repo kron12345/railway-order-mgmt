@@ -18,7 +18,17 @@ public class OperationalPointComboBox extends ComboBox<OperationalPoint> {
 
     public OperationalPointComboBox(OperationalPointRepository repo) {
         setItemLabelGenerator(op -> op.getName() + " (" + op.getUopid() + ")");
-        setItems(
+        bindLazySearch(this, repo);
+    }
+
+    /**
+     * Binds lazy, server-side paged name/UOPID search onto any {@code ComboBox<OperationalPoint>}
+     * so it never loads all ~19,300 points. Lets existing combos (route from/to/via, add-stop)
+     * reuse the exact paging contract without subclassing.
+     */
+    public static void bindLazySearch(
+            ComboBox<OperationalPoint> combo, OperationalPointRepository repo) {
+        combo.setItems(
                 query -> {
                     String filter = query.getFilter().orElse("");
                     // Stable order (name, then unique UOPID as tie-breaker) so paged scrolling

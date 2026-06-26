@@ -5,15 +5,11 @@ import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.
 
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 import jakarta.annotation.security.RolesAllowed;
-
-import org.springframework.data.domain.Sort;
 
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.Key;
@@ -44,7 +40,6 @@ import com.vaadin.flow.router.BeforeLeaveObserver;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 
-import com.ordermgmt.railway.domain.infrastructure.model.OperationalPoint;
 import com.ordermgmt.railway.domain.infrastructure.model.PredefinedTag;
 import com.ordermgmt.railway.domain.infrastructure.repository.OperationalPointRepository;
 import com.ordermgmt.railway.domain.infrastructure.repository.PredefinedTagRepository;
@@ -107,8 +102,6 @@ public class TimetableBuilderView extends VerticalLayout
     private OrderPosition existingPosition;
     private TimetableRouteResult currentRoute = new TimetableRouteResult(List.of(), 0D);
     private Step currentStep = Step.ROUTE;
-    private List<OperationalPoint> availableOperationalPoints = List.of();
-    private Map<String, OperationalPoint> operationalPointsByUopid = Map.of();
     private List<PredefinedTag> availableTags = List.of();
     private List<TimetableActivityOption> activityOptions = List.of();
     private TimetableRouteStep routeStep;
@@ -209,12 +202,9 @@ public class TimetableBuilderView extends VerticalLayout
     }
 
     private void loadReferenceData() {
-        availableOperationalPoints =
-                operationalPointRepository.findAll(
-                        Sort.by("country").ascending().and(Sort.by("name").ascending()));
-        Map<String, OperationalPoint> map = new LinkedHashMap<>();
-        availableOperationalPoints.forEach(p -> map.put(p.getUopid(), p));
-        operationalPointsByUopid = map;
+        // P1b: operational points are no longer pre-loaded. The route/table combos search the repo
+        // lazily and the map fetches only its current viewport, so opening the builder never pulls
+        // all ~19k points; existing-position pre-fill resolves just its referenced OPs on demand.
         availableTags =
                 predefinedTagRepository.findAllByOrderByCategoryAscSortOrderAsc().stream()
                         .filter(PredefinedTag::isActive)
@@ -241,10 +231,10 @@ public class TimetableBuilderView extends VerticalLayout
     private void initializeSteps() {
         routeStep =
                 new TimetableRouteStep(
-                        availableOperationalPoints, activityOptions, timetableRoutingService);
+                        operationalPointRepository, activityOptions, timetableRoutingService);
         tableStep =
                 new TimetableTableStep(
-                        activityOptions, timetableEditingService, availableOperationalPoints);
+                        activityOptions, timetableEditingService, operationalPointRepository);
         intervalPanel = new IntervalTimetablePanel();
     }
 
@@ -584,7 +574,7 @@ public class TimetableBuilderView extends VerticalLayout
                 new TimetableDataLoader(
                         timetableArchiveService,
                         timetableRoutingService,
-                        operationalPointsByUopid,
+                        operationalPointRepository,
                         this);
         TimetableDataLoader.LoadResult result =
                 loader.load(

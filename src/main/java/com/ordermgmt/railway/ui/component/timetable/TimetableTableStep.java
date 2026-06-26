@@ -32,6 +32,7 @@ import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.splitlayout.SplitLayout;
 
 import com.ordermgmt.railway.domain.infrastructure.model.OperationalPoint;
+import com.ordermgmt.railway.domain.infrastructure.repository.OperationalPointRepository;
 import com.ordermgmt.railway.domain.timetable.model.TimetableActivityOption;
 import com.ordermgmt.railway.domain.timetable.model.TimetableRowData;
 import com.ordermgmt.railway.domain.timetable.service.TimetableEditingService;
@@ -42,7 +43,7 @@ public class TimetableTableStep extends Div {
 
     private final List<TimetableActivityOption> activityOptions;
     private final TimetableEditingService editingService;
-    private final List<OperationalPoint> availableOperationalPoints;
+    private final OperationalPointRepository opRepo;
 
     private final Grid<TimetableRowData> rowGrid = new Grid<>(TimetableRowData.class, false);
     private final TimetableRowEditorPanel editorPanel;
@@ -53,10 +54,10 @@ public class TimetableTableStep extends Div {
     public TimetableTableStep(
             List<TimetableActivityOption> activityOptions,
             TimetableEditingService editingService,
-            List<OperationalPoint> availableOperationalPoints) {
+            OperationalPointRepository opRepo) {
         this.activityOptions = activityOptions;
         this.editingService = editingService;
-        this.availableOperationalPoints = availableOperationalPoints;
+        this.opRepo = opRepo;
         this.editorPanel = new TimetableRowEditorPanel(activityOptions, this::applyEditorChanges);
         configureGrid();
     }
@@ -100,8 +101,7 @@ public class TimetableTableStep extends Div {
         validityDetails.setOpened(selectedCount == 0);
         wrapper.add(validityDetails);
 
-        addStopForm =
-                new AddStopForm(availableOperationalPoints, activityOptions, this::handleAddStop);
+        addStopForm = new AddStopForm(opRepo, activityOptions, this::handleAddStop);
 
         Div gridAndForm = new Div(rowGrid, addStopForm);
         gridAndForm.setWidthFull();

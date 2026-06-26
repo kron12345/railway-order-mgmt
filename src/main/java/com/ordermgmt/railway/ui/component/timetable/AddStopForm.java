@@ -19,8 +19,10 @@ import com.vaadin.flow.component.select.Select;
 import com.vaadin.flow.component.timepicker.TimePicker;
 
 import com.ordermgmt.railway.domain.infrastructure.model.OperationalPoint;
+import com.ordermgmt.railway.domain.infrastructure.repository.OperationalPointRepository;
 import com.ordermgmt.railway.domain.timetable.model.TimeConstraintMode;
 import com.ordermgmt.railway.domain.timetable.model.TimetableActivityOption;
+import com.ordermgmt.railway.ui.component.OperationalPointComboBox;
 
 /**
  * Inline form for inserting a new timetable stop. Asks for OP, activity, plus the arrival and
@@ -54,7 +56,7 @@ class AddStopForm extends Div {
     private int insertAfterIndex = -1;
 
     AddStopForm(
-            List<OperationalPoint> operationalPoints,
+            OperationalPointRepository opRepo,
             List<TimetableActivityOption> activityOptions,
             AddStopCallback onAdd) {
 
@@ -82,7 +84,7 @@ class AddStopForm extends Div {
                 .set("display", "block")
                 .set("margin-bottom", "10px");
 
-        pointCombo.setItems(operationalPoints);
+        OperationalPointComboBox.bindLazySearch(pointCombo, opRepo);
         pointCombo.setItemLabelGenerator(
                 op -> op.getCountry() + " · " + op.getName() + " (" + op.getUopid() + ")");
         pointCombo.setWidthFull();

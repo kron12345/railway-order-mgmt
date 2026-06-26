@@ -14,6 +14,8 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.function.Consumer;
 
+import org.springframework.data.domain.PageRequest;
+
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.Key;
 import com.vaadin.flow.component.button.Button;
@@ -31,6 +33,7 @@ import com.vaadin.flow.component.splitlayout.SplitLayout;
 import com.vaadin.flow.component.timepicker.TimePicker;
 
 import com.ordermgmt.railway.domain.infrastructure.model.OperationalPoint;
+import com.ordermgmt.railway.domain.infrastructure.repository.OperationalPointRepository;
 import com.ordermgmt.railway.domain.timetable.model.RoutePointRole;
 import com.ordermgmt.railway.domain.timetable.model.TimeConstraintMode;
 import com.ordermgmt.railway.domain.timetable.model.TimetableActivityOption;
@@ -56,7 +59,10 @@ public class TimetableRouteStep extends Div {
 
     // ── Route Form ──────────────────────────────────────────────────────
 
-    private final List<OperationalPoint> availableOps;
+    /** Max background OPs pushed to the map per viewport — capped so a wide zoom stays cheap. */
+    private static final int MAX_BACKGROUND_OPS = 600;
+
+    private final OperationalPointRepository opRepo;
     private final List<TimetableActivityOption> activityOptions;
     private final TimetableRoutingService routingService;
 
@@ -77,10 +83,10 @@ public class TimetableRouteStep extends Div {
     private Runnable onRouteDirty;
 
     public TimetableRouteStep(
-            List<OperationalPoint> availableOperationalPoints,
+            OperationalPointRepository opRepo,
             List<TimetableActivityOption> activityOptions,
             TimetableRoutingService timetableRoutingService) {
-        this.availableOps = availableOperationalPoints;
+        this.opRepo = opRepo;
         this.activityOptions = activityOptions;
         this.routingService = timetableRoutingService;
         configureRouteInputs();
@@ -173,8 +179,17 @@ public class TimetableRouteStep extends Div {
         routeMap.getElement().getStyle().set("flex", "1").set("min-height", "0");
         mapCard.add(mapLabel, routeMap);
 
-        // Show all operational points as background markers on the map
-        routeMap.setAllOperationalPoints(availableOps);
+        // Viewport-lazy background markers: fetch only the operational points in the current map
+        // bounds (capped), refreshed on pan/zoom — never the full ~19k set.
+        routeMap.addBoundsChangedListener(
+                (south, west, north, east, zoom) ->
+                        routeMap.setBackgroundOperationalPoints(
+                                opRepo.findByLatitudeBetweenAndLongitudeBetween(
+                                        south,
+                                        north,
+                                        west,
+                                        east,
+                                        PageRequest.of(0, MAX_BACKGROUND_OPS))));
 
         // Map click on OP fills from/to/via fields sequentially
         routeMap.addOpSelectedListener(
@@ -341,10 +356,7 @@ public class TimetableRouteStep extends Div {
 
     private OperationalPoint findOpByUopid(String uopid) {
         if (uopid == null) return null;
-        return availableOps.stream()
-                .filter(op -> uopid.equals(op.getUopid()))
-                .findFirst()
-                .orElse(null);
+        return opRepo.findByUopid(uopid).orElse(null);
     }
 
     // ── Route input configuration ──────────────────────────────────────
@@ -376,7 +388,7 @@ public class TimetableRouteStep extends Div {
 
     private void configureOpCombo(ComboBox<OperationalPoint> combo, String label, String helper) {
         combo.setLabel(label);
-        combo.setItems(availableOps);
+        com.ordermgmt.railway.ui.component.OperationalPointComboBox.bindLazySearch(combo, opRepo);
         combo.setItemLabelGenerator(TimetableFormatUtils::opLabel);
         combo.setWidthFull();
         combo.setClearButtonVisible(true);
@@ -387,7 +399,8 @@ public class TimetableRouteStep extends Div {
 
     private void addViaEditor(OperationalPoint point, boolean halt, String activityCode) {
         ViaPointEditor ed = new ViaPointEditor();
-        ed.pointField.setItems(availableOps);
+        com.ordermgmt.railway.ui.component.OperationalPointComboBox.bindLazySearch(
+                ed.pointField, opRepo);
         ed.pointField.setItemLabelGenerator(TimetableFormatUtils::opLabel);
         ed.pointField.setWidthFull();
         ed.pointField.setClearButtonVisible(true);
