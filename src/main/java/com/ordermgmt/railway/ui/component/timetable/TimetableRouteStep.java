@@ -179,32 +179,6 @@ public class TimetableRouteStep extends Div {
         routeMap.getElement().getStyle().set("flex", "1").set("min-height", "0");
         mapCard.add(mapLabel, routeMap);
 
-        // Viewport-lazy background markers: fetch only the operational points in the current map
-        // bounds (capped), refreshed on pan/zoom — never the full ~19k set.
-        routeMap.addBoundsChangedListener(
-                (south, west, north, east, zoom) ->
-                        routeMap.setBackgroundOperationalPoints(
-                                opRepo.findByLatitudeBetweenAndLongitudeBetween(
-                                        south,
-                                        north,
-                                        west,
-                                        east,
-                                        PageRequest.of(0, MAX_BACKGROUND_OPS))));
-
-        // Map click on OP fills from/to/via fields sequentially
-        routeMap.addOpSelectedListener(
-                uopid -> {
-                    OperationalPoint op = findOpByUopid(uopid);
-                    if (op == null) return;
-                    if (fromField.getValue() == null) {
-                        fromField.setValue(op);
-                    } else if (toField.getValue() == null) {
-                        toField.setValue(op);
-                    } else {
-                        addViaEditor(op, false, null);
-                    }
-                });
-
         SplitLayout split = new SplitLayout(left, mapCard);
         split.setWidthFull();
         split.setSizeFull();
@@ -384,6 +358,30 @@ public class TimetableRouteStep extends Div {
                 .set("font-weight", "600")
                 .set("color", "var(--rom-status-danger)");
         routeMap.getElement().getStyle().set("height", "100%");
+
+        // Register map listeners ONCE here — createContent() re-runs on every step switch, so
+        // registering there would stack duplicate viewport fetches and click handlers per visit.
+        routeMap.addBoundsChangedListener(
+                (south, west, north, east, zoom) ->
+                        routeMap.setBackgroundOperationalPoints(
+                                opRepo.findByLatitudeBetweenAndLongitudeBetween(
+                                        south,
+                                        north,
+                                        west,
+                                        east,
+                                        PageRequest.of(0, MAX_BACKGROUND_OPS))));
+        routeMap.addOpSelectedListener(
+                uopid -> {
+                    OperationalPoint op = findOpByUopid(uopid);
+                    if (op == null) return;
+                    if (fromField.getValue() == null) {
+                        fromField.setValue(op);
+                    } else if (toField.getValue() == null) {
+                        toField.setValue(op);
+                    } else {
+                        addViaEditor(op, false, null);
+                    }
+                });
     }
 
     private void configureOpCombo(ComboBox<OperationalPoint> combo, String label, String helper) {
