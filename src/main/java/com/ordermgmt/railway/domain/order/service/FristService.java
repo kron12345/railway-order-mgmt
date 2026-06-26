@@ -112,9 +112,13 @@ public class FristService {
      * surface a phantom deadline.
      */
     private boolean hasOperatingDays(OrderPosition pos) {
-        return pos.getStart() != null
-                || !ValidityJsonCodec.fromJson(pos.getValidity()).isEmpty()
-                || !Weekdays.parse(pos.getWeekdays()).isEmpty();
+        if (!ValidityJsonCodec.fromJson(pos.getValidity()).isEmpty()
+                || !Weekdays.parse(pos.getWeekdays()).isEmpty()) {
+            return true;
+        }
+        // Legacy flat Fahrplan rows are scheduled only via start/end; an expression's schedule must
+        // come from its validity/weekday set, so a bare start does not make a clone a candidate.
+        return pos.getVariantType() == null && pos.getStart() != null;
     }
 
     private boolean isMember(FristRegel rule, OrderPosition pos) {
