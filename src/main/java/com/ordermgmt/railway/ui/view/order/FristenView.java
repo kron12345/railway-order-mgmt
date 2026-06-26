@@ -105,23 +105,50 @@ public class FristenView extends VerticalLayout {
             if (group.isEmpty()) {
                 continue;
             }
-            add(
-                    sectionHeader(
-                            getTranslation("fristen.status." + status.name())
-                                    + " ("
-                                    + group.size()
-                                    + ")"));
-            int limit = Math.min(group.size(), MAX_PER_GROUP);
-            for (int i = 0; i < limit; i++) {
-                add(entryRow(group.get(i)));
-            }
-            if (group.size() > limit) {
-                add(emptyHint(getTranslation("fristen.more", group.size() - limit)));
-            }
+            renderGroup(status, group);
         }
     }
 
-    private static final int MAX_PER_GROUP = 25;
+    private static final int PAGE_SIZE = 25;
+
+    /**
+     * Renders one urgency group: a counted header, its first {@value #PAGE_SIZE} rows, and a
+     * "weitere laden" button that reveals the rest in pages — no entry is hidden (the old static
+     * "…+N" cap dropped them). The service computes the full grouped result; this is the UI reveal.
+     */
+    private void renderGroup(Status status, List<FristEntry> group) {
+        add(
+                sectionHeader(
+                        getTranslation("fristen.status." + status.name())
+                                + " ("
+                                + group.size()
+                                + ")"));
+        Div rowsBox = new Div();
+        rowsBox.setWidthFull();
+        add(rowsBox);
+        if (group.size() <= PAGE_SIZE) {
+            group.forEach(e -> rowsBox.add(entryRow(e)));
+            return;
+        }
+        Button more = new Button();
+        more.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
+        more.getStyle().set("margin", "4px 0 8px 0");
+        int[] shown = {0};
+        Runnable reveal =
+                () -> {
+                    int end = Math.min(group.size(), shown[0] + PAGE_SIZE);
+                    for (int i = shown[0]; i < end; i++) {
+                        rowsBox.add(entryRow(group.get(i)));
+                    }
+                    shown[0] = end;
+                    int remaining = group.size() - shown[0];
+                    more.setText(getTranslation("fristen.loadMore", remaining));
+                    more.setVisible(remaining > 0);
+                };
+        more.addClickListener(e -> reveal.run());
+        add(more);
+        reveal.run();
+    }
 
     private Component buildAutoBusinessSection(List<AutoBusiness> autos) {
         Div section = new Div();
