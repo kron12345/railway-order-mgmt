@@ -7,6 +7,9 @@ import java.util.stream.Stream;
 
 import jakarta.annotation.security.RolesAllowed;
 
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+
 import com.vaadin.flow.component.AttachEvent;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
@@ -529,20 +532,17 @@ public class PathManagerView extends VerticalLayout implements BeforeEnterObserv
                 }
                 return switch (parent) {
                     case TreeNode.YearNode yearNode ->
-                            referenceTrainRepository
-                                    .findByTimetableYearYearOrderByOperationalTrainNumberAsc(
-                                            yearNode.year().getYear())
-                                    .size();
+                            (int)
+                                    referenceTrainRepository.countByTimetableYearYear(
+                                            yearNode.year().getYear());
                     case TreeNode.TrainNode trainNode ->
-                            trainVersionRepository
-                                    .findByReferenceTrainIdOrderByVersionNumberDesc(
-                                            trainNode.train().getId())
-                                    .size();
+                            (int)
+                                    trainVersionRepository.countByReferenceTrainId(
+                                            trainNode.train().getId());
                     case TreeNode.VersionNode versionNode ->
-                            journeyLocationRepository
-                                    .findByTrainVersionIdOrderBySequenceAsc(
-                                            versionNode.version().getId())
-                                    .size();
+                            (int)
+                                    journeyLocationRepository.countByTrainVersionId(
+                                            versionNode.version().getId());
                     case TreeNode.LocationNode ignored -> 0;
                 };
             }
@@ -561,43 +561,46 @@ public class PathManagerView extends VerticalLayout implements BeforeEnterObserv
             protected Stream<TreeNode> fetchChildrenFromBackEnd(
                     HierarchicalQuery<TreeNode, Void> query) {
                 TreeNode parent = query.getParent();
+                Pageable pageable = pageOf(query);
                 List<TreeNode> children = new ArrayList<>();
 
                 if (parent == null) {
-                    List<PmTimetableYear> years = timetableYearRepository.findAll();
-                    years.forEach(y -> children.add(new TreeNode.YearNode(y)));
+                    timetableYearRepository
+                            .findAll(pageable)
+                            .forEach(y -> children.add(new TreeNode.YearNode(y)));
                 } else {
                     switch (parent) {
-                        case TreeNode.YearNode yearNode -> {
-                            List<PmReferenceTrain> trains =
-                                    referenceTrainRepository
-                                            .findByTimetableYearYearOrderByOperationalTrainNumberAsc(
-                                                    yearNode.year().getYear());
-                            trains.forEach(tr -> children.add(new TreeNode.TrainNode(tr)));
-                        }
-                        case TreeNode.TrainNode trainNode -> {
-                            List<PmTrainVersion> versions =
-                                    trainVersionRepository
-                                            .findByReferenceTrainIdOrderByVersionNumberDesc(
-                                                    trainNode.train().getId());
-                            versions.forEach(v -> children.add(new TreeNode.VersionNode(v)));
-                        }
-                        case TreeNode.VersionNode versionNode -> {
-                            List<PmJourneyLocation> locations =
-                                    journeyLocationRepository
-                                            .findByTrainVersionIdOrderBySequenceAsc(
-                                                    versionNode.version().getId());
-                            locations.forEach(l -> children.add(new TreeNode.LocationNode(l)));
-                        }
+                        case TreeNode.YearNode yearNode ->
+                                referenceTrainRepository
+                                        .findByTimetableYearYearOrderByOperationalTrainNumberAsc(
+                                                yearNode.year().getYear(), pageable)
+                                        .forEach(tr -> children.add(new TreeNode.TrainNode(tr)));
+                        case TreeNode.TrainNode trainNode ->
+                                trainVersionRepository
+                                        .findByReferenceTrainIdOrderByVersionNumberDesc(
+                                                trainNode.train().getId(), pageable)
+                                        .forEach(v -> children.add(new TreeNode.VersionNode(v)));
+                        case TreeNode.VersionNode versionNode ->
+                                journeyLocationRepository
+                                        .findByTrainVersionIdOrderBySequenceAsc(
+                                                versionNode.version().getId(), pageable)
+                                        .forEach(l -> children.add(new TreeNode.LocationNode(l)));
                         case TreeNode.LocationNode ignored -> {
                             /* leaf */
                         }
                     }
                 }
 
-                return children.stream().skip(query.getOffset()).limit(query.getLimit());
+                // Page already applied in the DB query — return the fetched page as-is.
+                return children.stream();
             }
         };
+    }
+
+    /** The TreeGrid's offset/limit as a Spring page request (offset is page-aligned for grids). */
+    private static Pageable pageOf(HierarchicalQuery<TreeNode, Void> query) {
+        int limit = Math.max(1, query.getLimit());
+        return PageRequest.of(query.getOffset() / limit, limit);
     }
 
     private void refreshTree() {

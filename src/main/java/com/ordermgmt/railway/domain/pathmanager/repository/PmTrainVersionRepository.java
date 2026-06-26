@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -17,6 +18,12 @@ import com.ordermgmt.railway.domain.pathmanager.model.PmTrainVersion;
 public interface PmTrainVersionRepository extends JpaRepository<PmTrainVersion, UUID> {
 
     List<PmTrainVersion> findByReferenceTrainIdOrderByVersionNumberDesc(UUID referenceTrainId);
+
+    /** One page of a train's versions (P6: paged DB fetch for the TreeGrid). */
+    List<PmTrainVersion> findByReferenceTrainIdOrderByVersionNumberDesc(
+            UUID referenceTrainId, Pageable pageable);
+
+    long countByReferenceTrainId(UUID referenceTrainId);
 
     /** Eagerly fetches journey locations to avoid LazyInitializationException in DTOs. */
     @EntityGraph(attributePaths = "journeyLocations")
