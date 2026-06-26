@@ -106,12 +106,14 @@ public class FristService {
     }
 
     /**
-     * An expression is a deadline candidate only once it is actually scheduled — it has operating
-     * days, either an explicit validity date-set or a weekday template. A freshly cloned, not-yet-
-     * assigned expression (A-S5) has neither and must not surface a phantom deadline.
+     * A position is a deadline candidate only once it carries some temporal anchor: an explicit
+     * validity date-set, a weekday template, or at least a start/end range (legacy flat Fahrplan
+     * rows). A freshly cloned, not-yet-assigned expression (A-S5) has none of these and must not
+     * surface a phantom deadline.
      */
     private boolean hasOperatingDays(OrderPosition pos) {
-        return !ValidityJsonCodec.fromJson(pos.getValidity()).isEmpty()
+        return pos.getStart() != null
+                || !ValidityJsonCodec.fromJson(pos.getValidity()).isEmpty()
                 || !Weekdays.parse(pos.getWeekdays()).isEmpty();
     }
 
