@@ -83,7 +83,7 @@ public class PurchaseOrderService {
         pp.setOrderPosition(orderPosition);
         pp.setResourceNeed(need);
         pp.setDescription(description);
-        pp.setValidity(validity);
+        pp.setValidity(resolvePurchaseValidity(validity, need, orderPosition));
         pp.setPurchaseStatus(PurchaseStatus.OFFEN);
 
         PurchasePosition saved = purchasePositionRepository.save(pp);
@@ -318,6 +318,22 @@ public class PurchaseOrderService {
         } catch (Exception e) {
             log.warn("Failed to extract debitCode from TTT attributes: {}", e.getMessage());
         }
+    }
+
+    /**
+     * The validity a purchase position inherits: the Bedarf's own Verkehrstage when it has them —
+     * so an R²P variation like "2 attendants on weekends, 1 on weekdays" is captured per demand on
+     * the same path — else the caller's explicit value, else the order position's overall validity.
+     */
+    private static String resolvePurchaseValidity(
+            String explicit, ResourceNeed need, OrderPosition orderPosition) {
+        if (need.getValidity() != null && !need.getValidity().isBlank()) {
+            return need.getValidity();
+        }
+        if (explicit != null && !explicit.isBlank()) {
+            return explicit;
+        }
+        return orderPosition != null ? orderPosition.getValidity() : null;
     }
 
     private PurchasePosition findOrCreatePurchasePosition(ResourceNeed need) {

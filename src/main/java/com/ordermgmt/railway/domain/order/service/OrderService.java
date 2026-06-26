@@ -19,6 +19,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.ordermgmt.railway.domain.order.model.OperatingDays;
 import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.order.model.OrderPositionVersion;
@@ -341,28 +342,10 @@ public class OrderService {
     }
 
     /**
-     * The operating days a position actually occupies: its explicit validity date-set, or — when
-     * that is unset — the days derived from its weekday template within its own range. Lets the
-     * picker and disjointness account for siblings created with only a weekday pattern (no date-set
-     * yet); on hand-over those derived days get materialised into an explicit date-set.
+     * Operating days a position actually occupies — delegates to the shared {@link OperatingDays}.
      */
     private static List<LocalDate> effectiveDays(OrderPosition position) {
-        List<LocalDate> fromValidity = ValidityJsonCodec.fromJson(position.getValidity());
-        if (!fromValidity.isEmpty()) {
-            return fromValidity;
-        }
-        Set<DayOfWeek> dows = Weekdays.parse(position.getWeekdays());
-        if (dows.isEmpty() || position.getStart() == null || position.getEnd() == null) {
-            return List.of();
-        }
-        List<LocalDate> days = new java.util.ArrayList<>();
-        LocalDate end = position.getEnd().toLocalDate();
-        for (LocalDate d = position.getStart().toLocalDate(); !d.isAfter(end); d = d.plusDays(1)) {
-            if (dows.contains(d.getDayOfWeek())) {
-                days.add(d);
-            }
-        }
-        return days;
+        return OperatingDays.of(position);
     }
 
     private static final DateTimeFormatter DAY_FMT = DateTimeFormatter.ofPattern("dd.MM.yyyy");

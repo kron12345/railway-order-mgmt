@@ -21,6 +21,7 @@ import com.vaadin.flow.shared.Registration;
 
 import com.ordermgmt.railway.domain.infrastructure.repository.OperationalPointRepository;
 import com.ordermgmt.railway.domain.order.model.CoverageType;
+import com.ordermgmt.railway.domain.order.model.OperatingDays;
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.order.model.PositionType;
 import com.ordermgmt.railway.domain.order.model.ResourceCatalogItem;
@@ -106,16 +107,32 @@ public class ResourceDialog extends Dialog {
         toOp.setClearButtonVisible(true);
         toOp.setWidthFull();
 
-        // Per-demand Verkehrstage within the position's day range; empty = all days.
-        LocalDate min =
-                position.getStart() != null ? position.getStart().toLocalDate() : LocalDate.now();
-        LocalDate max =
-                position.getEnd() != null ? position.getEnd().toLocalDate() : min.plusYears(1);
+        // A Bedarf's Verkehrstage must stay within the position's operating days (Bedarf ⊆
+        // expression).
+        // When the position is scheduled, the calendar is bounded AND restricted to those exact
+        // days
+        // and defaults to all of them; an unscheduled position falls back to its plain date range.
+        List<LocalDate> operatingDays =
+                OperatingDays.of(position).stream().sorted().distinct().toList();
+        LocalDate min;
+        LocalDate max;
+        if (!operatingDays.isEmpty()) {
+            min = operatingDays.get(0);
+            max = operatingDays.get(operatingDays.size() - 1);
+        } else {
+            min = position.getStart() != null ? position.getStart().toLocalDate() : LocalDate.now();
+            max = position.getEnd() != null ? position.getEnd().toLocalDate() : min.plusYears(1);
+        }
         if (max.isBefore(min)) {
             max = min;
         }
         ValidityCalendar calendar = new ValidityCalendar(min, max);
         calendar.setCompact(true);
+        if (!operatingDays.isEmpty()) {
+            calendar.setAllowedDates(operatingDays);
+            calendar.setSelectedDates(
+                    operatingDays); // default: the Bedarf covers all expression days
+        }
         Span calLabel = new Span(tr("resource.verkehrstage"));
         calLabel.getStyle().set("font-size", "13px").set("color", "var(--rom-text-secondary)");
         Div calWrap = new Div(calLabel, calendar);

@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -37,6 +38,10 @@ public class ValidityCalendar extends Div {
     private final LocalDate maxDate;
     private final Set<LocalDate> selectedDates = new LinkedHashSet<>();
     private final Map<LocalDate, String> occupiedDates = new HashMap<>();
+
+    /** When non-null, only these dates are selectable (e.g. a Bedarf ⊆ the expression's days). */
+    private Set<LocalDate> allowedDates;
+
     private final Map<LocalDate, Div> cellMap = new LinkedHashMap<>();
     private final Span countLabel = new Span();
     private boolean compact = false;
@@ -109,6 +114,27 @@ public class ValidityCalendar extends Div {
                     });
         }
         updateAllCells();
+    }
+
+    /**
+     * Restricts the selectable days to {@code allowed} (intersected with the range) — e.g. a
+     * Bedarf's Verkehrstage must stay within its expression's operating days. Pass {@code null} or
+     * an empty set to lift the restriction (any day in range is selectable). Rebuilds the grid.
+     */
+    public void setAllowedDates(Collection<LocalDate> allowed) {
+        if (allowed == null || allowed.isEmpty()) {
+            allowedDates = null;
+        } else {
+            allowedDates = new HashSet<>(allowed);
+        }
+        rebuildCalendar();
+        updateAllCells();
+    }
+
+    private boolean isSelectable(LocalDate date) {
+        return !date.isBefore(minDate)
+                && !date.isAfter(maxDate)
+                && (allowedDates == null || allowedDates.contains(date));
     }
 
     // --- Toolbar: weekday buttons + bulk actions ---
@@ -305,7 +331,7 @@ public class ValidityCalendar extends Div {
                     table.add(compactEmptyCell());
                 } else {
                     LocalDate date = ym.atDay(dayCounter);
-                    boolean inRange = !date.isBefore(minDate) && !date.isAfter(maxDate);
+                    boolean inRange = isSelectable(date);
                     Div cell = compactDayCell(date, dayCounter, inRange);
                     if (inRange) {
                         cellMap.put(date, cell);
@@ -404,7 +430,7 @@ public class ValidityCalendar extends Div {
 
         for (int d = 1; d <= daysInMonth; d++) {
             LocalDate date = ym.atDay(d);
-            boolean inRange = !date.isBefore(minDate) && !date.isAfter(maxDate);
+            boolean inRange = isSelectable(date);
             Div cell = dayCell(date, d, inRange);
             if (inRange) {
                 cellMap.put(date, cell);
@@ -499,7 +525,7 @@ public class ValidityCalendar extends Div {
         List<LocalDate> datesForDow = new ArrayList<>();
         LocalDate d = minDate;
         while (!d.isAfter(maxDate)) {
-            if (d.getDayOfWeek() == dow) datesForDow.add(d);
+            if (d.getDayOfWeek() == dow && isSelectable(d)) datesForDow.add(d);
             d = d.plusDays(1);
         }
 
@@ -518,7 +544,7 @@ public class ValidityCalendar extends Div {
     private void selectAll() {
         LocalDate d = minDate;
         while (!d.isAfter(maxDate)) {
-            selectedDates.add(d);
+            if (isSelectable(d)) selectedDates.add(d);
             d = d.plusDays(1);
         }
         updateAllCells();
@@ -528,7 +554,7 @@ public class ValidityCalendar extends Div {
     private void selectWeekdays() {
         LocalDate d = minDate;
         while (!d.isAfter(maxDate)) {
-            if (d.getDayOfWeek().getValue() <= 5) selectedDates.add(d);
+            if (d.getDayOfWeek().getValue() <= 5 && isSelectable(d)) selectedDates.add(d);
             d = d.plusDays(1);
         }
         updateAllCells();
