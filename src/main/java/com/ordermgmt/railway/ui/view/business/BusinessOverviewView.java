@@ -1,12 +1,12 @@
 package com.ordermgmt.railway.ui.view.business;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
 
 import jakarta.annotation.security.PermitAll;
+
+import org.springframework.data.domain.Slice;
 
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
@@ -25,25 +25,31 @@ import com.ordermgmt.railway.domain.business.model.BusinessStatus;
 import com.ordermgmt.railway.domain.business.service.BusinessService;
 import com.ordermgmt.railway.domain.order.service.AuditService;
 import com.ordermgmt.railway.domain.userprefs.service.UserViewPreferenceService;
+import com.ordermgmt.railway.dto.business.BusinessListItem;
+import com.ordermgmt.railway.dto.business.BusinessListQuery;
 import com.ordermgmt.railway.infrastructure.keycloak.CurrentUserHelper;
 import com.ordermgmt.railway.infrastructure.keycloak.KeycloakUserService;
 import com.ordermgmt.railway.ui.component.a11y.SkipLinks;
 import com.ordermgmt.railway.ui.component.business.BusinessCard;
 import com.ordermgmt.railway.ui.component.masterdetail.MasterDetailLayout;
+import com.ordermgmt.railway.ui.component.masterdetail.SliceResult;
 import com.ordermgmt.railway.ui.component.masterdetail.filter.DateRangeFilterField;
 import com.ordermgmt.railway.ui.component.masterdetail.filter.FilterField;
 import com.ordermgmt.railway.ui.component.masterdetail.filter.SelectFilterField;
 import com.ordermgmt.railway.ui.component.masterdetail.filter.TextFilterField;
 import com.ordermgmt.railway.ui.component.masterdetail.filter.ToggleFilterField;
 import com.ordermgmt.railway.ui.layout.MainLayout;
+import com.ordermgmt.railway.ui.support.OffsetPageable;
 
 /**
  * Master-detail overview for businesses. Serves both <code>/businesses</code> (list with empty
  * detail) and <code>/businesses/{id}</code> (list + selected business detail).
  *
- * <p>Keyboard navigation, ARIA listbox semantics, type-ahead filter, and skip-links are provided by
- * {@link MasterDetailLayout} and {@link SkipLinks}; URL drives selection so deep links and browser
- * back/forward keep working.
+ * <p>The list is lazy (P4): {@link MasterDetailLayout} pulls {@link BusinessListItem} pages from
+ * {@link BusinessService#searchBusinesses} via {@link #lazyLoadBusinesses}; filters become a
+ * server-side {@link BusinessListQuery}, so no full business list (and no n:m link counts) is ever
+ * materialized. Keyboard navigation, ARIA listbox semantics, type-ahead filter, and skip-links are
+ * provided by {@link MasterDetailLayout} and {@link SkipLinks}; URL drives selection.
  */
 @Route(value = "businesses/:businessId/:mode", layout = MainLayout.class)
 @RouteAlias(value = "businesses/:businessId", layout = MainLayout.class)
@@ -52,12 +58,21 @@ import com.ordermgmt.railway.ui.layout.MainLayout;
 @PermitAll
 public class BusinessOverviewView extends VerticalLayout implements BeforeEnterObserver {
 
+    private static final int PAGE_SIZE = 50;
+
     private final BusinessService businessService;
     private final UserViewPreferenceService prefsService;
     private final KeycloakUserService keycloakUserService;
     private final AuditService auditService;
-    private final MasterDetailLayout<Business> shell;
-    private final Map<UUID, int[]> linkCountsCache = new HashMap<>();
+
+    // Not final: the cardRenderer lambda (built during the spec chain) reads shell to reloadLazy().
+    private MasterDetailLayout<BusinessListItem> shell;
+
+    // Filter controls — held so the lazy loader can read their values into a BusinessListQuery.
+    private SelectFilterField<BusinessListItem, BusinessStatus> statusField;
+    private DateRangeFilterField<BusinessListItem> dateRangeField;
+    private TextFilterField<BusinessListItem> tagsField;
+    private ToggleFilterField<BusinessListItem> assignedToMeField;
 
     public BusinessOverviewView(
             BusinessService businessService,
@@ -79,33 +94,25 @@ public class BusinessOverviewView extends VerticalLayout implements BeforeEnterO
 
         Function<String, String> tr = this::getTranslation;
         shell =
-                MasterDetailLayout.<Business>spec()
-                        .idExtractor(Business::getId)
+                MasterDetailLayout.<BusinessListItem>spec()
+                        .idExtractor(BusinessListItem::id)
                         .cardRenderer(
-                                b -> {
-                                    int[] counts = countsFor(b);
-                                    return new BusinessCard(
-                                            b,
-                                            tr,
-                                            counts[0],
-                                            counts[1],
-                                            businessService,
-                                            keycloakUserService,
-                                            this::loadBusinesses);
-                                })
+                                b ->
+                                        new BusinessCard(
+                                                b,
+                                                tr,
+                                                businessService,
+                                                keycloakUserService,
+                                                () -> shell.reloadLazy()))
+                        // Inert in lazy mode (applyFilter delegates to the server query); kept so
+                        // the
+                        // spec stays valid and the legacy in-memory path would still work if
+                        // reused.
                         .matcher(
                                 (b, q) -> {
-                                    String title =
-                                            b.getTitle() == null ? "" : b.getTitle().toLowerCase();
-                                    String desc =
-                                            b.getDescription() == null
-                                                    ? ""
-                                                    : b.getDescription().toLowerCase();
-                                    String tags =
-                                            b.getTags() == null ? "" : b.getTags().toLowerCase();
-                                    return title.contains(q)
-                                            || desc.contains(q)
-                                            || tags.contains(q);
+                                    String title = b.title() == null ? "" : b.title().toLowerCase();
+                                    String tags = b.tags() == null ? "" : b.tags().toLowerCase();
+                                    return title.contains(q) || tags.contains(q);
                                 })
                         .filterPlaceholder(getTranslation("business.filterPlaceholder"))
                         .filterAriaLabel(getTranslation("business.search"))
@@ -122,13 +129,17 @@ public class BusinessOverviewView extends VerticalLayout implements BeforeEnterO
                         .filterPanelAria(getTranslation("filter.panel.aria"))
                         .emptyText(getTranslation("business.empty"))
                         .detailEmptyText(getTranslation("business.detail.empty"))
+                        .readoutLoadedLabel(getTranslation("md.lazy.loaded"))
+                        .readoutMoreLabel(getTranslation("md.lazy.more"))
+                        .readoutFilteredLabel(getTranslation("md.lazy.filtered"))
+                        .sentinelLabel(getTranslation("md.lazy.sentinel", PAGE_SIZE))
                         .announceTemplate(
                                 (b, idx, total) ->
                                         getTranslation(
                                                 "business.announce.selected",
                                                 idx,
                                                 total,
-                                                b.getTitle() == null ? "—" : b.getTitle()))
+                                                b.title() == null ? "—" : b.title()))
                         .extraToolbar(canMutate() ? List.of(buildNewButton()) : List.of())
                         .shortcutNew(
                                 canMutate()
@@ -140,19 +151,22 @@ public class BusinessOverviewView extends VerticalLayout implements BeforeEnterO
         add(shell);
         setFlexGrow(1, shell);
 
-        loadBusinesses();
+        shell.setLazyLoader(this::lazyLoadBusinesses);
     }
 
     @Override
     public void beforeEnter(BeforeEnterEvent event) {
         String param = event.getRouteParameters().get("businessId").orElse(null);
         String mode = event.getRouteParameters().get("mode").orElse(null);
-        loadBusinesses();
+        // Bare list: (re)load page 1. A specific business: load page 1 only if nothing is loaded
+        // yet, so an accumulated list keeps its pages/scroll/selection when a card is clicked.
         if (param == null) {
+            shell.reloadLazy();
             shell.setSelectedId(null);
             shell.setDetail(null);
             return;
         }
+        shell.ensureLoaded();
         if ("new".equals(param)) {
             // Defence-in-depth: non-mutators can reach /businesses/new by URL though the button is
             // hidden; bounce them to the list (service also guards on save).
@@ -185,30 +199,53 @@ public class BusinessOverviewView extends VerticalLayout implements BeforeEnterO
     }
 
     /**
-     * Filter criteria for the business list — same shape as the order list (status / validity range
-     * / tags / "assigned to me") so both views look and behave identically. "Assigned to me"
-     * matches USER-type assignments whose name is the current Keycloak user.
+     * One lazy page of the business list: builds a {@link BusinessListQuery} from the search text
+     * plus the held filter controls and asks the search service for the slice at {@code offset}.
      */
-    private List<FilterField<Business>> buildFilterFields() {
+    private SliceResult<BusinessListItem> lazyLoadBusinesses(String text, int offset) {
         String me = CurrentUserHelper.getUsername();
-        return List.of(
+        BusinessListQuery query =
+                new BusinessListQuery(
+                        text,
+                        statusField.getSelectedValue(),
+                        dateRangeField.getFrom(),
+                        dateRangeField.getTo(),
+                        tagsField.getTextValue(),
+                        assignedToMeField.isToggled() ? me : null);
+        Slice<BusinessListItem> slice =
+                businessService.searchBusinesses(query, new OffsetPageable(offset, PAGE_SIZE));
+        return new SliceResult<>(slice.getContent(), slice.hasNext());
+    }
+
+    /**
+     * Filter criteria for the business list (status / validity range / tags / "assigned to me") —
+     * same shape as the order list. "Assigned to me" matches USER-type assignments whose name is
+     * the current Keycloak user. Stored as fields so {@link #lazyLoadBusinesses} can read them.
+     */
+    private List<FilterField<BusinessListItem>> buildFilterFields() {
+        String me = CurrentUserHelper.getUsername();
+        statusField =
                 new SelectFilterField<>(
                         getTranslation("filter.field.status"),
                         List.of(BusinessStatus.values()),
                         s -> getTranslation("business.status." + s.name()),
-                        Business::getStatus),
+                        BusinessListItem::status);
+        dateRangeField =
                 new DateRangeFilterField<>(
                         getTranslation("filter.field.dateFrom"),
                         getTranslation("filter.field.dateTo"),
-                        Business::getValidFrom,
-                        Business::getValidTo),
-                new TextFilterField<>(getTranslation("filter.field.tags"), Business::getTags),
+                        b -> null,
+                        BusinessListItem::validTo);
+        tagsField =
+                new TextFilterField<>(getTranslation("filter.field.tags"), BusinessListItem::tags);
+        assignedToMeField =
                 new ToggleFilterField<>(
                         getTranslation("filter.field.assignedToMe"),
                         b ->
-                                "USER".equals(b.getAssignmentType())
+                                "USER".equals(b.assignmentType())
                                         && me != null
-                                        && me.equals(b.getAssignmentName())));
+                                        && me.equals(b.assignmentName()));
+        return List.of(statusField, dateRangeField, tagsField, assignedToMeField);
     }
 
     private Component buildSkipLinks() {
@@ -230,15 +267,5 @@ public class BusinessOverviewView extends VerticalLayout implements BeforeEnterO
         btn.getElement().setAttribute("aria-keyshortcuts", "n");
         btn.addClickListener(e -> UI.getCurrent().navigate("businesses/new"));
         return btn;
-    }
-
-    private void loadBusinesses() {
-        linkCountsCache.clear();
-        linkCountsCache.putAll(businessService.linkCounts());
-        shell.setItems(businessService.listAll());
-    }
-
-    private int[] countsFor(Business b) {
-        return linkCountsCache.getOrDefault(b.getId(), new int[] {0, 0});
     }
 }

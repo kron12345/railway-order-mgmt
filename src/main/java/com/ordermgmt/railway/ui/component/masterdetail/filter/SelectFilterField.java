@@ -43,6 +43,14 @@ public class SelectFilterField<T, V> implements FilterField<T> {
         return select;
     }
 
+    /**
+     * Current selection, or {@code null} when inactive — read by lazy views to build a server
+     * query.
+     */
+    public V getSelectedValue() {
+        return select.getValue();
+    }
+
     @Override
     public Predicate<T> predicate() {
         V selected = select.getValue();

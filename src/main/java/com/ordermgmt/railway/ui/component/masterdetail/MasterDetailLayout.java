@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
@@ -18,7 +19,9 @@ import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.component.textfield.TextFieldVariant;
 import com.vaadin.flow.data.value.ValueChangeMode;
 
+import com.ordermgmt.railway.ui.component.DataReadout;
 import com.ordermgmt.railway.ui.component.a11y.AriaLive;
+import com.ordermgmt.railway.ui.component.masterdetail.filter.FilterField;
 import com.ordermgmt.railway.ui.component.masterdetail.filter.FilterPanel;
 
 /**
@@ -46,6 +49,15 @@ public class MasterDetailLayout<T> extends Div {
 
     private FilterPanel<T> filterPanel;
     private Predicate<T> panelPredicate = t -> true;
+
+    /** Auto-load when keyboard navigation reaches this close to the last loaded row. */
+    private static final int AUTO_LOAD_THRESHOLD = 3;
+
+    // Lazy mode (opt-in via setLazyLoader): server-paged accumulation alongside the legacy
+    // in-memory setItems() path. When lazyMode is false, none of this is touched.
+    private final DataReadout readout = new DataReadout();
+    private LazyListController<T> lazyController;
+    private boolean lazyMode = false;
 
     public MasterDetailLayout(MasterDetailSpec<T> spec) {
         this.spec = spec;
@@ -195,6 +207,10 @@ public class MasterDetailLayout<T> extends Div {
 
         listPane.add(listScroll);
 
+        // Terminal-style readout footer, shown only in lazy mode (setLazyLoader makes it visible).
+        readout.setVisible(false);
+        listPane.add(readout);
+
         detailPane.addClassName("md-detail");
         detailPane.setId(spec.detailId);
         detailPane.getElement().setAttribute("role", "region");
@@ -213,6 +229,59 @@ public class MasterDetailLayout<T> extends Div {
         applyFilter();
     }
 
+    /**
+     * Switch this list into lazy (server-paged) mode: {@code loader} receives the current filter
+     * text + an offset (always a multiple of the loader's page size) and returns one page. Call
+     * once after {@link MasterDetailSpec#build()}; the legacy {@link #setItems(List)} path stays
+     * untouched.
+     */
+    public void setLazyLoader(BiFunction<String, Integer, SliceResult<T>> loader) {
+        this.lazyMode = true;
+        this.lazyController = new LazyListController<>(loader, this::onLazyChange);
+        this.readout.setVisible(true);
+        // No initial load here — beforeEnter drives the first page (reloadLazy for the bare list,
+        // ensureLoaded for a deep link), so navigation never fires a duplicate page-1 query.
+    }
+
+    /**
+     * Re-run the current lazy query from offset 0 — explicit refresh (filter, card edit, list
+     * view).
+     */
+    public void reloadLazy() {
+        if (lazyMode && lazyController != null) {
+            lazyController.reset(filterText);
+        }
+    }
+
+    /**
+     * Load the first page only if it has never been loaded — used on a deep-link/selection
+     * navigation so an already-accumulated list keeps its pages, scroll position and selection
+     * highlight instead of collapsing back to page 1.
+     */
+    public void ensureLoaded() {
+        if (lazyMode && lazyController != null && !lazyController.isStarted()) {
+            lazyController.reset(filterText);
+        }
+    }
+
+    public boolean isLazyMode() {
+        return lazyMode;
+    }
+
+    public DataReadout getReadout() {
+        return readout;
+    }
+
+    private void onLazyChange() {
+        renderCards();
+        updateReadout();
+    }
+
+    /** The currently displayed list — accumulated lazy items, or the in-memory filtered list. */
+    private List<T> displayed() {
+        return lazyMode ? lazyController.items() : visibleItems;
+    }
+
     public void setSelectedId(UUID id) {
         this.selectedId = id;
         for (MasterCardWrapper w : cardWrappers) {
@@ -221,7 +290,7 @@ public class MasterDetailLayout<T> extends Div {
         T item = findById(id);
         if (item != null) {
             ariaLive.announce(
-                    spec.announceTemplate.apply(item, indexOf(id) + 1, visibleItems.size()));
+                    spec.announceTemplate.apply(item, indexOf(id) + 1, displayed().size()));
         }
     }
 
@@ -242,6 +311,12 @@ public class MasterDetailLayout<T> extends Div {
     }
 
     private void applyFilter() {
+        if (lazyMode) {
+            // Server-side: rebuild the query from filterText + field getters (the view's loader
+            // closure reads them) and reload from offset 0; renderCards runs via onLazyChange.
+            lazyController.reset(filterText);
+            return;
+        }
         visibleItems.clear();
         Predicate<T> text =
                 filterText.isBlank() ? t -> true : t -> spec.matcher.test(t, filterText);
@@ -255,44 +330,91 @@ public class MasterDetailLayout<T> extends Div {
     private void renderCards() {
         listScroll.removeAll();
         cardWrappers.clear();
-        if (visibleItems.isEmpty()) {
+        List<T> items = displayed();
+        if (items.isEmpty()) {
             listScroll.add(emptyState);
             return;
         }
         int idx = 0;
-        for (T item : visibleItems) {
-            UUID id = spec.idExtractor.apply(item);
-            Component card = spec.cardRenderer.apply(item);
-            Div wrapper = new Div(card);
-            wrapper.addClassName("md-card-wrapper");
-            wrapper.getElement().setAttribute("role", "option");
-            wrapper.getElement().setAttribute("tabindex", idx == 0 ? "0" : "-1");
-            wrapper.getElement().setAttribute("data-id", id.toString());
-            wrapper.getElement().addEventListener("click", e -> spec.onSelect.accept(id));
-            MasterCardWrapper mcw = new MasterCardWrapper(id, wrapper);
-            mcw.applySelection(Objects.equals(id, selectedId));
-            cardWrappers.add(mcw);
-            listScroll.add(wrapper);
+        for (T item : items) {
+            listScroll.add(renderOneCard(item, idx));
             idx++;
+        }
+        if (lazyMode && lazyController.hasMore()) {
+            LazyLoadSentinel sentinel =
+                    new LazyLoadSentinel(
+                            spec.sentinelLabel, () -> lazyController.loadNext(filterText));
+            listScroll.add(sentinel);
+            sentinel.observe(listScroll.getElement());
+        } else if (lazyMode) {
+            detachObserver();
         }
     }
 
+    private Div renderOneCard(T item, int idx) {
+        UUID id = spec.idExtractor.apply(item);
+        Component card = spec.cardRenderer.apply(item);
+        Div wrapper = new Div(card);
+        wrapper.addClassName("md-card-wrapper");
+        wrapper.getElement().setAttribute("role", "option");
+        wrapper.getElement().setAttribute("tabindex", idx == 0 ? "0" : "-1");
+        wrapper.getElement().setAttribute("data-id", id.toString());
+        wrapper.getElement().addEventListener("click", e -> spec.onSelect.accept(id));
+        MasterCardWrapper mcw = new MasterCardWrapper(id, wrapper);
+        mcw.applySelection(Objects.equals(id, selectedId));
+        cardWrappers.add(mcw);
+        return wrapper;
+    }
+
+    /** Disconnect the auto-load observer when no further pages remain (no sentinel to watch). */
+    private void detachObserver() {
+        listScroll
+                .getElement()
+                .executeJs("if(this.__romObs){this.__romObs.disconnect(); this.__romObs=null;}");
+    }
+
+    private void updateReadout() {
+        if (!lazyMode) {
+            return;
+        }
+        int n = lazyController.loadedCount();
+        StringBuilder sb = new StringBuilder(spec.readoutLoadedLabel);
+        sb.append(' ').append(n == 0 ? "0" : "1–" + n);
+        if (lazyController.hasMore()) {
+            sb.append(" / ").append(spec.readoutMoreLabel);
+        }
+        if (isFilterActive()) {
+            sb.append(" · ").append(spec.readoutFilteredLabel);
+        }
+        readout.setStatus(sb.toString());
+    }
+
+    private boolean isFilterActive() {
+        if (!filterText.isBlank()) {
+            return true;
+        }
+        for (FilterField<T> field : spec.filterFields) {
+            if (!field.chips().isEmpty()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void onListKey(String key) {
-        if (visibleItems.isEmpty()) return;
+        List<T> items = displayed();
+        if (items.isEmpty()) return;
         int currentIndex = selectedId != null ? indexOf(selectedId) : -1;
+        int last = items.size() - 1;
         int next = currentIndex;
         switch (key) {
-            case "ArrowDown" ->
-                    next =
-                            currentIndex < 0
-                                    ? 0
-                                    : Math.min(visibleItems.size() - 1, currentIndex + 1);
+            case "ArrowDown" -> next = currentIndex < 0 ? 0 : Math.min(last, currentIndex + 1);
             case "ArrowUp" -> next = currentIndex <= 0 ? 0 : currentIndex - 1;
             case "Home" -> next = 0;
-            case "End" -> next = visibleItems.size() - 1;
+            case "End" -> next = last;
             case "Enter" -> {
                 if (currentIndex >= 0)
-                    spec.onSelect.accept(spec.idExtractor.apply(visibleItems.get(currentIndex)));
+                    spec.onSelect.accept(spec.idExtractor.apply(items.get(currentIndex)));
                 return;
             }
             default -> {
@@ -300,20 +422,26 @@ public class MasterDetailLayout<T> extends Div {
             }
         }
         if (next == currentIndex || next < 0) return;
-        T target = visibleItems.get(next);
-        UUID id = spec.idExtractor.apply(target);
-        spec.onSelect.accept(id);
+        // Lazy: pull the next page when navigating into the last few loaded rows.
+        if (lazyMode && lazyController.hasMore() && next >= items.size() - AUTO_LOAD_THRESHOLD) {
+            lazyController.loadNext(filterText);
+        }
+        spec.onSelect.accept(spec.idExtractor.apply(items.get(next)));
     }
 
     private int indexOf(UUID id) {
-        for (int i = 0; i < visibleItems.size(); i++) {
-            if (Objects.equals(spec.idExtractor.apply(visibleItems.get(i)), id)) return i;
+        List<T> items = displayed();
+        for (int i = 0; i < items.size(); i++) {
+            if (Objects.equals(spec.idExtractor.apply(items.get(i)), id)) return i;
         }
         return -1;
     }
 
     private T findById(UUID id) {
-        for (T t : allItems) {
+        // Non-lazy: full set (announce works for a filtered-out deep link). Lazy: only loaded rows
+        // (a deep-linked unloaded row still renders its detail via beforeEnter, just no highlight).
+        List<T> source = lazyMode ? lazyController.items() : allItems;
+        for (T t : source) {
             if (Objects.equals(spec.idExtractor.apply(t), id)) return t;
         }
         return null;

@@ -28,6 +28,11 @@ public class ToggleFilterField<T> implements FilterField<T> {
         return box;
     }
 
+    /** Whether the toggle is on — read by lazy views to build a server query. */
+    public boolean isToggled() {
+        return Boolean.TRUE.equals(box.getValue());
+    }
+
     @Override
     public Predicate<T> predicate() {
         return Boolean.TRUE.equals(box.getValue()) ? activePredicate : t -> true;

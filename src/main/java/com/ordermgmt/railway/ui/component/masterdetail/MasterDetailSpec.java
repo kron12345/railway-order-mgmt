@@ -43,6 +43,12 @@ public class MasterDetailSpec<T> {
     String filterChipClearAria = "Filter entfernen";
     String filterPanelAria = "Filter";
 
+    // Lazy-mode (setLazyLoader) readout + sentinel labels; only used when a loader is set.
+    String readoutLoadedLabel = "geladen";
+    String readoutMoreLabel = "mehr";
+    String readoutFilteredLabel = "gefiltert";
+    String sentinelLabel = "weitere {0} laden";
+
     public MasterDetailSpec<T> idExtractor(Function<T, UUID> v) {
         this.idExtractor = v;
         return this;
@@ -150,6 +156,26 @@ public class MasterDetailSpec<T> {
 
     public MasterDetailSpec<T> filterPanelAria(String v) {
         this.filterPanelAria = v;
+        return this;
+    }
+
+    public MasterDetailSpec<T> readoutLoadedLabel(String v) {
+        this.readoutLoadedLabel = v;
+        return this;
+    }
+
+    public MasterDetailSpec<T> readoutMoreLabel(String v) {
+        this.readoutMoreLabel = v;
+        return this;
+    }
+
+    public MasterDetailSpec<T> readoutFilteredLabel(String v) {
+        this.readoutFilteredLabel = v;
+        return this;
+    }
+
+    public MasterDetailSpec<T> sentinelLabel(String v) {
+        this.sentinelLabel = v;
         return this;
     }
 

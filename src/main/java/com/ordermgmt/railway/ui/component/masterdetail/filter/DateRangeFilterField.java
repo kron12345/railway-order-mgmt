@@ -57,6 +57,16 @@ public class DateRangeFilterField<T> implements FilterField<T> {
         return row;
     }
 
+    /** Lower bound of the window, or {@code null} — read by lazy views to build a server query. */
+    public LocalDate getFrom() {
+        return from.getValue();
+    }
+
+    /** Upper bound of the window, or {@code null} — read by lazy views to build a server query. */
+    public LocalDate getTo() {
+        return to.getValue();
+    }
+
     @Override
     public Predicate<T> predicate() {
         LocalDate f = from.getValue();

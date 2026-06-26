@@ -36,6 +36,13 @@ public class TextFilterField<T> implements FilterField<T> {
         return field;
     }
 
+    /**
+     * Current raw text (untrimmed), or {@code null} — read by lazy views to build a server query.
+     */
+    public String getTextValue() {
+        return field.getValue();
+    }
+
     @Override
     public Predicate<T> predicate() {
         String query = normalize(field.getValue());

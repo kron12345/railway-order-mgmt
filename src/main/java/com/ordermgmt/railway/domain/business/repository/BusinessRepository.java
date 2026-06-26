@@ -20,9 +20,6 @@ import com.ordermgmt.railway.dto.business.BusinessListItem;
 @Repository
 public interface BusinessRepository extends JpaRepository<Business, UUID> {
 
-    @Query("SELECT b.id, SIZE(b.orderPositions), SIZE(b.purchasePositions) FROM Business b")
-    List<Object[]> findAllLinkCounts();
-
     /**
      * Lazy business list (P3): a {@code Slice} of projections (fetch pageSize+1, no total count)
      * with all filters optional and the linked-position counts via {@code SIZE(...)} — never by
@@ -35,13 +32,13 @@ public interface BusinessRepository extends JpaRepository<Business, UUID> {
                     + "size(b.orderPositions), size(b.purchasePositions)) "
                     + "from Business b "
                     + "where (:text is null "
-                    + "  or lower(b.title) like lower(concat('%', :text, '%')) "
-                    + "  or lower(coalesce(b.description, '')) like lower(concat('%', :text, '%')) "
-                    + "  or lower(coalesce(b.tags, '')) like lower(concat('%', :text, '%'))) "
+                    + "  or lower(b.title) like lower(concat('%', cast(:text as string), '%')) "
+                    + "  or lower(coalesce(b.description, '')) like lower(concat('%', cast(:text as string), '%')) "
+                    + "  or lower(coalesce(b.tags, '')) like lower(concat('%', cast(:text as string), '%'))) "
                     + "and (:status is null or b.status = :status) "
                     + "and (:validFromMin is null or b.validTo is null or b.validTo >= :validFromMin) "
                     + "and (:validToMax is null or b.validFrom is null or b.validFrom <= :validToMax) "
-                    + "and (:tags is null or lower(coalesce(b.tags, '')) like lower(concat('%', :tags, '%'))) "
+                    + "and (:tags is null or lower(coalesce(b.tags, '')) like lower(concat('%', cast(:tags as string), '%'))) "
                     + "and (:assignee is null "
                     + "  or (b.assignmentType = 'USER' and b.assignmentName = :assignee))")
     Slice<BusinessListItem> searchBusinesses(

@@ -110,7 +110,13 @@ public class OrderService {
                 stableSort(pageable, "orderNumber"));
     }
 
-    /** Appends an id tie-breaker (or a default field + id when unsorted) for stable paging. */
+    /**
+     * Appends an id tie-breaker (or a default field + id when unsorted) for stable paging. Rebuilds
+     * the Pageable via {@code PageRequest.of(getPageNumber(), getPageSize())}; this preserves the
+     * exact offset ONLY for page-aligned offsets (multiples of the page size). The lazy list
+     * callers always append whole pages, so their offsets stay aligned — do not feed this a
+     * non-aligned {@code OffsetPageable} or the reconstructed page will skip rows.
+     */
     static Pageable stableSort(Pageable pageable, String defaultField) {
         Sort sort =
                 pageable.getSort().isSorted()

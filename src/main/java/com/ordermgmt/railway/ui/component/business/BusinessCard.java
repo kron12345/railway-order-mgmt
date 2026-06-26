@@ -13,14 +13,15 @@ import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.select.Select;
 
 import com.ordermgmt.railway.domain.business.model.AssignmentType;
-import com.ordermgmt.railway.domain.business.model.Business;
 import com.ordermgmt.railway.domain.business.model.BusinessStatus;
 import com.ordermgmt.railway.domain.business.service.BusinessService;
+import com.ordermgmt.railway.dto.business.BusinessListItem;
 import com.ordermgmt.railway.infrastructure.keycloak.CurrentUserHelper;
 import com.ordermgmt.railway.infrastructure.keycloak.KeycloakUserService;
 
 /**
- * Bloomberg-style master-list card for a {@link Business}. Status gutter, status (icon + text),
+ * Bloomberg-style master-list card for a business, built from the lazy {@link BusinessListItem}
+ * projection (P3/P4) — no entity or n:m collection is touched. Status gutter, status (icon + text),
  * title, link counts, due date, assignee.
  *
  * <p>Status and assignee are always rendered as real form controls (not toggled on hover). Default
@@ -33,26 +34,24 @@ public class BusinessCard extends Div {
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("dd.MM.yy");
 
     public BusinessCard(
-            Business business,
+            BusinessListItem business,
             Function<String, String> tr,
-            int linkedOrderPositions,
-            int linkedPurchasePositions,
             BusinessService businessService,
             KeycloakUserService keycloakUserService,
             Runnable onChange) {
         addClassName("biz-card-tile");
-        addClassName("biz-card-tile--" + business.getStatus().name().toLowerCase());
+        addClassName("biz-card-tile--" + business.status().name().toLowerCase());
 
         getElement()
                 .setAttribute(
                         "aria-label",
                         tr.apply("business.title")
                                 + ": "
-                                + safe(business.getTitle())
+                                + safe(business.title())
                                 + ", "
                                 + tr.apply("business.status.aria")
                                 + " "
-                                + tr.apply("business.status." + business.getStatus().name()));
+                                + tr.apply("business.status." + business.status().name()));
 
         Div gutter = new Div();
         gutter.addClassName("biz-card-tile__gutter");
@@ -64,12 +63,11 @@ public class BusinessCard extends Div {
 
         body.add(buildStatusControl(business, tr, businessService, onChange));
 
-        Span title =
-                new Span(safe(business.getTitle()).isEmpty() ? "—" : safe(business.getTitle()));
+        Span title = new Span(safe(business.title()).isEmpty() ? "—" : safe(business.title()));
         title.addClassName("biz-card-tile__title");
         body.add(title);
 
-        body.add(buildMetaRow(business, linkedOrderPositions, linkedPurchasePositions, tr));
+        body.add(buildMetaRow(business, tr));
         body.add(
                 buildAssigneeControl(business, tr, businessService, keycloakUserService, onChange));
 
@@ -79,31 +77,31 @@ public class BusinessCard extends Div {
     // ─── Status as Select styled like a pill ───────────────────
 
     private Component buildStatusControl(
-            Business business,
+            BusinessListItem business,
             Function<String, String> tr,
             BusinessService businessService,
             Runnable onChange) {
         // Non-mutating users (no ADMIN/DISPATCHER role) see a read-only pill; the service layer
         // enforces the same rule, so this just removes a control that would always fail.
         if (!CurrentUserHelper.hasAnyRole("ADMIN", "DISPATCHER")) {
-            return buildStaticStatusPill(business.getStatus(), tr);
+            return buildStaticStatusPill(business.status(), tr);
         }
         // Terminal status (no transitions allowed) → static pill, not editable.
-        Set<BusinessStatus> next = business.getStatus().nextTargets();
+        Set<BusinessStatus> next = business.status().nextTargets();
         if (next.isEmpty()) {
-            return buildStaticStatusPill(business.getStatus(), tr);
+            return buildStaticStatusPill(business.status(), tr);
         }
 
         // Otherwise: a Select that includes current + valid transitions, styled like the pill.
         Set<BusinessStatus> options = new LinkedHashSet<>();
-        options.add(business.getStatus());
+        options.add(business.status());
         options.addAll(next);
 
         Select<BusinessStatus> select = new Select<>();
         select.addClassName("biz-card-tile__status-select");
-        select.addClassName("biz-status-pill-icon--" + business.getStatus().name().toLowerCase());
+        select.addClassName("biz-status-pill-icon--" + business.status().name().toLowerCase());
         select.setItems(options);
-        select.setValue(business.getStatus());
+        select.setValue(business.status());
         select.setItemLabelGenerator(s -> tr.apply("business.status." + s.name()));
         select.getElement().setAttribute("aria-label", tr.apply("business.status"));
         // Stop card click → detail when interacting with the select.
@@ -118,7 +116,7 @@ public class BusinessCard extends Div {
                     if (e.getValue() == null || !e.isFromClient()) return;
                     if (e.getValue() == e.getOldValue()) return;
                     try {
-                        businessService.setStatus(business.getId(), e.getValue());
+                        businessService.setStatus(business.id(), e.getValue());
                         onChange.run();
                     } catch (RuntimeException ex) {
                         // parent refresh shows current state
@@ -158,7 +156,7 @@ public class BusinessCard extends Div {
     // ─── Assignee always-on combo styled like text ─────────────
 
     private Component buildAssigneeControl(
-            Business business,
+            BusinessListItem business,
             Function<String, String> tr,
             BusinessService businessService,
             KeycloakUserService keycloakUserService,
@@ -168,7 +166,7 @@ public class BusinessCard extends Div {
                         keycloakUserService,
                         (t, v) -> {
                             try {
-                                businessService.setAssignee(business.getId(), t, v);
+                                businessService.setAssignee(business.id(), t, v);
                                 onChange.run();
                             } catch (RuntimeException ex) {
                                 // parent refresh shows current state
@@ -176,8 +174,7 @@ public class BusinessCard extends Div {
                         });
         picker.addClassName("biz-card-tile__assignee-select");
         picker.preset(
-                AssignmentType.fromString(business.getAssignmentType()),
-                business.getAssignmentName());
+                AssignmentType.fromString(business.assignmentType()), business.assignmentName());
         picker.setPlaceholder("— " + tr.apply("business.unassigned"));
         picker.getElement().setAttribute("aria-label", tr.apply("business.assignment"));
         picker.getElement()
@@ -189,18 +186,17 @@ public class BusinessCard extends Div {
         return picker;
     }
 
-    private Div buildMetaRow(
-            Business business, int linkedOps, int linkedPps, Function<String, String> tr) {
+    private Div buildMetaRow(BusinessListItem business, Function<String, String> tr) {
         Div meta = new Div();
         meta.addClassName("biz-card-tile__meta");
 
         Span counts =
                 new Span(
-                        linkedOps
+                        business.linkedOrderPositionCount()
                                 + " "
                                 + tr.apply("business.tree.tag.AP")
                                 + " · "
-                                + linkedPps
+                                + business.linkedPurchasePositionCount()
                                 + " "
                                 + tr.apply("business.tree.tag.BP"));
         counts.addClassName("biz-card-tile__counts");
@@ -213,12 +209,10 @@ public class BusinessCard extends Div {
 
         Span due = new Span();
         due.addClassName("biz-card-tile__due");
-        if (business.getValidTo() != null) {
-            due.setText(
-                    tr.apply("business.validTo") + " " + business.getValidTo().format(DATE_FMT));
-        } else if (business.getDueDate() != null) {
-            due.setText(
-                    tr.apply("business.dueDate") + " " + business.getDueDate().format(DATE_FMT));
+        if (business.validTo() != null) {
+            due.setText(tr.apply("business.validTo") + " " + business.validTo().format(DATE_FMT));
+        } else if (business.dueDate() != null) {
+            due.setText(tr.apply("business.dueDate") + " " + business.dueDate().format(DATE_FMT));
         } else {
             due.setText("—");
         }

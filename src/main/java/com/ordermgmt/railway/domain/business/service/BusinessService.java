@@ -487,7 +487,13 @@ public class BusinessService {
                 stableSort(pageable, "title"));
     }
 
-    /** Appends an id tie-breaker (or a default field + id when unsorted) for stable paging. */
+    /**
+     * Appends an id tie-breaker (or a default field + id when unsorted) for stable paging. Rebuilds
+     * the Pageable via {@code PageRequest.of(getPageNumber(), getPageSize())}; this preserves the
+     * exact offset ONLY for page-aligned offsets (multiples of the page size). The lazy list
+     * callers always append whole pages, so their offsets stay aligned — do not feed this a
+     * non-aligned {@code OffsetPageable} or the reconstructed page will skip rows.
+     */
     private static Pageable stableSort(Pageable pageable, String defaultField) {
         Sort sort =
                 pageable.getSort().isSorted()
@@ -539,19 +545,6 @@ public class BusinessService {
     @Transactional(readOnly = true)
     public List<Business> findByLinkedOrder(UUID orderId) {
         return businessRepository.findByLinkedOrderId(orderId);
-    }
-
-    /** {@code Map<businessId, [orderPositionCount, purchasePositionCount]>}. */
-    @Transactional(readOnly = true)
-    public java.util.Map<UUID, int[]> linkCounts() {
-        java.util.Map<UUID, int[]> out = new java.util.HashMap<>();
-        for (Object[] row : businessRepository.findAllLinkCounts()) {
-            UUID id = (UUID) row[0];
-            int ops = ((Number) row[1]).intValue();
-            int pps = ((Number) row[2]).intValue();
-            out.put(id, new int[] {ops, pps});
-        }
-        return out;
     }
 
     @Transactional(readOnly = true)

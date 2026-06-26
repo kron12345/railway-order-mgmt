@@ -11,31 +11,31 @@ import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 
 import com.ordermgmt.railway.domain.business.model.AssignmentType;
-import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.domain.order.model.OrderType;
 import com.ordermgmt.railway.domain.order.model.PositionStatus;
 import com.ordermgmt.railway.domain.order.model.ProcessStatus;
+import com.ordermgmt.railway.dto.order.OrderListItem;
 import com.ordermgmt.railway.infrastructure.keycloak.KeycloakUserService;
 import com.ordermgmt.railway.ui.component.StatusBadge;
 import com.ordermgmt.railway.ui.component.business.AssigneeComboBox;
 
 /**
- * Bloomberg-style master-list card for an {@link Order}. Status gutter on the left, status pill
- * (icon + text — never colour alone), order number, customer name, position count, validity range.
+ * Bloomberg-style master-list card for an order, built from the lazy {@link OrderListItem}
+ * projection (P3/P4) — no entity or lazy collection is touched. Status gutter on the left, status
+ * pill (icon + text — never colour alone), order number, customer name, position count, validity.
  */
 public class OrderCard extends Div {
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("dd.MM.yy");
 
     public OrderCard(
-            Order order,
+            OrderListItem order,
             Function<String, String> tr,
-            int positionCount,
             KeycloakUserService keycloakUserService,
             BiConsumer<AssignmentType, String> onAssign) {
         addClassName("order-card-tile");
-        if (order.getProcessStatus() != null) {
-            addClassName("order-card-tile--" + order.getProcessStatus().name().toLowerCase());
+        if (order.processStatus() != null) {
+            addClassName("order-card-tile--" + order.processStatus().name().toLowerCase());
         }
 
         getElement()
@@ -43,13 +43,13 @@ public class OrderCard extends Div {
                         "aria-label",
                         tr.apply("order.aria.cardLabel.prefix")
                                 + " "
-                                + safe(order.getOrderNumber())
+                                + safe(order.orderNumber())
                                 + ", "
                                 + tr.apply("order.processStatus")
                                 + " "
-                                + (order.getProcessStatus() == null
+                                + (order.processStatus() == null
                                         ? ""
-                                        : tr.apply("process." + order.getProcessStatus().name())));
+                                        : tr.apply("process." + order.processStatus().name())));
 
         Div gutter = new Div();
         gutter.addClassName("order-card-tile__gutter");
@@ -59,13 +59,13 @@ public class OrderCard extends Div {
         Div body = new Div();
         body.addClassName("order-card-tile__body");
 
-        body.add(buildStatusPill(order.getProcessStatus(), tr));
+        body.add(buildStatusPill(order.processStatus(), tr));
 
-        if (order.getInternalStatus() != null) {
-            body.add(buildInternalStatusBadge(order.getInternalStatus(), tr));
+        if (order.internalStatus() != null) {
+            body.add(buildInternalStatusBadge(order.internalStatus(), tr));
         }
 
-        OrderType orderType = OrderType.of(order);
+        OrderType orderType = order.orderType();
         if (orderType != null) {
             body.add(
                     new StatusBadge(
@@ -76,20 +76,17 @@ public class OrderCard extends Div {
         }
 
         Span title =
-                new Span(
-                        safe(order.getOrderNumber()).isEmpty()
-                                ? "—"
-                                : safe(order.getOrderNumber()));
+                new Span(safe(order.orderNumber()).isEmpty() ? "—" : safe(order.orderNumber()));
         title.addClassName("order-card-tile__number");
         body.add(title);
 
-        if (order.getName() != null && !order.getName().isBlank()) {
-            Span name = new Span(order.getName());
+        if (order.name() != null && !order.name().isBlank()) {
+            Span name = new Span(order.name());
             name.addClassName("order-card-tile__name");
             body.add(name);
         }
 
-        body.add(buildMetaRow(order, positionCount, tr));
+        body.add(buildMetaRow(order, tr));
         body.add(buildAssigneeControl(order, tr, keycloakUserService, onAssign));
 
         add(body);
@@ -99,14 +96,13 @@ public class OrderCard extends Div {
      * Always-on assignee combo (Keycloak person), styled like text — mirrors {@code BusinessCard}.
      */
     private Component buildAssigneeControl(
-            Order order,
+            OrderListItem order,
             Function<String, String> tr,
             KeycloakUserService keycloakUserService,
             BiConsumer<AssignmentType, String> onAssign) {
         var picker = new AssigneeComboBox(keycloakUserService, onAssign);
         picker.addClassName("order-card-tile__assignee-select");
-        picker.preset(
-                AssignmentType.fromString(order.getAssignmentType()), order.getAssignmentName());
+        picker.preset(AssignmentType.fromString(order.assignmentType()), order.assignmentName());
         picker.setPlaceholder("— " + tr.apply("order.unassigned"));
         picker.getElement().setAttribute("aria-label", tr.apply("order.assignment"));
         picker.getElement()
@@ -159,11 +155,11 @@ public class OrderCard extends Div {
         return pill;
     }
 
-    private Div buildMetaRow(Order order, int positionCount, Function<String, String> tr) {
+    private Div buildMetaRow(OrderListItem order, Function<String, String> tr) {
         Div meta = new Div();
         meta.addClassName("order-card-tile__meta");
 
-        Span counts = new Span(positionCount + " " + tr.apply("order.positionCount.label"));
+        Span counts = new Span(order.positionCount() + " " + tr.apply("order.positionCount.label"));
         counts.addClassName("order-card-tile__counts");
         meta.add(counts);
 
@@ -173,26 +169,24 @@ public class OrderCard extends Div {
 
         Span validity = new Span();
         validity.addClassName("order-card-tile__validity");
-        if (order.getValidFrom() != null && order.getValidTo() != null) {
+        if (order.validFrom() != null && order.validTo() != null) {
             validity.setText(
-                    order.getValidFrom().format(DATE_FMT)
-                            + " → "
-                            + order.getValidTo().format(DATE_FMT));
-        } else if (order.getValidTo() != null) {
-            validity.setText(tr.apply("order.validTo") + " " + order.getValidTo().format(DATE_FMT));
-        } else if (order.getValidFrom() != null) {
+                    order.validFrom().format(DATE_FMT) + " → " + order.validTo().format(DATE_FMT));
+        } else if (order.validTo() != null) {
+            validity.setText(tr.apply("order.validTo") + " " + order.validTo().format(DATE_FMT));
+        } else if (order.validFrom() != null) {
             validity.setText(
-                    tr.apply("order.validFrom") + " " + order.getValidFrom().format(DATE_FMT));
+                    tr.apply("order.validFrom") + " " + order.validFrom().format(DATE_FMT));
         } else {
             validity.setText("—");
         }
         meta.add(validity);
 
-        if (order.getCustomer() != null && order.getCustomer().getName() != null) {
+        if (order.customerName() != null && !order.customerName().isBlank()) {
             Span sep2 = new Span(" · ");
             sep2.getElement().setAttribute("aria-hidden", "true");
             meta.add(sep2);
-            Span customer = new Span(order.getCustomer().getName());
+            Span customer = new Span(order.customerName());
             customer.addClassName("order-card-tile__customer");
             meta.add(customer);
         }
