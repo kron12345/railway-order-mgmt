@@ -170,6 +170,12 @@ public class OrderOverviewView extends VerticalLayout implements BeforeEnterObse
                                                 idx,
                                                 total,
                                                 o.orderNumber() == null ? "—" : o.orderNumber()))
+                        .lazyAnnounceTemplate(
+                                (o, idx) ->
+                                        getTranslation(
+                                                "order.announce.selected.lazy",
+                                                idx,
+                                                o.orderNumber() == null ? "—" : o.orderNumber()))
                         .extraToolbar(canMutate() ? List.of(buildNewButton()) : List.of())
                         .shortcutNew(
                                 canMutate() ? () -> UI.getCurrent().navigate("orders/new") : null)

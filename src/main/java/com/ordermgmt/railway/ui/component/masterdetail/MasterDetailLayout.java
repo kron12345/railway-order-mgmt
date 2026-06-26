@@ -289,8 +289,14 @@ public class MasterDetailLayout<T> extends Div {
         }
         T item = findById(id);
         if (item != null) {
-            ariaLive.announce(
-                    spec.announceTemplate.apply(item, indexOf(id) + 1, displayed().size()));
+            // Lazy mode: announce without a real total (we only know the loaded count). Falls back
+            // to the regular "x of N" template when no lazy template was supplied.
+            if (lazyMode && spec.lazyAnnounceTemplate != null) {
+                ariaLive.announce(spec.lazyAnnounceTemplate.apply(item, indexOf(id) + 1));
+            } else {
+                ariaLive.announce(
+                        spec.announceTemplate.apply(item, indexOf(id) + 1, displayed().size()));
+            }
         }
     }
 

@@ -140,6 +140,12 @@ public class BusinessOverviewView extends VerticalLayout implements BeforeEnterO
                                                 idx,
                                                 total,
                                                 b.title() == null ? "—" : b.title()))
+                        .lazyAnnounceTemplate(
+                                (b, idx) ->
+                                        getTranslation(
+                                                "business.announce.selected.lazy",
+                                                idx,
+                                                b.title() == null ? "—" : b.title()))
                         .extraToolbar(canMutate() ? List.of(buildNewButton()) : List.of())
                         .shortcutNew(
                                 canMutate()
@@ -230,6 +236,10 @@ public class BusinessOverviewView extends VerticalLayout implements BeforeEnterO
                         List.of(BusinessStatus.values()),
                         s -> getTranslation("business.status." + s.name()),
                         BusinessListItem::status);
+        // Server-side (searchBusinesses) this is a full validFrom/validTo overlap on the entity
+        // (getFrom -> validTo >= from, getTo -> validFrom <= to). The in-memory predicate is only a
+        // fallback and degrades here because BusinessListItem carries no validFrom (start-extractor
+        // is null); it is never executed in lazy mode, so the server overlap is what actually runs.
         dateRangeField =
                 new DateRangeFilterField<>(
                         getTranslation("filter.field.dateFrom"),

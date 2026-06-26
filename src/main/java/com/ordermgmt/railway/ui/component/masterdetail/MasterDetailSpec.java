@@ -36,6 +36,9 @@ public class MasterDetailSpec<T> {
     String detailEmptyText = "Wähle einen Eintrag aus der Liste.";
     TriFunction<T, Integer, Integer, String> announceTemplate =
             (item, index, total) -> "Eintrag " + index + " von " + total;
+    // Lazy mode only: announce without a total (the real total is unknown — only "loaded" is). When
+    // null, lazy selection falls back to announceTemplate with the loaded count as the "total".
+    java.util.function.BiFunction<T, Integer, String> lazyAnnounceTemplate;
     List<Component> extraToolbar = new ArrayList<>();
     List<FilterField<T>> filterFields = new ArrayList<>();
     String filterToggleLabel = "Filter";
@@ -126,6 +129,12 @@ public class MasterDetailSpec<T> {
 
     public MasterDetailSpec<T> announceTemplate(TriFunction<T, Integer, Integer, String> v) {
         this.announceTemplate = v;
+        return this;
+    }
+
+    public MasterDetailSpec<T> lazyAnnounceTemplate(
+            java.util.function.BiFunction<T, Integer, String> v) {
+        this.lazyAnnounceTemplate = v;
         return this;
     }
 
