@@ -90,18 +90,25 @@ test("full functional sweep", async ({ page }) => {
     await page.waitForTimeout(1200);
     await page.screenshot({ path: `${SHOT}/business-detail.png` });
 
-    // --- ⌃K command palette (exercises the new flat projection) ---
+    // --- ⌃K command palette (regression guard: the shortcut must actually open it, and the
+    // flat projection must list orders+positions) ---
     await page.goto("/orders");
-    await expect(page.locator("vaadin-app-layout")).toBeVisible();
+    await expect(page.locator("#order-list .md-card-wrapper").first()).toBeVisible({ timeout: 20_000 });
+    await page.locator("body").click({ position: { x: 700, y: 300 } }); // blur the filter input
     await page.keyboard.press("Control+k");
     await page.waitForTimeout(800);
-    const palette = page.locator(".cmd-palette, [class*=command], [class*=palette], input[placeholder]");
-    await page.screenshot({ path: `${SHOT}/command-palette.png` });
-    // Type a query and screenshot results.
-    await page.keyboard.type("a");
-    await page.waitForTimeout(600);
+    await page.keyboard.type("471");
+    await page.waitForTimeout(700);
+    const paletteRows = page.locator(".cmd-palette__row");
     await page.screenshot({ path: `${SHOT}/command-palette-typed.png` });
+    await expect(paletteRows.first()).toBeVisible({ timeout: 5_000 }); // palette opened + listed items
     await page.keyboard.press("Escape");
+
+    // --- "n" opens the new-order form (the other previously-dead shortcut) ---
+    await page.waitForTimeout(300);
+    await page.locator("body").click({ position: { x: 700, y: 300 } });
+    await page.keyboard.press("n");
+    await page.waitForURL(/\/orders\/new/, { timeout: 5_000 });
 
     console.log("collected errors:\n" + (errors.length ? errors.join("\n") : "NONE"));
     // Assert no server-error overlays (console errors are reported but not auto-failed — dev mode
