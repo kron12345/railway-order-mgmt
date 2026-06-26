@@ -66,7 +66,7 @@ public class MainLayout extends AppLayout
         // Wires global vim-style keys, Ctrl+K (command palette), and Shift+? (help)
         // through the hotkeys-js helper in frontend/rom-shortcuts.ts. The helper
         // dispatches CustomEvents that Vaadin listens for below.
-        getElement().executeJs("window.romShortcuts && window.romShortcuts.registerGlobal();");
+        getElement().executeJs("window.romShortcuts && window.romShortcuts.registerGlobal(this);");
 
         // Bridge custom DOM events back into Vaadin so we can open dialogs server-side.
         getElement().addEventListener("rom-palette", e -> openCommandPalette());

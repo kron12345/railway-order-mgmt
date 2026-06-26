@@ -97,7 +97,7 @@ public class MasterDetailLayout<T> extends Div {
     private void registerShortcuts() {
         getElement()
                 .executeJs(
-                        "window.romShortcuts && window.romShortcuts.registerView($0, $1);",
+                        "window.romShortcuts && window.romShortcuts.registerView(this, $0, $1);",
                         spec.filterId,
                         spec.shortcutNew != null);
 

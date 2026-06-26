@@ -34,21 +34,29 @@ hotkeys.filter = (event: KeyboardEvent) => {
 declare global {
     interface Window {
         romShortcuts?: {
-            registerGlobal(): void;
-            registerView(filterId: string, allowNew: boolean): void;
+            registerGlobal(root: HTMLElement): void;
+            registerView(root: HTMLElement, filterId: string, allowNew: boolean): void;
         };
     }
 }
 
-const dispatch = (name: string) =>
-    document.body.dispatchEvent(new CustomEvent(name, { bubbles: true, composed: true }));
+// Dispatch the CustomEvent ON the element that owns the Vaadin listener (MainLayout for
+// rom-palette/rom-help, MasterDetailLayout for md-new). Dispatching on document.body would NOT
+// reach those listeners — they sit on descendant elements and a body event only bubbles upward.
+const dispatchOn = (target: EventTarget | null, name: string) =>
+    (target ?? document.body).dispatchEvent(
+        new CustomEvent(name, { bubbles: true, composed: true })
+    );
 
 if (!window.romShortcuts) {
     let globalReady = false;
+    let globalRoot: HTMLElement | null = null;
+    let viewRoot: HTMLElement | null = null;
     let viewBound: { filterId: string | null; allowNew: boolean } = { filterId: null, allowNew: false };
 
     window.romShortcuts = {
-        registerGlobal() {
+        registerGlobal(root: HTMLElement) {
+            globalRoot = root; // closures below read the latest
             if (globalReady) return;
             globalReady = true;
 
@@ -56,16 +64,17 @@ if (!window.romShortcuts) {
             hotkeys("g+b", (e) => { e.preventDefault(); window.location.assign("/businesses"); });
             hotkeys("g+h", (e) => { e.preventDefault(); window.location.assign("/"); });
 
-            hotkeys("ctrl+k, command+k", (e) => { e.preventDefault(); dispatch("rom-palette"); });
-            hotkeys("shift+/", (e) => { e.preventDefault(); dispatch("rom-help"); });
+            hotkeys("ctrl+k, command+k", (e) => { e.preventDefault(); dispatchOn(globalRoot, "rom-palette"); });
+            hotkeys("shift+/", (e) => { e.preventDefault(); dispatchOn(globalRoot, "rom-help"); });
         },
 
-        // Idempotent: re-binds with the latest filterId so navigating between master-
-        // detail views (orders ↔ businesses) updates which input gets focused.
-        registerView(filterId: string, allowNew: boolean) {
+        // Idempotent: re-binds with the latest filterId/root so navigating between master-
+        // detail views (orders ↔ businesses) updates which input gets focused / receives md-new.
+        registerView(root: HTMLElement, filterId: string, allowNew: boolean) {
+            viewRoot = root;
             viewBound = { filterId, allowNew };
 
-            // Bindings install once; closures read the latest viewBound.
+            // Bindings install once; closures read the latest viewBound/viewRoot.
             if ((window.romShortcuts as any).__viewReady) return;
             (window.romShortcuts as any).__viewReady = true;
 
@@ -78,7 +87,7 @@ if (!window.romShortcuts) {
             hotkeys("n", (e) => {
                 if (!viewBound.allowNew) return;
                 e.preventDefault();
-                dispatch("md-new");
+                dispatchOn(viewRoot, "md-new");
             });
         },
     };
