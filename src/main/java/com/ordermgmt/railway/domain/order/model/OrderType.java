@@ -26,9 +26,21 @@ public enum OrderType {
         if (order == null || order.getValidFrom() == null || order.getCreatedAt() == null) {
             return null;
         }
-        LocalDate ordered = order.getCreatedAt().atZone(ZoneId.systemDefault()).toLocalDate();
-        LocalDate adhocBoundary = order.getValidFrom().minusMonths(ADHOC_MONTHS_BEFORE);
+        return ofDates(
+                order.getCreatedAt().atZone(ZoneId.systemDefault()).toLocalDate(),
+                order.getValidFrom());
+    }
+
+    /**
+     * The derived type from the order date and first validity day, so list projections can compute
+     * the badge without loading the entity. {@code null} when either date is unknown.
+     */
+    public static OrderType ofDates(LocalDate orderedDate, LocalDate validFrom) {
+        if (orderedDate == null || validFrom == null) {
+            return null;
+        }
+        LocalDate adhocBoundary = validFrom.minusMonths(ADHOC_MONTHS_BEFORE);
         // Ordered on/before X-2 months → annual cycle; within the last two months → ad-hoc single.
-        return ordered.isAfter(adhocBoundary) ? EINZELBESTELLUNG : JAHRESBESTELLUNG;
+        return orderedDate.isAfter(adhocBoundary) ? EINZELBESTELLUNG : JAHRESBESTELLUNG;
     }
 }

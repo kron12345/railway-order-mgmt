@@ -15,6 +15,10 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +38,8 @@ import com.ordermgmt.railway.domain.order.repository.OrderPositionRepository;
 import com.ordermgmt.railway.domain.order.repository.OrderPositionVersionRepository;
 import com.ordermgmt.railway.domain.order.repository.OrderRepository;
 import com.ordermgmt.railway.domain.order.repository.PositionOtnHistoryRepository;
+import com.ordermgmt.railway.dto.order.OrderListItem;
+import com.ordermgmt.railway.dto.order.OrderListQuery;
 
 import lombok.RequiredArgsConstructor;
 
@@ -84,6 +90,38 @@ public class OrderService {
         List<Order> orders = orderRepository.findByNameContainingIgnoreCase(query);
         initializePositions(orders);
         return orders;
+    }
+
+    /**
+     * Lazy order list (P3): a {@code Slice} of {@link OrderListItem} projections for the given
+     * filter, with the sort made stable via an id tie-breaker so paging never skips/repeats. No
+     * total count (Slice fetches pageSize+1) — the list shows "loaded / more", not a total.
+     */
+    @Transactional(readOnly = true)
+    public Slice<OrderListItem> searchOrders(OrderListQuery q, Pageable pageable) {
+        return orderRepository.searchOrders(
+                blankToNull(q.text()),
+                q.processStatus(),
+                q.internalStatus(),
+                q.validFromMin(),
+                q.validToMax(),
+                blankToNull(q.tags()),
+                blankToNull(q.assignee()),
+                stableSort(pageable, "orderNumber"));
+    }
+
+    /** Appends an id tie-breaker (or a default field + id when unsorted) for stable paging. */
+    static Pageable stableSort(Pageable pageable, String defaultField) {
+        Sort sort =
+                pageable.getSort().isSorted()
+                        ? pageable.getSort().and(Sort.by(Sort.Direction.ASC, "id"))
+                        : Sort.by(Sort.Direction.ASC, defaultField)
+                                .and(Sort.by(Sort.Direction.ASC, "id"));
+        return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort);
+    }
+
+    private static String blankToNull(String s) {
+        return s == null || s.isBlank() ? null : s.trim();
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")

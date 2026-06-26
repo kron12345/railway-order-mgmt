@@ -9,6 +9,10 @@ import java.util.UUID;
 import jakarta.persistence.EntityNotFoundException;
 
 import org.hibernate.Hibernate;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +25,8 @@ import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.order.model.PurchasePosition;
 import com.ordermgmt.railway.domain.order.repository.OrderPositionRepository;
 import com.ordermgmt.railway.domain.order.repository.PurchasePositionRepository;
+import com.ordermgmt.railway.dto.business.BusinessListItem;
+import com.ordermgmt.railway.dto.business.BusinessListQuery;
 
 /**
  * Service for CRUD operations on {@link Business} entities including status transitions and
@@ -462,6 +468,37 @@ public class BusinessService {
     @Transactional(readOnly = true)
     public List<Business> listAll() {
         return businessRepository.findAll();
+    }
+
+    /**
+     * Lazy business list (P3): a {@code Slice} of {@link BusinessListItem} projections for the
+     * given filter, with the sort made stable via an id tie-breaker. No total count (Slice fetches
+     * pageSize+1) — the list shows "loaded / more", not a total.
+     */
+    @Transactional(readOnly = true)
+    public Slice<BusinessListItem> searchBusinesses(BusinessListQuery q, Pageable pageable) {
+        return businessRepository.searchBusinesses(
+                blankToNull(q.text()),
+                q.status(),
+                q.validFromMin(),
+                q.validToMax(),
+                blankToNull(q.tags()),
+                blankToNull(q.assignee()),
+                stableSort(pageable, "title"));
+    }
+
+    /** Appends an id tie-breaker (or a default field + id when unsorted) for stable paging. */
+    private static Pageable stableSort(Pageable pageable, String defaultField) {
+        Sort sort =
+                pageable.getSort().isSorted()
+                        ? pageable.getSort().and(Sort.by(Sort.Direction.ASC, "id"))
+                        : Sort.by(Sort.Direction.ASC, defaultField)
+                                .and(Sort.by(Sort.Direction.ASC, "id"));
+        return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort);
+    }
+
+    private static String blankToNull(String s) {
+        return s == null || s.isBlank() ? null : s.trim();
     }
 
     @Transactional(readOnly = true)
