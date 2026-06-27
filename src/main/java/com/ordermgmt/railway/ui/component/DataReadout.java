@@ -12,7 +12,9 @@ public class DataReadout extends Div {
 
     public DataReadout() {
         addClassName("data-readout");
-        getElement().setAttribute("aria-live", "polite");
+        // No aria-live here: the master-detail layout already owns a dedicated polite live region
+        // (AriaLive) for announcements. Two competing polite regions double-announce; this is a
+        // visual status line (aria-busy still reflects loading), not a second announcer.
         getStyle()
                 .set("font-family", "'JetBrains Mono', monospace")
                 .set("font-size", "11px")
