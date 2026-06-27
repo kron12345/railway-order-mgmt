@@ -216,7 +216,10 @@ public class MasterDetailLayout<T> extends Div {
         listPane.add(listScroll);
 
         // Terminal-style readout footer, shown only in lazy mode (setLazyLoader makes it visible).
+        // Not a live region here — this layout's AriaLive is the single announcer (avoids a second
+        // competing polite region double-announcing selection + load status).
         readout.setVisible(false);
+        readout.setAnnouncing(false);
         listPane.add(readout);
 
         detailPane.addClassName("md-detail");

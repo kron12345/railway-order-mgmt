@@ -12,9 +12,10 @@ public class DataReadout extends Div {
 
     public DataReadout() {
         addClassName("data-readout");
-        // No aria-live here: the master-detail layout already owns a dedicated polite live region
-        // (AriaLive) for announcements. Two competing polite regions double-announce; this is a
-        // visual status line (aria-busy still reflects loading), not a second announcer.
+        // Polite by default so standalone users (e.g. the topology grid) announce status changes.
+        // Hosts that already own a dedicated live region (MasterDetailLayout's AriaLive) call
+        // {@link #setAnnouncing(false)} to avoid two competing polite regions double-announcing.
+        getElement().setAttribute("aria-live", "polite");
         getStyle()
                 .set("font-family", "'JetBrains Mono', monospace")
                 .set("font-size", "11px")
@@ -37,5 +38,17 @@ public class DataReadout extends Div {
     public void setBusy(boolean busy) {
         getElement().setAttribute("aria-busy", busy);
         marker.getStyle().set("opacity", busy ? "0.4" : "1");
+    }
+
+    /**
+     * Turns the polite live region on/off. Off when the host has its own announcer (e.g.
+     * MasterDetailLayout's AriaLive) so the two don't double-announce.
+     */
+    public void setAnnouncing(boolean announcing) {
+        if (announcing) {
+            getElement().setAttribute("aria-live", "polite");
+        } else {
+            getElement().removeAttribute("aria-live");
+        }
     }
 }
