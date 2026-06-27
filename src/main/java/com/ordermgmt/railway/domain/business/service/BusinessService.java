@@ -28,11 +28,13 @@ import com.ordermgmt.railway.domain.business.model.AssignmentType;
 import com.ordermgmt.railway.domain.business.model.Business;
 import com.ordermgmt.railway.domain.business.model.BusinessDocument;
 import com.ordermgmt.railway.domain.business.model.BusinessStatus;
+import com.ordermgmt.railway.domain.business.repository.BusinessDocumentRepository;
 import com.ordermgmt.railway.domain.business.repository.BusinessRepository;
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.order.model.PurchasePosition;
 import com.ordermgmt.railway.domain.order.repository.OrderPositionRepository;
 import com.ordermgmt.railway.domain.order.repository.PurchasePositionRepository;
+import com.ordermgmt.railway.dto.business.BusinessDocumentMeta;
 import com.ordermgmt.railway.dto.business.BusinessListItem;
 import com.ordermgmt.railway.dto.business.BusinessListQuery;
 
@@ -71,14 +73,17 @@ public class BusinessService {
     private final BusinessRepository businessRepository;
     private final OrderPositionRepository orderPositionRepository;
     private final PurchasePositionRepository purchasePositionRepository;
+    private final BusinessDocumentRepository businessDocumentRepository;
 
     public BusinessService(
             BusinessRepository businessRepository,
             OrderPositionRepository orderPositionRepository,
-            PurchasePositionRepository purchasePositionRepository) {
+            PurchasePositionRepository purchasePositionRepository,
+            BusinessDocumentRepository businessDocumentRepository) {
         this.businessRepository = businessRepository;
         this.orderPositionRepository = orderPositionRepository;
         this.purchasePositionRepository = purchasePositionRepository;
+        this.businessDocumentRepository = businessDocumentRepository;
     }
 
     /** Load a business by id or throw — the single find-or-throw used by all mutators/readers. */
@@ -260,7 +265,7 @@ public class BusinessService {
             Business business,
             List<OrderPosition> orderPositions,
             List<PurchasePosition> purchasePositions,
-            List<BusinessDocument> documents) {}
+            List<BusinessDocumentMeta> documents) {}
 
     /**
      * Loads a business and its linked order/purchase positions + documents in ONE transaction (one
@@ -274,12 +279,11 @@ public class BusinessService {
                         business -> {
                             initializeOrders(business.getOrderPositions());
                             initializePurchasePositions(business.getPurchasePositions());
-                            Hibernate.initialize(business.getDocuments());
                             return new BusinessReadModel(
                                     business,
                                     new ArrayList<>(business.getOrderPositions()),
                                     new ArrayList<>(business.getPurchasePositions()),
-                                    new ArrayList<>(business.getDocuments()));
+                                    businessDocumentRepository.findMetaByBusinessId(businessId));
                         });
     }
 
@@ -364,11 +368,17 @@ public class BusinessService {
         businessRepository.save(business);
     }
 
-    /** Get all documents for a business. */
+    /** Document metadata for a business (no blob); the file is fetched on demand for download. */
     @Transactional(readOnly = true)
-    public List<BusinessDocument> getDocuments(UUID businessId) {
-        Business business = requireBusiness(businessId);
-        return new ArrayList<>(business.getDocuments());
+    public List<BusinessDocumentMeta> getDocuments(UUID businessId) {
+        return businessDocumentRepository.findMetaByBusinessId(businessId);
+    }
+
+    /** The blob of a single document, loaded only when the user actually downloads it. */
+    @Transactional(readOnly = true)
+    public byte[] getDocumentData(UUID documentId) {
+        byte[] data = businessDocumentRepository.findDataById(documentId);
+        return data == null ? new byte[0] : data;
     }
 
     /** Get business by ID. */
