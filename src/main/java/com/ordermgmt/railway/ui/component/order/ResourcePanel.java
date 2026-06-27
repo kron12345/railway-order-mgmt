@@ -4,7 +4,10 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import java.util.function.BiFunction;
+import java.util.stream.Collectors;
 
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
@@ -16,6 +19,8 @@ import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 
+import com.ordermgmt.railway.domain.business.model.Business;
+import com.ordermgmt.railway.domain.business.service.BusinessService;
 import com.ordermgmt.railway.domain.infrastructure.repository.OperationalPointRepository;
 import com.ordermgmt.railway.domain.order.model.CoverageType;
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
@@ -29,6 +34,7 @@ import com.ordermgmt.railway.domain.order.service.AuditService;
 import com.ordermgmt.railway.domain.order.service.PurchaseOrderService;
 import com.ordermgmt.railway.domain.order.service.ResourceNeedService;
 import com.ordermgmt.railway.ui.component.AuditHistoryDialog;
+import com.ordermgmt.railway.ui.component.business.BusinessChips;
 
 /**
  * Collapsible panel showing all resources and their purchases for one OrderPosition. Displays
@@ -45,7 +51,7 @@ public class ResourcePanel extends Div {
     private final ResourceCatalogItemRepository catalogItemRepository;
     private final OperationalPointRepository opRepo;
     private final AuditService auditService;
-    private final com.ordermgmt.railway.domain.business.service.BusinessService businessService;
+    private final BusinessService businessService;
     private final BiFunction<String, Object[], String> translator;
     private final Runnable refreshCallback;
 
@@ -57,14 +63,10 @@ public class ResourcePanel extends Div {
     private final Div contentSlot = new Div();
 
     /** Businesses linked per purchase position, batched once per render (avoids one query/row). */
-    private java.util.Map<
-                    java.util.UUID,
-                    java.util.List<com.ordermgmt.railway.domain.business.model.Business>>
-            purchaseBizMap = java.util.Map.of();
+    private Map<UUID, List<Business>> purchaseBizMap = Map.of();
 
     /** Purchases grouped by resource-need id, built once per render from the loaded collection. */
-    private java.util.Map<java.util.UUID, List<PurchasePosition>> purchasesByNeed =
-            java.util.Map.of();
+    private Map<UUID, List<PurchasePosition>> purchasesByNeed = Map.of();
 
     public ResourcePanel(
             OrderPosition position,
@@ -73,7 +75,7 @@ public class ResourcePanel extends Div {
             ResourceCatalogItemRepository catalogItemRepository,
             OperationalPointRepository opRepo,
             AuditService auditService,
-            com.ordermgmt.railway.domain.business.service.BusinessService businessService,
+            BusinessService businessService,
             BiFunction<String, Object[], String> translator,
             Runnable refreshCallback,
             boolean editable) {
@@ -106,28 +108,7 @@ public class ResourcePanel extends Div {
     public void loadResources() {
         contentSlot.removeAll();
 
-        // Batch the linked-business lookup for ALL of this position's purchases (one IN query).
-        java.util.List<java.util.UUID> ppIds =
-                position.getPurchasePositions() == null
-                        ? java.util.List.of()
-                        : position.getPurchasePositions().stream()
-                                .map(PurchasePosition::getId)
-                                .toList();
-        purchaseBizMap =
-                ppIds.isEmpty()
-                        ? java.util.Map.of()
-                        : businessService.findByLinkedPurchasePositions(ppIds);
-
-        // Group the position's already-loaded purchases by resource-need id (getId() on the lazy
-        // ResourceNeed proxy is the FK — no extra SQL), so per-row lookup is in-memory not a query.
-        purchasesByNeed =
-                position.getPurchasePositions() == null
-                        ? java.util.Map.of()
-                        : position.getPurchasePositions().stream()
-                                .filter(pp -> pp.getResourceNeed() != null)
-                                .collect(
-                                        java.util.stream.Collectors.groupingBy(
-                                                pp -> pp.getResourceNeed().getId()));
+        loadPurchaseLookups();
 
         List<ResourceNeed> resources =
                 resourceNeedService.getResourcesForPosition(position.getId());
@@ -143,12 +124,29 @@ public class ResourcePanel extends Div {
                     .set("padding", "4px 0");
             contentSlot.add(empty);
         } else {
-            for (ResourceNeed rn : resources) {
-                contentSlot.add(createResourceRow(rn));
+            for (ResourceNeed resourceNeed : resources) {
+                contentSlot.add(createResourceRow(resourceNeed));
             }
         }
 
         contentSlot.add(createFooterButtons());
+    }
+
+    private void loadPurchaseLookups() {
+        List<PurchasePosition> purchases =
+                position.getPurchasePositions() == null
+                        ? List.of()
+                        : List.copyOf(position.getPurchasePositions());
+        List<UUID> purchaseIds = purchases.stream().map(PurchasePosition::getId).toList();
+        purchaseBizMap =
+                purchaseIds.isEmpty()
+                        ? Map.of()
+                        : businessService.findByLinkedPurchasePositions(purchaseIds);
+
+        purchasesByNeed =
+                purchases.stream()
+                        .filter(purchase -> purchase.getResourceNeed() != null)
+                        .collect(Collectors.groupingBy(purchase -> purchase.getResourceNeed().getId()));
     }
 
     /** Reload this panel and notify the parent — used by the purchase action buttons. */
@@ -177,13 +175,14 @@ public class ResourcePanel extends Div {
         return header;
     }
 
-    private Div createResourceRow(ResourceNeed rn) {
+    private Div createResourceRow(ResourceNeed resourceNeed) {
         Div row = new Div();
         row.setWidthFull();
         row.getStyle()
                 .set(
                         "border-left",
-                        "2px solid " + ResourceBadges.resourceColor(rn.getResourceType()))
+                        "2px solid "
+                                + ResourceBadges.resourceColor(resourceNeed.getResourceType()))
                 .set("padding", "4px 0 4px 10px")
                 .set("margin-bottom", "4px");
 
@@ -194,48 +193,43 @@ public class ResourcePanel extends Div {
         info.setAlignItems(FlexComponent.Alignment.CENTER);
         info.getStyle().set("flex-wrap", "wrap").set("gap", "4px");
 
-        info.add(createTypeBadge(rn));
-        Span description = createDescriptionLabel(rn);
+        info.add(createTypeBadge(resourceNeed));
+        Span description = createDescriptionLabel(resourceNeed);
         if (description != null) {
             info.add(description);
         }
-        info.add(createCoverageBadge(rn));
-        info.add(createOriginBadge(rn));
+        info.add(createCoverageBadge(resourceNeed));
+        info.add(createOriginBadge(resourceNeed));
 
-        if (rn.getQuantity() != null && rn.getQuantity() > 1) {
-            info.add(ResourceBadges.small("x" + rn.getQuantity(), "var(--rom-text-secondary)"));
+        if (resourceNeed.getQuantity() != null && resourceNeed.getQuantity() > 1) {
+            info.add(
+                    ResourceBadges.small(
+                            "x" + resourceNeed.getQuantity(), "var(--rom-text-secondary)"));
         }
 
         // Per-demand Verkehrstage (day count) + von/nach route, when set.
-        List<LocalDate> days = ValidityJsonCodec.fromJson(rn.getValidity());
+        List<LocalDate> days = ValidityJsonCodec.fromJson(resourceNeed.getValidity());
         if (!days.isEmpty()) {
             info.add(
                     ResourceBadges.small(
                             days.size() + " " + tr("resource.days"), "var(--rom-text-secondary)"));
         }
-        if (rn.getFromLocation() != null || rn.getToLocation() != null) {
+        if (resourceNeed.getFromLocation() != null || resourceNeed.getToLocation() != null) {
             info.add(
                     ResourceBadges.small(
-                            nz(rn.getFromLocation()) + " → " + nz(rn.getToLocation()),
+                            nz(resourceNeed.getFromLocation())
+                                    + " → "
+                                    + nz(resourceNeed.getToLocation()),
                             "var(--rom-status-info)"));
         }
 
-        // Audit history button
-        Button histBtn = new Button(VaadinIcon.CLOCK.create());
-        histBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
-        histBtn.getStyle()
-                .set("color", "var(--rom-text-muted)")
-                .set("min-width", "24px")
-                .set("padding", "0");
-        histBtn.setTooltipText(tr("audit.button"));
-        histBtn.addClickListener(e -> openResourceHistory(rn));
-        info.add(histBtn);
+        info.add(createHistoryButton(resourceNeed));
 
         row.add(info);
 
         // Nested purchase positions
-        List<PurchasePosition> purchases = findPurchasesForNeed(rn);
-        if (rn.getCoverageType() == CoverageType.INTERNAL && purchases.isEmpty()) {
+        List<PurchasePosition> purchases = findPurchasesForNeed(resourceNeed);
+        if (resourceNeed.getCoverageType() == CoverageType.INTERNAL && purchases.isEmpty()) {
             Span intern = new Span("(" + tr("resource.coverage.INTERNAL").toLowerCase() + ")");
             intern.getStyle()
                     .set("font-size", "10px")
@@ -243,20 +237,33 @@ public class ResourcePanel extends Div {
                     .set("padding-left", "12px");
             row.add(intern);
         } else {
-            for (PurchasePosition pp : purchases) {
-                row.add(createPurchaseRow(pp, rn));
+            for (PurchasePosition purchase : purchases) {
+                row.add(createPurchaseRow(purchase, resourceNeed));
             }
         }
 
         // Add Purchase button for EXTERNAL resources (mutators on an unlocked order only)
-        if (editable && rn.getCoverageType() == CoverageType.EXTERNAL) {
-            row.add(createAddPurchaseButton(rn));
+        if (editable && resourceNeed.getCoverageType() == CoverageType.EXTERNAL) {
+            row.add(createAddPurchaseButton(resourceNeed));
         }
 
         return row;
     }
 
-    private Div createPurchaseRow(PurchasePosition pp, ResourceNeed need) {
+    private Button createHistoryButton(ResourceNeed resourceNeed) {
+        Button historyButton = new Button(VaadinIcon.CLOCK.create());
+        historyButton.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
+        historyButton
+                .getStyle()
+                .set("color", "var(--rom-text-muted)")
+                .set("min-width", "24px")
+                .set("padding", "0");
+        historyButton.setTooltipText(tr("audit.button"));
+        historyButton.addClickListener(event -> openResourceHistory(resourceNeed));
+        return historyButton;
+    }
+
+    private Div createPurchaseRow(PurchasePosition purchase, ResourceNeed need) {
         Div row = new Div();
         row.getStyle()
                 .set("display", "flex")
@@ -266,7 +273,7 @@ public class ResourcePanel extends Div {
                 .set("flex-wrap", "wrap");
 
         // Position number
-        Span number = new Span(pp.getPositionNumber());
+        Span number = new Span(purchase.getPositionNumber());
         number.getStyle()
                 .set("font-family", "'JetBrains Mono', monospace")
                 .set("font-size", "10px")
@@ -275,41 +282,42 @@ public class ResourcePanel extends Div {
         row.add(number);
 
         // Free-text description (entered in the purchase dialog) — shown muted next to the number.
-        if (pp.getDescription() != null && !pp.getDescription().isBlank()) {
-            Span desc = new Span(pp.getDescription());
+        if (purchase.getDescription() != null && !purchase.getDescription().isBlank()) {
+            Span desc = new Span(purchase.getDescription());
             desc.getStyle().set("font-size", "11px").set("color", "var(--rom-text-secondary)");
             row.add(desc);
         }
 
         // Status badge
-        row.add(createPurchaseStatusBadge(pp));
+        row.add(createPurchaseStatusBadge(purchase));
 
         // TTT status for CAPACITY purchases
-        if (pp.getPmPathRequestId() != null) {
-            if (pp.getPmProcessState() != null) {
+        if (purchase.getPmPathRequestId() != null) {
+            if (purchase.getPmProcessState() != null) {
                 row.add(
                         ResourceBadges.small(
-                                "TTT: " + pp.getPmProcessState(), "var(--rom-status-info)"));
+                                "TTT: " + purchase.getPmProcessState(),
+                                "var(--rom-status-info)"));
             }
-            if (pp.getPmTtrPhase() != null) {
-                row.add(ResourceBadges.small(pp.getPmTtrPhase(), "var(--rom-text-secondary)"));
+            if (purchase.getPmTtrPhase() != null) {
+                row.add(ResourceBadges.small(purchase.getPmTtrPhase(), "var(--rom-text-secondary)"));
             }
 
             // Sync button (mutators on an unlocked order only)
             if (editable) {
                 row.add(
                         PurchaseOrderButtons.sync(
-                                pp, purchaseOrderService, translator, this::reloadAll));
+                                purchase, purchaseOrderService, translator, this::reloadAll));
             }
         }
 
         // TTT order button for unordered CAPACITY purchases (mutators on an unlocked order only)
         if (editable
-                && pp.getPmPathRequestId() == null
+                && purchase.getPmPathRequestId() == null
                 && need.getResourceType() == ResourceType.CAPACITY) {
             row.add(
                     PurchaseOrderButtons.ttt(
-                            pp,
+                            purchase,
                             position.getOperationalTrainNumber(),
                             buildRouteLabel(),
                             purchaseOrderService,
@@ -322,16 +330,16 @@ public class ResourcePanel extends Div {
         // shown like the TTT flow so it reads the same way.
         if (isR2pPurchase(need)) {
             row.add(ResourceBadges.small("R²P", "var(--rom-status-info)"));
-            if (editable && pp.getPurchaseStatus() == PurchaseStatus.OFFEN) {
+            if (editable && purchase.getPurchaseStatus() == PurchaseStatus.OFFEN) {
                 row.add(
                         PurchaseOrderButtons.r2p(
-                                pp, purchaseOrderService, translator, this::reloadAll));
+                                purchase, purchaseOrderService, translator, this::reloadAll));
             }
         }
 
         // Ordered-at timestamp
-        if (pp.getOrderedAt() != null) {
-            Span orderedAt = new Span(DT_FMT.format(pp.getOrderedAt()));
+        if (purchase.getOrderedAt() != null) {
+            Span orderedAt = new Span(DT_FMT.format(purchase.getOrderedAt()));
             orderedAt
                     .getStyle()
                     .set("font-size", "9px")
@@ -341,11 +349,9 @@ public class ResourcePanel extends Div {
         }
 
         // Linked businesses for this purchase position (clickable chips → business detail).
-        var linkedBusinesses = purchaseBizMap.getOrDefault(pp.getId(), java.util.List.of());
+        var linkedBusinesses = purchaseBizMap.getOrDefault(purchase.getId(), List.of());
         if (!linkedBusinesses.isEmpty()) {
-            row.add(
-                    new com.ordermgmt.railway.ui.component.business.BusinessChips(
-                            linkedBusinesses, this::tr));
+            row.add(new BusinessChips(linkedBusinesses, this::tr));
         }
 
         return row;
@@ -396,40 +402,40 @@ public class ResourcePanel extends Div {
                 .set("border", "1px solid var(--rom-status-warning)")
                 .set("background", "rgba(255,184,0,0.06)")
                 .set("padding", "2px 8px");
-        orderAll.addClickListener(
-                e -> {
-                    try {
-                        purchaseOrderService.triggerAllCapacityOrders(position.getId());
-                        loadResources();
-                        if (refreshCallback != null) refreshCallback.run();
-                        Notification.show("TTT", 2000, Notification.Position.BOTTOM_END)
-                                .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
-                    } catch (Exception ex) {
-                        Notification.show(ex.getMessage(), 4000, Notification.Position.BOTTOM_END)
-                                .addThemeVariants(NotificationVariant.LUMO_ERROR);
-                    }
-                });
+        orderAll.addClickListener(event -> triggerAllCapacityOrders());
         footer.add(orderAll);
 
         return footer;
     }
 
-    private Button createAddPurchaseButton(ResourceNeed rn) {
-        Button btn = new Button("+ " + tr("purchase.add"));
-        btn.addThemeVariants(ButtonVariant.LUMO_SMALL);
-        btn.getStyle()
+    private void triggerAllCapacityOrders() {
+        try {
+            purchaseOrderService.triggerAllCapacityOrders(position.getId());
+            reloadAll();
+            Notification.show("TTT", 2000, Notification.Position.BOTTOM_END)
+                    .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+        } catch (Exception ex) {
+            Notification.show(ex.getMessage(), 4000, Notification.Position.BOTTOM_END)
+                    .addThemeVariants(NotificationVariant.LUMO_ERROR);
+        }
+    }
+
+    private Button createAddPurchaseButton(ResourceNeed resourceNeed) {
+        Button button = new Button("+ " + tr("purchase.add"));
+        button.addThemeVariants(ButtonVariant.LUMO_SMALL);
+        button.getStyle()
                 .set("font-size", "10px")
                 .set("color", "var(--rom-text-muted)")
                 .set("background", "transparent")
                 .set("padding", "1px 6px 1px 12px");
-        btn.addClickListener(
+        button.addClickListener(
                 e -> {
                     PurchaseDialog dialog =
                             new PurchaseDialog(
-                                    rn.getId(),
-                                    tr("resource.type." + rn.getResourceType().name()),
-                                    tr("resource.coverage." + rn.getCoverageType().name()),
-                                    rn.getResourceType() == ResourceType.CAPACITY,
+                                    resourceNeed.getId(),
+                                    tr("resource.type." + resourceNeed.getResourceType().name()),
+                                    tr("resource.coverage." + resourceNeed.getCoverageType().name()),
+                                    resourceNeed.getResourceType() == ResourceType.CAPACITY,
                                     position.getValidity(),
                                     position.getOperationalTrainNumber(),
                                     buildRouteLabel(),
@@ -443,7 +449,7 @@ public class ResourcePanel extends Div {
                     dialog.addSaveListener(ev -> reloadAll());
                     dialog.open();
                 });
-        return btn;
+        return button;
     }
 
     /** A non-capacity external purchase is ordered via the (mock) R²P channel, not TTT. */
@@ -452,17 +458,19 @@ public class ResourcePanel extends Div {
                 && need.getResourceType() != ResourceType.CAPACITY;
     }
 
-    private List<PurchasePosition> findPurchasesForNeed(ResourceNeed rn) {
-        return purchasesByNeed.getOrDefault(rn.getId(), List.of());
+    private List<PurchasePosition> findPurchasesForNeed(ResourceNeed resourceNeed) {
+        return purchasesByNeed.getOrDefault(resourceNeed.getId(), List.of());
     }
 
-    private void openResourceHistory(ResourceNeed rn) {
+    private void openResourceHistory(ResourceNeed resourceNeed) {
         if (auditService == null) {
             return;
         }
-        var entries = auditService.getResourceNeedHistory(rn.getId());
+        var entries = auditService.getResourceNeedHistory(resourceNeed.getId());
         String title =
-                tr("audit.title") + " — " + tr("resource.type." + rn.getResourceType().name());
+                tr("audit.title")
+                        + " — "
+                        + tr("resource.type." + resourceNeed.getResourceType().name());
         var dialog = new AuditHistoryDialog(title, entries, translator);
         dialog.open();
     }
@@ -473,9 +481,9 @@ public class ResourcePanel extends Div {
         return s == null || s.isBlank() ? "…" : s;
     }
 
-    private Span createTypeBadge(ResourceNeed rn) {
-        String label = tr("resource.type." + rn.getResourceType().name());
-        String color = ResourceBadges.resourceColor(rn.getResourceType());
+    private Span createTypeBadge(ResourceNeed resourceNeed) {
+        String label = tr("resource.type." + resourceNeed.getResourceType().name());
+        String color = ResourceBadges.resourceColor(resourceNeed.getResourceType());
         return ResourceBadges.small(label, color);
     }
 
@@ -485,12 +493,14 @@ public class ResourcePanel extends Div {
      * need — the Fahrplantrasse that has to be ordered — the route is shown instead, which is more
      * telling than repeating the type.
      */
-    private Span createDescriptionLabel(ResourceNeed rn) {
-        String text = rn.getDescription() != null ? rn.getDescription() : "";
-        if (rn.getCatalogItem() != null) {
-            text = rn.getCatalogItem().getName() + (text.isEmpty() ? "" : " " + text);
+    private Span createDescriptionLabel(ResourceNeed resourceNeed) {
+        String text = resourceNeed.getDescription() != null ? resourceNeed.getDescription() : "";
+        if (resourceNeed.getCatalogItem() != null) {
+            text =
+                    resourceNeed.getCatalogItem().getName()
+                            + (text.isEmpty() ? "" : " " + text);
         }
-        if (text.isEmpty() && rn.getResourceType() == ResourceType.CAPACITY) {
+        if (text.isEmpty() && resourceNeed.getResourceType() == ResourceType.CAPACITY) {
             String route = buildRouteLabel();
             if (route != null && !route.isBlank()) {
                 text = route;
@@ -507,23 +517,23 @@ public class ResourcePanel extends Div {
         return label;
     }
 
-    private Span createCoverageBadge(ResourceNeed rn) {
-        String label = tr("resource.coverage." + rn.getCoverageType().name());
+    private Span createCoverageBadge(ResourceNeed resourceNeed) {
+        String label = tr("resource.coverage." + resourceNeed.getCoverageType().name());
         String color =
-                rn.getCoverageType() == CoverageType.EXTERNAL
+                resourceNeed.getCoverageType() == CoverageType.EXTERNAL
                         ? "var(--rom-status-warning)"
                         : "var(--rom-status-active)";
         return ResourceBadges.small(label, color);
     }
 
-    private Span createOriginBadge(ResourceNeed rn) {
-        String label = tr("resource.origin." + rn.getOrigin().name());
+    private Span createOriginBadge(ResourceNeed resourceNeed) {
+        String label = tr("resource.origin." + resourceNeed.getOrigin().name());
         return ResourceBadges.small(label, "var(--rom-text-muted)");
     }
 
-    private Span createPurchaseStatusBadge(PurchasePosition pp) {
-        String label = tr("purchase.status." + pp.getPurchaseStatus().name());
-        String color = ResourceBadges.purchaseStatusColor(pp.getPurchaseStatus());
+    private Span createPurchaseStatusBadge(PurchasePosition purchase) {
+        String label = tr("purchase.status." + purchase.getPurchaseStatus().name());
+        String color = ResourceBadges.purchaseStatusColor(purchase.getPurchaseStatus());
         return ResourceBadges.small(label, color);
     }
 

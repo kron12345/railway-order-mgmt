@@ -34,6 +34,13 @@ import com.ordermgmt.railway.ui.component.masterdetail.filter.FilterPanel;
  */
 public class MasterDetailLayout<T> extends Div {
 
+    private static final int FILTER_VALUE_CHANGE_TIMEOUT_MS = 200;
+    private static final int MASTER_SPLIT_POSITION = 28;
+    private static final String FILTER_WIDTH = "280px";
+    private static final String EMPTY_FILTER_TEXT = "";
+    /** Auto-load when keyboard navigation reaches this close to the last loaded row. */
+    private static final int AUTO_LOAD_THRESHOLD = 3;
+
     private final MasterDetailSpec<T> spec;
     private final TextField filter = new TextField();
     private final Div listScroll = new Div();
@@ -45,13 +52,10 @@ public class MasterDetailLayout<T> extends Div {
     private final List<T> visibleItems = new ArrayList<>();
     private final List<MasterCardWrapper> cardWrappers = new ArrayList<>();
     private UUID selectedId;
-    private String filterText = "";
+    private String filterText = EMPTY_FILTER_TEXT;
 
     private FilterPanel<T> filterPanel;
-    private Predicate<T> panelPredicate = t -> true;
-
-    /** Auto-load when keyboard navigation reaches this close to the last loaded row. */
-    private static final int AUTO_LOAD_THRESHOLD = 3;
+    private Predicate<T> panelPredicate = item -> true;
 
     // Lazy mode (opt-in via setLazyLoader): server-paged accumulation alongside the legacy
     // in-memory setItems() path. When lazyMode is false, none of this is touched.
@@ -64,20 +68,7 @@ public class MasterDetailLayout<T> extends Div {
         addClassName("md-layout");
         getStyle().set("display", "flex").set("flex-direction", "column").set("height", "100%");
 
-        if (!spec.filterFields.isEmpty()) {
-            filterPanel =
-                    new FilterPanel<>(
-                            spec.filterFields,
-                            predicate -> {
-                                panelPredicate = predicate;
-                                applyFilter();
-                            },
-                            new FilterPanel.Labels(
-                                    spec.filterToggleLabel,
-                                    spec.filterClearAllLabel,
-                                    spec.filterChipClearAria,
-                                    spec.filterPanelAria));
-        }
+        filterPanel = buildFilterPanel();
 
         add(buildToolbar());
         if (filterPanel != null) {
@@ -87,6 +78,23 @@ public class MasterDetailLayout<T> extends Div {
         add(ariaLive);
 
         registerShortcuts();
+    }
+
+    private FilterPanel<T> buildFilterPanel() {
+        if (spec.filterFields.isEmpty()) {
+            return null;
+        }
+        return new FilterPanel<>(
+                spec.filterFields,
+                predicate -> {
+                    panelPredicate = predicate;
+                    applyFilter();
+                },
+                new FilterPanel.Labels(
+                        spec.filterToggleLabel,
+                        spec.filterClearAllLabel,
+                        spec.filterChipClearAria,
+                        spec.filterPanelAria));
     }
 
     /**
@@ -130,39 +138,44 @@ public class MasterDetailLayout<T> extends Div {
         bar.getElement().setAttribute("role", "toolbar");
         bar.getElement().setAttribute("aria-label", spec.toolbarAriaLabel);
 
-        filter.setId(spec.filterId);
-        filter.setPlaceholder(spec.filterPlaceholder);
-        filter.setPrefixComponent(VaadinIcon.SEARCH.create());
-        filter.addThemeVariants(TextFieldVariant.LUMO_SMALL);
-        filter.setClearButtonVisible(true);
-        filter.setValueChangeMode(ValueChangeMode.LAZY);
-        filter.setValueChangeTimeout(200);
-        filter.setWidth("280px");
-        filter.getElement().setAttribute("aria-label", spec.filterAriaLabel);
-        filter.addValueChangeListener(
-                e -> {
-                    filterText =
-                            e.getValue() == null
-                                    ? ""
-                                    : e.getValue().trim().toLowerCase(Locale.ROOT);
-                    applyFilter();
-                });
+        configureFilterField();
         bar.add(filter);
 
         if (filterPanel != null) {
             bar.add(filterPanel.getToggle());
         }
 
-        for (Component extra : spec.extraToolbar) {
-            bar.add(extra);
+        for (Component extraComponent : spec.extraToolbar) {
+            bar.add(extraComponent);
         }
         return bar;
+    }
+
+    private void configureFilterField() {
+        filter.setId(spec.filterId);
+        filter.setPlaceholder(spec.filterPlaceholder);
+        filter.setPrefixComponent(VaadinIcon.SEARCH.create());
+        filter.addThemeVariants(TextFieldVariant.LUMO_SMALL);
+        filter.setClearButtonVisible(true);
+        filter.setValueChangeMode(ValueChangeMode.LAZY);
+        filter.setValueChangeTimeout(FILTER_VALUE_CHANGE_TIMEOUT_MS);
+        filter.setWidth(FILTER_WIDTH);
+        filter.getElement().setAttribute("aria-label", spec.filterAriaLabel);
+        filter.addValueChangeListener(e -> updateFilterText(e.getValue()));
+    }
+
+    private void updateFilterText(String rawValue) {
+        filterText =
+                rawValue == null
+                        ? EMPTY_FILTER_TEXT
+                        : rawValue.trim().toLowerCase(Locale.ROOT);
+        applyFilter();
     }
 
     private Component buildSplit() {
         var split = new SplitLayout();
         split.setOrientation(SplitLayout.Orientation.HORIZONTAL);
-        split.setSplitterPosition(28);
+        split.setSplitterPosition(MASTER_SPLIT_POSITION);
         split.setSizeFull();
         split.addClassName("md-split");
 
@@ -193,10 +206,7 @@ public class MasterDetailLayout<T> extends Div {
                 .getElement()
                 .addEventListener(
                         "keydown",
-                        e -> {
-                            String key = e.getEventData().getString("event.key");
-                            onListKey(key);
-                        })
+                        e -> onListKey(e.getEventData().getString("event.key")))
                 .addEventData("event.key")
                 .addEventData("event.preventDefault()")
                 .setFilter("['ArrowDown','ArrowUp','Home','End','Enter'].includes(event.key)");
@@ -284,8 +294,8 @@ public class MasterDetailLayout<T> extends Div {
 
     public void setSelectedId(UUID id) {
         this.selectedId = id;
-        for (MasterCardWrapper w : cardWrappers) {
-            w.applySelection(Objects.equals(w.id, id));
+        for (MasterCardWrapper cardWrapper : cardWrappers) {
+            cardWrapper.applySelection(Objects.equals(cardWrapper.id, id));
         }
         T item = findById(id);
         if (item != null) {
@@ -325,10 +335,14 @@ public class MasterDetailLayout<T> extends Div {
         }
         visibleItems.clear();
         Predicate<T> text =
-                filterText.isBlank() ? t -> true : t -> spec.matcher.test(t, filterText);
+                filterText.isBlank()
+                        ? item -> true
+                        : item -> spec.matcher.test(item, filterText);
         Predicate<T> matches = text.and(panelPredicate);
-        for (T t : allItems) {
-            if (matches.test(t)) visibleItems.add(t);
+        for (T item : allItems) {
+            if (matches.test(item)) {
+                visibleItems.add(item);
+            }
         }
         renderCards();
     }
@@ -341,10 +355,10 @@ public class MasterDetailLayout<T> extends Div {
             listScroll.add(emptyState);
             return;
         }
-        int idx = 0;
+        int index = 0;
         for (T item : items) {
-            listScroll.add(renderOneCard(item, idx));
-            idx++;
+            listScroll.add(renderOneCard(item, index));
+            index++;
         }
         if (lazyMode && lazyController.hasMore()) {
             LazyLoadSentinel sentinel =
@@ -357,18 +371,18 @@ public class MasterDetailLayout<T> extends Div {
         }
     }
 
-    private Div renderOneCard(T item, int idx) {
+    private Div renderOneCard(T item, int index) {
         UUID id = spec.idExtractor.apply(item);
         Component card = spec.cardRenderer.apply(item);
         Div wrapper = new Div(card);
         wrapper.addClassName("md-card-wrapper");
         wrapper.getElement().setAttribute("role", "option");
-        wrapper.getElement().setAttribute("tabindex", idx == 0 ? "0" : "-1");
+        wrapper.getElement().setAttribute("tabindex", index == 0 ? "0" : "-1");
         wrapper.getElement().setAttribute("data-id", id.toString());
         wrapper.getElement().addEventListener("click", e -> spec.onSelect.accept(id));
-        MasterCardWrapper mcw = new MasterCardWrapper(id, wrapper);
-        mcw.applySelection(Objects.equals(id, selectedId));
-        cardWrappers.add(mcw);
+        MasterCardWrapper cardWrapper = new MasterCardWrapper(id, wrapper);
+        cardWrapper.applySelection(Objects.equals(id, selectedId));
+        cardWrappers.add(cardWrapper);
         return wrapper;
     }
 
@@ -383,16 +397,16 @@ public class MasterDetailLayout<T> extends Div {
         if (!lazyMode) {
             return;
         }
-        int n = lazyController.loadedCount();
-        StringBuilder sb = new StringBuilder(spec.readoutLoadedLabel);
-        sb.append(' ').append(n == 0 ? "0" : "1–" + n);
+        int loadedCount = lazyController.loadedCount();
+        StringBuilder statusText = new StringBuilder(spec.readoutLoadedLabel);
+        statusText.append(' ').append(loadedCount == 0 ? "0" : "1–" + loadedCount);
         if (lazyController.hasMore()) {
-            sb.append(" / ").append(spec.readoutMoreLabel);
+            statusText.append(" / ").append(spec.readoutMoreLabel);
         }
         if (isFilterActive()) {
-            sb.append(" · ").append(spec.readoutFilteredLabel);
+            statusText.append(" · ").append(spec.readoutFilteredLabel);
         }
-        readout.setStatus(sb.toString());
+        readout.setStatus(statusText.toString());
     }
 
     private boolean isFilterActive() {
@@ -409,25 +423,30 @@ public class MasterDetailLayout<T> extends Div {
 
     private void onListKey(String key) {
         List<T> items = displayed();
-        if (items.isEmpty()) return;
+        if (items.isEmpty()) {
+            return;
+        }
         int currentIndex = selectedId != null ? indexOf(selectedId) : -1;
-        int last = items.size() - 1;
+        int lastIndex = items.size() - 1;
         int next = currentIndex;
         switch (key) {
-            case "ArrowDown" -> next = currentIndex < 0 ? 0 : Math.min(last, currentIndex + 1);
+            case "ArrowDown" -> next = currentIndex < 0 ? 0 : Math.min(lastIndex, currentIndex + 1);
             case "ArrowUp" -> next = currentIndex <= 0 ? 0 : currentIndex - 1;
             case "Home" -> next = 0;
-            case "End" -> next = last;
+            case "End" -> next = lastIndex;
             case "Enter" -> {
-                if (currentIndex >= 0)
+                if (currentIndex >= 0) {
                     spec.onSelect.accept(spec.idExtractor.apply(items.get(currentIndex)));
+                }
                 return;
             }
             default -> {
                 return;
             }
         }
-        if (next == currentIndex || next < 0) return;
+        if (next == currentIndex || next < 0) {
+            return;
+        }
         // Lazy: pull the next page when navigating into the last few loaded rows.
         if (lazyMode && lazyController.hasMore() && next >= items.size() - AUTO_LOAD_THRESHOLD) {
             lazyController.loadNext(filterText);
@@ -437,8 +456,10 @@ public class MasterDetailLayout<T> extends Div {
 
     private int indexOf(UUID id) {
         List<T> items = displayed();
-        for (int i = 0; i < items.size(); i++) {
-            if (Objects.equals(spec.idExtractor.apply(items.get(i)), id)) return i;
+        for (int index = 0; index < items.size(); index++) {
+            if (Objects.equals(spec.idExtractor.apply(items.get(index)), id)) {
+                return index;
+            }
         }
         return -1;
     }
@@ -447,8 +468,10 @@ public class MasterDetailLayout<T> extends Div {
         // Non-lazy: full set (announce works for a filtered-out deep link). Lazy: only loaded rows
         // (a deep-linked unloaded row still renders its detail via beforeEnter, just no highlight).
         List<T> source = lazyMode ? lazyController.items() : allItems;
-        for (T t : source) {
-            if (Objects.equals(spec.idExtractor.apply(t), id)) return t;
+        for (T item : source) {
+            if (Objects.equals(spec.idExtractor.apply(item), id)) {
+                return item;
+            }
         }
         return null;
     }
@@ -462,8 +485,8 @@ public class MasterDetailLayout<T> extends Div {
             this.wrapper = wrapper;
         }
 
-        void applySelection(boolean sel) {
-            if (sel) {
+        void applySelection(boolean selected) {
+            if (selected) {
                 wrapper.addClassName("md-card-wrapper--selected");
                 wrapper.getElement().setAttribute("aria-selected", "true");
                 wrapper.getElement()

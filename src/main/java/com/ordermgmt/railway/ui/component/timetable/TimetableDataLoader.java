@@ -82,17 +82,21 @@ public class TimetableDataLoader {
                     .ifPresent(a -> otnField.setValue(textOrBlank(a.getOperationalTrainNumber())));
         }
 
-        LocalDate min = order.getValidFrom() != null ? order.getValidFrom() : LocalDate.now();
-        LocalDate max = order.getValidTo() != null ? order.getValidTo() : min.plusMonths(3);
-        ValidityCalendar cal = new ValidityCalendar(min, max);
+        LocalDate validityStart =
+                order.getValidFrom() != null ? order.getValidFrom() : LocalDate.now();
+        LocalDate validityEnd =
+                order.getValidTo() != null ? order.getValidTo() : validityStart.plusMonths(3);
+        ValidityCalendar calendar = new ValidityCalendar(validityStart, validityEnd);
         if (existingPosition != null) {
-            cal.setSelectedDates(archiveService.parseValidityDates(existingPosition.getValidity()));
+            calendar.setSelectedDates(
+                    archiveService.parseValidityDates(existingPosition.getValidity()));
         }
 
         if (existingPosition == null) {
             routeStep.getRouteSummary().setText(t("timetable.route.empty"));
             routeStep.getRouteError().setText("");
-            return new LoadResult(cal, new TimetableRouteResult(List.of(), 0D), List.of(), false);
+            return new LoadResult(
+                    calendar, new TimetableRouteResult(List.of(), 0D), List.of(), false);
         }
 
         Optional<TimetableArchive> archive = archiveService.findArchive(existingPosition);
@@ -104,10 +108,10 @@ public class TimetableDataLoader {
             routeStep.getRouteSummary().setText(routeSummaryText);
             routeStep.getRouteError().setText("");
             tableStep.setRows(new ArrayList<>(rows));
-            return new LoadResult(cal, route, rows, true);
+            return new LoadResult(calendar, route, rows, true);
         }
 
-        return prefillLegacyRoute(existingPosition, cal, routeStep, tableStep);
+        return prefillLegacyRoute(existingPosition, calendar, routeStep, tableStep);
     }
 
     private void prefillRouteInputsFromRows(
@@ -121,7 +125,7 @@ public class TimetableDataLoader {
                         .map(TimetableRowData::getUopid)
                         .filter(Objects::nonNull)
                         .collect(Collectors.toSet());
-        Map<String, OperationalPoint> byUopid =
+        Map<String, OperationalPoint> operationalPointsByUopid =
                 opRepo.findByUopidIn(uopids).stream()
                         .collect(
                                 Collectors.toMap(
@@ -131,20 +135,20 @@ public class TimetableDataLoader {
             if (row.getRoutePointRole() == RoutePointRole.VIA) {
                 vias.add(
                         new TimetableRouteStep.ViaData(
-                                byUopid.get(row.getUopid()),
+                                operationalPointsByUopid.get(row.getUopid()),
                                 Boolean.TRUE.equals(row.getHalt()),
                                 row.getActivityCode()));
             }
         }
         routeStep.prefillFrom(
-                byUopid.get(rows.getFirst().getUopid()),
-                byUopid.get(rows.getLast().getUopid()),
+                operationalPointsByUopid.get(rows.getFirst().getUopid()),
+                operationalPointsByUopid.get(rows.getLast().getUopid()),
                 vias);
     }
 
     private LoadResult prefillLegacyRoute(
             OrderPosition existingPosition,
-            ValidityCalendar cal,
+            ValidityCalendar calendar,
             TimetableRouteStep routeStep,
             TimetableTableStep tableStep) {
         Optional<OperationalPoint> fromPt =
@@ -164,16 +168,17 @@ public class TimetableDataLoader {
                             routeStep.getDepartureAnchor(), routeStep.getArrivalAnchor());
             if (rows != null) {
                 tableStep.setRows(new ArrayList<>(rows));
-                return new LoadResult(cal, routeStep.getCurrentRoute(), rows, false);
+                return new LoadResult(calendar, routeStep.getCurrentRoute(), rows, false);
             }
         }
         routeStep.getRouteSummary().setText(t("timetable.route.empty"));
         routeStep.getRouteError().setText(t("timetable.route.legacyUnresolved"));
-        return new LoadResult(cal, new TimetableRouteResult(List.of(), 0D), List.of(), false);
+        return new LoadResult(
+                calendar, new TimetableRouteResult(List.of(), 0D), List.of(), false);
     }
 
-    private String textOrBlank(String v) {
-        return v != null ? v : "";
+    private String textOrBlank(String value) {
+        return value != null ? value : "";
     }
 
     private String t(String key, Object... params) {

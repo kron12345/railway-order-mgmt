@@ -142,15 +142,32 @@ public class OrderPositionDialog extends Dialog {
     }
 
     private void savePosition() {
-        if (name.getValue().isBlank()) {
-            name.setInvalid(true);
-            return;
-        }
-        if (type.getValue() == null) {
-            type.setInvalid(true);
+        if (!validateForm()) {
             return;
         }
 
+        writeFormToPosition();
+        orderService.savePosition(position);
+        Notification.show(t("common.save") + " ✓", 2000, Notification.Position.BOTTOM_END)
+                .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+
+        fireEvent(new SaveEvent(this));
+        close();
+    }
+
+    private boolean validateForm() {
+        if (name.getValue().isBlank()) {
+            name.setInvalid(true);
+            return false;
+        }
+        if (type.getValue() == null) {
+            type.setInvalid(true);
+            return false;
+        }
+        return true;
+    }
+
+    private void writeFormToPosition() {
         position.setName(name.getValue().trim());
         position.setType(type.getValue());
         position.setServiceType(blankToNull(serviceType.getValue()));
@@ -165,13 +182,6 @@ public class OrderPositionDialog extends Dialog {
         if (isNew) {
             position.setOrder(order);
         }
-
-        orderService.savePosition(position);
-        Notification.show(t("common.save") + " ✓", 2000, Notification.Position.BOTTOM_END)
-                .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
-
-        fireEvent(new SaveEvent(this));
-        close();
     }
 
     public Registration addSaveListener(ComponentEventListener<SaveEvent> listener) {

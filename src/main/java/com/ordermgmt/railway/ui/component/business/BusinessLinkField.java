@@ -29,6 +29,8 @@ import com.ordermgmt.railway.domain.business.service.BusinessService;
  */
 public class BusinessLinkField extends Div {
 
+    private static final String EMPTY_VALUE = "—";
+
     private final BusinessService businessService;
     private final Function<String, String> tr;
     private final MultiSelectComboBox<Business> combo = new MultiSelectComboBox<>();
@@ -40,17 +42,14 @@ public class BusinessLinkField extends Div {
         this.items = businessService.listAll();
 
         setWidthFull();
-        combo.setLabel(tr.apply("position.businesses"));
-        combo.setItems(items);
-        combo.setItemLabelGenerator(b -> b.getTitle() == null ? "—" : b.getTitle());
-        combo.setWidthFull();
-        combo.setHelperText(tr.apply("position.businesses.help"));
+        configureCombo();
 
-        Button addBtn = new Button(tr.apply("business.create.inline"), VaadinIcon.PLUS.create());
-        addBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
-        addBtn.addClickListener(e -> openCreateDialog());
+        var addButton =
+                new Button(tr.apply("business.create.inline"), VaadinIcon.PLUS.create());
+        addButton.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
+        addButton.addClickListener(e -> openCreateDialog());
 
-        var row = new HorizontalLayout(combo, addBtn);
+        var row = new HorizontalLayout(combo, addButton);
         row.setWidthFull();
         row.setDefaultVerticalComponentAlignment(
                 com.vaadin.flow.component.orderedlayout.FlexComponent.Alignment.END);
@@ -58,11 +57,21 @@ public class BusinessLinkField extends Div {
         add(row);
     }
 
+    private void configureCombo() {
+        combo.setLabel(tr.apply("position.businesses"));
+        combo.setItems(items);
+        combo.setItemLabelGenerator(this::businessTitle);
+        combo.setWidthFull();
+        combo.setHelperText(tr.apply("position.businesses.help"));
+    }
+
     /** Pre-select the businesses currently linked to the edited position (matched by id). */
     public void preset(List<Business> linked) {
         Set<UUID> ids = linked.stream().map(Business::getId).collect(Collectors.toSet());
         combo.setValue(
-                items.stream().filter(b -> ids.contains(b.getId())).collect(Collectors.toSet()));
+                items.stream()
+                        .filter(business -> ids.contains(business.getId()))
+                        .collect(Collectors.toSet()));
     }
 
     /**
@@ -71,10 +80,10 @@ public class BusinessLinkField extends Div {
      * transaction); failures are swallowed so one bad link doesn't abort the save.
      */
     public void applyTo(UUID orderPositionId) {
-        Set<UUID> selected =
+        Set<UUID> selectedBusinessIds =
                 combo.getValue().stream().map(Business::getId).collect(Collectors.toSet());
         try {
-            businessService.setOrderPositionLinks(orderPositionId, selected);
+            businessService.setOrderPositionLinks(orderPositionId, selectedBusinessIds);
         } catch (RuntimeException ex) {
             // best-effort: linking must not abort the position save
         }
@@ -83,15 +92,15 @@ public class BusinessLinkField extends Div {
     private void openCreateDialog() {
         Dialog dialog = new Dialog();
         dialog.setHeaderTitle(tr.apply("business.create.inline"));
-        TextField title = new TextField(tr.apply("business.title"));
+        var title = new TextField(tr.apply("business.title"));
         title.setWidthFull();
         title.setRequired(true);
-        TextArea description = new TextArea(tr.apply("business.description"));
+        var description = new TextArea(tr.apply("business.description"));
         description.setWidthFull();
         dialog.add(new Div(title, description));
 
-        Button cancel = new Button(tr.apply("common.cancel"), e -> dialog.close());
-        Button create = new Button(tr.apply("common.create"));
+        var cancel = new Button(tr.apply("common.cancel"), e -> dialog.close());
+        var create = new Button(tr.apply("common.create"));
         create.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
         create.addClickListener(
                 e -> {
@@ -109,7 +118,7 @@ public class BusinessLinkField extends Div {
                     combo.setItems(items);
                     Set<Business> selection = new HashSet<>(combo.getValue());
                     items.stream()
-                            .filter(b -> b.getId().equals(created.getId()))
+                            .filter(business -> business.getId().equals(created.getId()))
                             .findFirst()
                             .ifPresent(selection::add);
                     combo.setValue(selection);
@@ -117,5 +126,9 @@ public class BusinessLinkField extends Div {
                 });
         dialog.getFooter().add(cancel, create);
         dialog.open();
+    }
+
+    private String businessTitle(Business business) {
+        return business.getTitle() == null ? EMPTY_VALUE : business.getTitle();
     }
 }

@@ -27,6 +27,8 @@ import com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils;
 /** Editable header form for a selected reference train. */
 public class TrainHeaderPanel extends VerticalLayout {
 
+    private static final int SAVE_NOTIFICATION_DURATION_MS = 2000;
+
     private final PmReferenceTrain train;
     private final PathManagerService pathManagerService;
     private final BiFunction<String, Object[], String> translator;
@@ -166,15 +168,16 @@ public class TrainHeaderPanel extends VerticalLayout {
     }
 
     private HorizontalLayout createSaveButton() {
-        Button save = new Button(t("pm.save"), VaadinIcon.CHECK.create());
-        save.addThemeVariants(ButtonVariant.LUMO_PRIMARY, ButtonVariant.LUMO_SMALL);
-        save.getStyle()
+        Button saveButton = new Button(t("pm.save"), VaadinIcon.CHECK.create());
+        saveButton.addThemeVariants(ButtonVariant.LUMO_PRIMARY, ButtonVariant.LUMO_SMALL);
+        saveButton
+                .getStyle()
                 .set("background", "var(--rom-accent)")
                 .set("color", "var(--rom-bg-primary)")
                 .set("font-weight", "600");
-        save.addClickListener(e -> saveTrain());
+        saveButton.addClickListener(e -> saveTrain());
 
-        HorizontalLayout row = new HorizontalLayout(save);
+        HorizontalLayout row = new HorizontalLayout(saveButton);
         row.setJustifyContentMode(FlexComponent.JustifyContentMode.END);
         row.setWidthFull();
         return row;
@@ -191,7 +194,10 @@ public class TrainHeaderPanel extends VerticalLayout {
                         lengthField.getValue(),
                         maxSpeedField.getValue(),
                         null));
-        Notification.show(t("pm.save"), 2000, Notification.Position.BOTTOM_END)
+        Notification.show(
+                        t("pm.save"),
+                        SAVE_NOTIFICATION_DURATION_MS,
+                        Notification.Position.BOTTOM_END)
                 .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
         if (onSaved != null) {
             onSaved.accept(train);

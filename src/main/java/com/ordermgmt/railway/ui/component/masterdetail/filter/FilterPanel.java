@@ -93,11 +93,11 @@ public class FilterPanel<T> extends Div {
         chipsRow.setVisible(false);
     }
 
-    private void setExpanded(boolean exp) {
-        this.expanded = exp;
-        body.setVisible(exp);
-        toggle.getElement().setAttribute("aria-expanded", String.valueOf(exp));
-        if (exp) {
+    private void setExpanded(boolean expanded) {
+        this.expanded = expanded;
+        body.setVisible(expanded);
+        toggle.getElement().setAttribute("aria-expanded", String.valueOf(expanded));
+        if (expanded) {
             toggle.addClassName("md-filter-toggle--open");
         } else {
             toggle.removeClassName("md-filter-toggle--open");
@@ -106,20 +106,20 @@ public class FilterPanel<T> extends Div {
 
     /** Rebuild the combined predicate + chip row from the current field states. */
     private void recompute() {
-        Predicate<T> combined = t -> true;
+        Predicate<T> combined = item -> true;
         chipsRow.removeAll();
-        int active = 0;
+        int activeChipCount = 0;
         for (FilterField<T> field : fields) {
             combined = combined.and(field.predicate());
             for (FilterChip chip : field.chips()) {
                 chipsRow.add(buildChip(chip));
-                active++;
+                activeChipCount++;
             }
         }
-        boolean any = active > 0;
-        chipsRow.setVisible(any);
-        badge.setText(String.valueOf(active));
-        badge.setVisible(any);
+        boolean hasActiveFilters = activeChipCount > 0;
+        chipsRow.setVisible(hasActiveFilters);
+        badge.setText(String.valueOf(activeChipCount));
+        badge.setVisible(hasActiveFilters);
         onChange.accept(combined);
     }
 

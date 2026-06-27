@@ -25,6 +25,7 @@ import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.component.timepicker.TimePicker;
 import com.vaadin.flow.shared.Registration;
 
+import com.ordermgmt.railway.domain.business.service.BusinessService;
 import com.ordermgmt.railway.domain.infrastructure.model.OperationalPoint;
 import com.ordermgmt.railway.domain.infrastructure.model.PredefinedTag;
 import com.ordermgmt.railway.domain.infrastructure.repository.OperationalPointRepository;
@@ -35,6 +36,7 @@ import com.ordermgmt.railway.domain.order.model.PositionStatus;
 import com.ordermgmt.railway.domain.order.model.PositionType;
 import com.ordermgmt.railway.domain.order.model.ValidityJsonCodec;
 import com.ordermgmt.railway.domain.order.service.OrderService;
+import com.ordermgmt.railway.ui.component.business.BusinessLinkField;
 import com.ordermgmt.railway.ui.component.OperationalPointComboBox;
 import com.ordermgmt.railway.ui.component.ValidityCalendar;
 import com.ordermgmt.railway.ui.util.StringUtils;
@@ -66,8 +68,8 @@ public class ServicePositionDialog extends Dialog {
     private Details validityDetails;
     private final CheckboxGroup<PredefinedTag> tags = new CheckboxGroup<>();
     private final TextArea comment = new TextArea();
-    private final com.ordermgmt.railway.domain.business.service.BusinessService businessService;
-    private com.ordermgmt.railway.ui.component.business.BusinessLinkField businessLinkField;
+    private final BusinessService businessService;
+    private BusinessLinkField businessLinkField;
 
     public ServicePositionDialog(
             Order order,
@@ -75,7 +77,7 @@ public class ServicePositionDialog extends Dialog {
             OrderService orderService,
             OperationalPointRepository opRepo,
             PredefinedTagRepository tagRepo,
-            com.ordermgmt.railway.domain.business.service.BusinessService businessService,
+            BusinessService businessService,
             BiFunction<String, Object[], String> translator) {
         this.order = order;
         this.orderService = orderService;
@@ -127,45 +129,18 @@ public class ServicePositionDialog extends Dialog {
         toOp.setHelperText(t("position.to.help"));
         toOp.setWidthFull();
 
-        startTime.setLabel(t("position.startTime"));
-        startTime.setHelperText(t("position.startTime.help"));
-        startTime.setWidthFull();
-        startTime.setRequired(true);
-        startTime.setStep(Duration.ofMinutes(1));
-        startTime.setClearButtonVisible(false);
-        startTime.setAllowedCharPattern("[0-9:]");
-        startTime.setPlaceholder("HH:mm");
-        startTime.setLocale(locale);
-        startTime.setI18n(
-                new TimePicker.TimePickerI18n()
-                        .setRequiredErrorMessage(t("position.startTime.required"))
-                        .setBadInputErrorMessage(t("position.time.format")));
-        startTime.addValueChangeListener(
-                event -> {
-                    if (event.getValue() != null) {
-                        startTime.setInvalid(false);
-                    }
-                });
-
-        endTime.setLabel(t("position.endTime"));
-        endTime.setHelperText(t("position.endTime.help"));
-        endTime.setWidthFull();
-        endTime.setRequired(true);
-        endTime.setStep(Duration.ofMinutes(1));
-        endTime.setClearButtonVisible(false);
-        endTime.setAllowedCharPattern("[0-9:]");
-        endTime.setPlaceholder("HH:mm");
-        endTime.setLocale(locale);
-        endTime.setI18n(
-                new TimePicker.TimePickerI18n()
-                        .setRequiredErrorMessage(t("position.endTime.required"))
-                        .setBadInputErrorMessage(t("position.time.format")));
-        endTime.addValueChangeListener(
-                event -> {
-                    if (event.getValue() != null) {
-                        endTime.setInvalid(false);
-                    }
-                });
+        configureTimePicker(
+                startTime,
+                locale,
+                "position.startTime",
+                "position.startTime.help",
+                "position.startTime.required");
+        configureTimePicker(
+                endTime,
+                locale,
+                "position.endTime",
+                "position.endTime.help",
+                "position.endTime.required");
 
         // Validity calendar — compact multi-date selection within order range
         LocalDate orderFrom = order.getValidFrom() != null ? order.getValidFrom() : LocalDate.now();
@@ -195,15 +170,8 @@ public class ServicePositionDialog extends Dialog {
         form.add(startTime, endTime);
 
         // Validity calendar — compact collapsible (same style as TimetableTableStep)
-        int selectedCount = validityCalendar.getSelectedDates().size();
-        String validitySummary =
-                t("position.validity")
-                        + " \u2014 "
-                        + selectedCount
-                        + " "
-                        + t("timetable.archive.days", selectedCount);
         validityDetails = new Details();
-        validityDetails.setSummaryText(validitySummary);
+        validityDetails.setSummaryText(validitySummaryText());
         Div calendarWrapper = new Div(validityCalendar);
         calendarWrapper.getStyle().set("max-height", "200px").set("overflow-y", "auto");
         Span calHelper =
@@ -222,7 +190,7 @@ public class ServicePositionDialog extends Dialog {
                 .set("background", "var(--rom-bg-card)")
                 .set("border", "1px solid var(--rom-border)")
                 .set("border-radius", "6px");
-        validityDetails.setOpened(selectedCount == 0);
+        validityDetails.setOpened(validityCalendar.getSelectedDates().isEmpty());
         form.setColspan(validityDetails, 2);
         form.add(validityDetails);
 
@@ -231,9 +199,7 @@ public class ServicePositionDialog extends Dialog {
         form.setColspan(comment, 2);
         form.add(comment);
 
-        businessLinkField =
-                new com.ordermgmt.railway.ui.component.business.BusinessLinkField(
-                        businessService, this::t);
+        businessLinkField = new BusinessLinkField(businessService, this::t);
         form.setColspan(businessLinkField, 2);
         form.add(businessLinkField);
         if (!isNew) {
@@ -258,6 +224,33 @@ public class ServicePositionDialog extends Dialog {
         save.addClickListener(e -> savePosition());
 
         getFooter().add(cancel, save);
+    }
+
+    private void configureTimePicker(
+            TimePicker picker,
+            Locale locale,
+            String labelKey,
+            String helperKey,
+            String requiredErrorKey) {
+        picker.setLabel(t(labelKey));
+        picker.setHelperText(t(helperKey));
+        picker.setWidthFull();
+        picker.setRequired(true);
+        picker.setStep(Duration.ofMinutes(1));
+        picker.setClearButtonVisible(false);
+        picker.setAllowedCharPattern("[0-9:]");
+        picker.setPlaceholder("HH:mm");
+        picker.setLocale(locale);
+        picker.setI18n(
+                new TimePicker.TimePickerI18n()
+                        .setRequiredErrorMessage(t(requiredErrorKey))
+                        .setBadInputErrorMessage(t("position.time.format")));
+        picker.addValueChangeListener(
+                event -> {
+                    if (event.getValue() != null) {
+                        picker.setInvalid(false);
+                    }
+                });
     }
 
     private void readFrom() {
@@ -289,57 +282,77 @@ public class ServicePositionDialog extends Dialog {
     }
 
     private void updateValiditySummary() {
-        int count = validityCalendar.getSelectedDates().size();
-        validityDetails.setSummaryText(
-                t("position.validity")
-                        + " \u2014 "
-                        + count
-                        + " "
-                        + t("timetable.archive.days", count));
-        validityDetails.setOpened(count == 0);
+        validityDetails.setSummaryText(validitySummaryText());
+        validityDetails.setOpened(validityCalendar.getSelectedDates().isEmpty());
+    }
+
+    private String validitySummaryText() {
+        int selectedCount = validityCalendar.getSelectedDates().size();
+        return t("position.validity")
+                + " \u2014 "
+                + selectedCount
+                + " "
+                + t("timetable.archive.days", selectedCount);
     }
 
     // ── Validation and save ─────────────────────────────────────────────
 
     private void savePosition() {
+        List<LocalDate> selectedDates = validityCalendar.getSelectedDates();
+        if (!validateForm(selectedDates)) {
+            return;
+        }
+
+        writeFormToPosition(selectedDates);
+        OrderPosition saved = orderService.savePosition(position);
+        businessLinkField.applyTo(saved.getId());
+        Notification.show(t("common.save") + " \u2713", 2000, Notification.Position.BOTTOM_END)
+                .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+        fireEvent(new SaveEvent(this));
+        close();
+    }
+
+    private boolean validateForm(List<LocalDate> selectedDates) {
         if (name.getValue().isBlank()) {
             name.setInvalid(true);
-            return;
+            return false;
         }
-
-        if (startTime.getValue() == null) {
-            startTime.setInvalid(true);
-            startTime.setErrorMessage(t("position.startTime.required"));
-            return;
+        if (!validateRequiredTime(startTime, "position.startTime.required")) {
+            return false;
         }
-        startTime.setInvalid(false);
-
-        if (endTime.getValue() == null) {
-            endTime.setInvalid(true);
-            endTime.setErrorMessage(t("position.endTime.required"));
-            return;
+        if (!validateRequiredTime(endTime, "position.endTime.required")) {
+            return false;
         }
-        endTime.setInvalid(false);
-
-        List<LocalDate> selectedDates = validityCalendar.getSelectedDates();
         if (selectedDates.isEmpty()) {
             Notification.show(
                             t("position.validity.required"), 3000, Notification.Position.BOTTOM_END)
                     .addThemeVariants(NotificationVariant.LUMO_ERROR);
-            return;
+            return false;
         }
-
-        LocalTime resolvedStartTime = startTime.getValue();
-        LocalTime resolvedEndTime = endTime.getValue();
-        if (selectedDates.size() == 1 && resolvedEndTime.isBefore(resolvedStartTime)) {
+        if (selectedDates.size() == 1 && endTime.getValue().isBefore(startTime.getValue())) {
             endTime.setInvalid(true);
             endTime.setErrorMessage(t("position.time.invalid"));
             Notification.show(t("position.time.invalid"), 3000, Notification.Position.BOTTOM_END)
                     .addThemeVariants(NotificationVariant.LUMO_ERROR);
-            return;
+            return false;
         }
         endTime.setInvalid(false);
+        return true;
+    }
 
+    private boolean validateRequiredTime(TimePicker picker, String requiredErrorKey) {
+        if (picker.getValue() != null) {
+            picker.setInvalid(false);
+            return true;
+        }
+        picker.setInvalid(true);
+        picker.setErrorMessage(t(requiredErrorKey));
+        return false;
+    }
+
+    private void writeFormToPosition(List<LocalDate> selectedDates) {
+        LocalTime resolvedStartTime = startTime.getValue();
+        LocalTime resolvedEndTime = endTime.getValue();
         position.setName(name.getValue().trim());
         position.setType(PositionType.LEISTUNG);
         position.setServiceType(StringUtils.blankToNull(serviceType.getValue()));
@@ -360,13 +373,6 @@ public class ServicePositionDialog extends Dialog {
             position.setOrder(order);
             position.setInternalStatus(PositionStatus.IN_BEARBEITUNG);
         }
-
-        OrderPosition saved = orderService.savePosition(position);
-        businessLinkField.applyTo(saved.getId());
-        Notification.show(t("common.save") + " \u2713", 2000, Notification.Position.BOTTOM_END)
-                .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
-        fireEvent(new SaveEvent(this));
-        close();
     }
 
     // ── Tag handling ────────────────────────────────────────────────────

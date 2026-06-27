@@ -105,59 +105,13 @@ public class OrderPositionRow extends Div {
 
         Div info = createInfoBlock(t);
 
-        // Action chips: icon + label, bordered so they clearly read as buttons (op-action* CSS).
-        // Purchase calendar — the primary action, carrying the order count.
-        long purchaseCount =
-                position.getPurchasePositions() != null
-                        ? position.getPurchasePositions().size()
-                        : 0;
-        String calText = t.apply("position.action.calendar", new Object[0]);
-        Button calBtn =
-                new Button(
-                        purchaseCount > 0 ? purchaseCount + " " + calText : calText,
-                        VaadinIcon.CALENDAR.create());
-        calBtn.addThemeVariants(ButtonVariant.LUMO_SMALL);
-        calBtn.addClassName("op-action");
-        if (purchaseCount > 0) {
-            calBtn.addClassName("op-action--primary");
-        }
-        calBtn.addClickListener(e -> toggleCalendar());
-
-        // View archive (FAHRPLAN only).
-        Button viewBtn =
-                new Button(t.apply("position.action.view", new Object[0]), VaadinIcon.EYE.create());
-        viewBtn.addThemeVariants(ButtonVariant.LUMO_SMALL);
-        viewBtn.addClassNames("op-action", "op-action--info");
-        // Canonical position detail for ALL types (fields + linked businesses + timetable for
-        // FAHRPLAN). The same place the business links point to.
-        viewBtn.addClickListener(e -> navigateToDetail());
-
-        // History.
-        Button histBtn =
-                new Button(t.apply("audit.button", new Object[0]), VaadinIcon.CLOCK.create());
-        histBtn.addThemeVariants(ButtonVariant.LUMO_SMALL);
-        histBtn.addClassName("op-action");
-        histBtn.addClickListener(e -> openPositionHistory());
-
-        // Edit + Delete only for mutators on an unlocked order (SOB §5.7); content is frozen
-        // while the order is "in Bearbeitung".
-        Button editBtn =
-                new Button(t.apply("common.edit", new Object[0]), VaadinIcon.EDIT.create());
-        editBtn.addThemeVariants(ButtonVariant.LUMO_SMALL);
-        editBtn.addClassName("op-action");
-        editBtn.addClickListener(e -> onEdit.accept(position));
-        editBtn.setVisible(editable);
-
-        // Delete stays icon-only and turns danger-red on hover, so it reads as the secondary
-        // action.
-        Button delBtn = new Button(VaadinIcon.TRASH.create());
-        delBtn.addThemeVariants(ButtonVariant.LUMO_SMALL);
-        delBtn.addClassNames("op-action", "op-action--icon", "op-action--danger");
-        delBtn.setTooltipText(t.apply("common.delete", new Object[0]));
-        delBtn.addClickListener(e -> onDelete.accept(position));
-        delBtn.setVisible(editable);
-
-        actionRow = new HorizontalLayout(calBtn, viewBtn, histBtn, editBtn, delBtn);
+        actionRow =
+                new HorizontalLayout(
+                        createCalendarButton(t),
+                        createViewButton(t),
+                        createHistoryButton(t),
+                        createEditButton(t, onEdit),
+                        createDeleteButton(t, onDelete));
         actionRow.setSpacing(true);
         actionRow.setAlignItems(FlexComponent.Alignment.START);
 
@@ -180,17 +134,71 @@ public class OrderPositionRow extends Div {
         return row;
     }
 
+    private Button createCalendarButton(BiFunction<String, Object[], String> t) {
+        long purchaseCount = countPurchases();
+        String calendarLabel = t.apply("position.action.calendar", new Object[0]);
+        Button button =
+                new Button(
+                        purchaseCount > 0 ? purchaseCount + " " + calendarLabel : calendarLabel,
+                        VaadinIcon.CALENDAR.create());
+        button.addThemeVariants(ButtonVariant.LUMO_SMALL);
+        button.addClassName("op-action");
+        if (purchaseCount > 0) {
+            button.addClassName("op-action--primary");
+        }
+        button.addClickListener(event -> toggleCalendar());
+        return button;
+    }
+
+    private Button createViewButton(BiFunction<String, Object[], String> t) {
+        Button button =
+                new Button(t.apply("position.action.view", new Object[0]), VaadinIcon.EYE.create());
+        button.addThemeVariants(ButtonVariant.LUMO_SMALL);
+        button.addClassNames("op-action", "op-action--info");
+        button.addClickListener(event -> navigateToDetail());
+        return button;
+    }
+
+    private Button createHistoryButton(BiFunction<String, Object[], String> t) {
+        Button button = new Button(t.apply("audit.button", new Object[0]), VaadinIcon.CLOCK.create());
+        button.addThemeVariants(ButtonVariant.LUMO_SMALL);
+        button.addClassName("op-action");
+        button.addClickListener(event -> openPositionHistory());
+        return button;
+    }
+
+    private Button createEditButton(
+            BiFunction<String, Object[], String> t, Consumer<OrderPosition> onEdit) {
+        Button button = new Button(t.apply("common.edit", new Object[0]), VaadinIcon.EDIT.create());
+        button.addThemeVariants(ButtonVariant.LUMO_SMALL);
+        button.addClassName("op-action");
+        button.addClickListener(event -> onEdit.accept(position));
+        button.setVisible(editable);
+        return button;
+    }
+
+    private Button createDeleteButton(
+            BiFunction<String, Object[], String> t, Consumer<OrderPosition> onDelete) {
+        Button button = new Button(VaadinIcon.TRASH.create());
+        button.addThemeVariants(ButtonVariant.LUMO_SMALL);
+        button.addClassNames("op-action", "op-action--icon", "op-action--danger");
+        button.setTooltipText(t.apply("common.delete", new Object[0]));
+        button.addClickListener(event -> onDelete.accept(position));
+        button.setVisible(editable);
+        return button;
+    }
+
     /** Inserts an extra action chip (e.g. Verkehrstage) before the edit/delete buttons. */
     public void addActionChip(String label, VaadinIcon icon, Runnable onClick) {
         if (!editable || actionRow == null) {
             return;
         }
-        Button btn = new Button(label, icon.create());
-        btn.addThemeVariants(ButtonVariant.LUMO_SMALL);
-        btn.addClassName("op-action");
-        btn.addClickListener(e -> onClick.run());
-        int idx = Math.max(0, actionRow.getComponentCount() - 2); // before edit + delete
-        actionRow.addComponentAtIndex(idx, btn);
+        Button button = new Button(label, icon.create());
+        button.addThemeVariants(ButtonVariant.LUMO_SMALL);
+        button.addClassName("op-action");
+        button.addClickListener(event -> onClick.run());
+        int insertionIndex = Math.max(0, actionRow.getComponentCount() - 2);
+        actionRow.addComponentAtIndex(insertionIndex, button);
     }
 
     private Div createInfoBlock(BiFunction<String, Object[], String> t) {
@@ -258,16 +266,10 @@ public class OrderPositionRow extends Div {
         }
 
         // Resource summary badge
-        long resourceCount =
-                position.getResourceNeeds() != null ? position.getResourceNeeds().size() : 0;
+        long resourceCount = countResources();
         // Each purchase position belongs to exactly one resource need of this position, so the
         // total is simply the count of purchases that have a resource need.
-        long purchaseCount =
-                position.getPurchasePositions() == null
-                        ? 0
-                        : position.getPurchasePositions().stream()
-                                .filter(pp -> pp.getResourceNeed() != null)
-                                .count();
+        long purchaseCount = countPurchasesWithResourceNeed();
         if (resourceCount > 0) {
             String resLabel =
                     translator.apply(
@@ -305,6 +307,23 @@ public class OrderPositionRow extends Div {
         }
 
         return info;
+    }
+
+    private long countPurchases() {
+        return position.getPurchasePositions() != null ? position.getPurchasePositions().size() : 0;
+    }
+
+    private long countResources() {
+        return position.getResourceNeeds() != null ? position.getResourceNeeds().size() : 0;
+    }
+
+    private long countPurchasesWithResourceNeed() {
+        if (position.getPurchasePositions() == null) {
+            return 0;
+        }
+        return position.getPurchasePositions().stream()
+                .filter(purchase -> purchase.getResourceNeed() != null)
+                .count();
     }
 
     private void toggleCalendar() {

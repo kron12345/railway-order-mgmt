@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -39,6 +40,10 @@ import com.ordermgmt.railway.ui.component.grid.GridPreferenceBinder;
  */
 public class BusinessLinksTree extends Div {
 
+    private static final UUID UNKNOWN_ORDER_ID = new UUID(0, 0);
+    private static final String EMPTY_VALUE = "—";
+    private static final int LINK_NOTIFICATION_DURATION_MS = 1200;
+
     private final Spec spec;
     private final TreeGrid<BusinessLinkNode> tree = new TreeGrid<>();
     private final TextField filter = new TextField();
@@ -48,28 +53,38 @@ public class BusinessLinksTree extends Div {
     public BusinessLinksTree(Spec spec) {
         this.spec = spec;
         addClassName("biz-links-tree");
+        configureLayout();
+
+        add(buildToolbar());
+        add(tree);
+
+        configureTree();
+        configureColumns();
+        installPreferenceBinder();
+
+        refresh();
+    }
+
+    private void configureLayout() {
         getStyle()
                 .set("display", "flex")
                 .set("flex-direction", "column")
                 .set("min-height", "0")
                 .set("height", "100%");
+    }
 
-        add(buildToolbar());
-        add(tree);
-
+    private void configureTree() {
         tree.addClassName("biz-links-tree__grid");
         tree.addThemeVariants(
                 GridVariant.LUMO_COMPACT, GridVariant.LUMO_NO_BORDER, GridVariant.LUMO_ROW_STRIPES);
         tree.setSizeFull();
-        configureColumns();
+    }
 
-        // Persist column width / order / visibility for the unified tree.
+    private void installPreferenceBinder() {
         if (spec.viewKey != null && spec.preferenceService != null) {
             var binder = new GridPreferenceBinder<>(tree, spec.viewKey, spec.preferenceService);
             binder.install();
         }
-
-        refresh();
     }
 
     public void refresh() {
@@ -101,7 +116,10 @@ public class BusinessLinksTree extends Div {
         filter.addClassName("biz-links-tree__filter");
         filter.addValueChangeListener(
                 e -> {
-                    filterText = e.getValue() == null ? "" : e.getValue().trim().toLowerCase();
+                    filterText =
+                            e.getValue() == null
+                                    ? ""
+                                    : e.getValue().trim().toLowerCase(Locale.ROOT);
                     applyFilter();
                 });
 
@@ -131,18 +149,21 @@ public class BusinessLinksTree extends Div {
     }
 
     private Component buildLinkCheckbox(BusinessLinkNode node) {
-        if (node.kind() == BusinessLinkNode.Kind.ORDER) return new Span();
-        var cb = new Checkbox(node.linked());
-        cb.addClassName("biz-tree-checkbox");
-        cb.getElement().setAttribute("aria-label", spec.translator.apply("business.linked"));
-        cb.addValueChangeListener(e -> toggleLink(node, Boolean.TRUE.equals(e.getValue())));
-        return cb;
+        if (node.kind() == BusinessLinkNode.Kind.ORDER) {
+            return new Span();
+        }
+        var checkbox = new Checkbox(node.linked());
+        checkbox.addClassName("biz-tree-checkbox");
+        checkbox.getElement().setAttribute("aria-label", spec.translator.apply("business.linked"));
+        checkbox.addValueChangeListener(e -> toggleLink(node, Boolean.TRUE.equals(e.getValue())));
+        return checkbox;
     }
 
     private void toggleLink(BusinessLinkNode node, boolean wantLinked) {
         UUID id = node.entityId();
-        if (id == null) return;
-        if (wantLinked == node.linked()) return;
+        if (id == null || wantLinked == node.linked()) {
+            return;
+        }
         switch (node.kind()) {
             case ORDER_POSITION -> {
                 if (wantLinked) spec.onLinkOrderPosition.accept(id);
@@ -156,12 +177,16 @@ public class BusinessLinksTree extends Div {
                 return;
             }
         }
+        showLinkNotification(wantLinked);
+        refresh();
+    }
+
+    private void showLinkNotification(boolean linked) {
         Notification.show(
-                        spec.translator.apply(wantLinked ? "business.linked" : "business.unlinked"),
-                        1200,
+                        spec.translator.apply(linked ? "business.linked" : "business.unlinked"),
+                        LINK_NOTIFICATION_DURATION_MS,
                         Notification.Position.BOTTOM_END)
                 .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
-        refresh();
     }
 
     private Component buildNameCell(BusinessLinkNode node) {
@@ -170,11 +195,11 @@ public class BusinessLinksTree extends Div {
         wrapper.setSpacing(false);
         wrapper.setAlignItems(FlexComponent.Alignment.CENTER);
         wrapper.addClassName("biz-tree-cell");
-        wrapper.addClassName("biz-tree-cell--" + node.kind().name().toLowerCase());
+        wrapper.addClassName("biz-tree-cell--" + cssName(node.kind().name()));
 
         var tag = new Span(node.kind().tag());
         tag.addClassName("biz-tree-tag");
-        tag.addClassName("biz-tree-tag--" + node.kind().name().toLowerCase());
+        tag.addClassName("biz-tree-tag--" + cssName(node.kind().name()));
 
         var name = new Span(node.name());
         name.addClassName("biz-tree-name");
@@ -189,69 +214,83 @@ public class BusinessLinksTree extends Div {
     // ─── tree assembly + filtering ─────────
 
     private List<BusinessLinkNode> buildTree(
-            List<OrderPosition> allOps,
-            List<PurchasePosition> allPps,
-            List<OrderPosition> linkedOps,
-            List<PurchasePosition> linkedPps) {
+            List<OrderPosition> allOrderPositions,
+            List<PurchasePosition> allPurchasePositions,
+            List<OrderPosition> linkedOrderPositions,
+            List<PurchasePosition> linkedPurchasePositions) {
         Set<UUID> linkedOpIds = new HashSet<>();
-        for (OrderPosition op : linkedOps) linkedOpIds.add(op.getId());
+        for (OrderPosition orderPosition : linkedOrderPositions) {
+            linkedOpIds.add(orderPosition.getId());
+        }
         Set<UUID> linkedPpIds = new HashSet<>();
-        for (PurchasePosition pp : linkedPps) linkedPpIds.add(pp.getId());
-
-        Map<UUID, BusinessLinkNode> ordersByID = new LinkedHashMap<>();
-        Map<UUID, BusinessLinkNode> opsByID = new LinkedHashMap<>();
-
-        for (OrderPosition op : allOps) {
-            BusinessLinkNode orderNode = ensureOrderNode(ordersByID, op.getOrder());
-            BusinessLinkNode opNode =
-                    BusinessLinkNode.orderPosition(
-                            op.getId(),
-                            op.getName() != null ? op.getName() : "—",
-                            linkedOpIds.contains(op.getId()));
-            opsByID.put(op.getId(), opNode);
-            orderNode.children().add(opNode);
+        for (PurchasePosition purchasePosition : linkedPurchasePositions) {
+            linkedPpIds.add(purchasePosition.getId());
         }
 
-        for (PurchasePosition pp : allPps) {
-            OrderPosition op = pp.getOrderPosition();
-            if (op == null) continue;
-            BusinessLinkNode opNode = opsByID.get(op.getId());
-            if (opNode == null) {
-                // Edge case: PP exists but its OP wasn't returned by allOps — synthesize.
-                BusinessLinkNode orderNode = ensureOrderNode(ordersByID, op.getOrder());
-                opNode =
-                        BusinessLinkNode.orderPosition(
-                                op.getId(),
-                                op.getName() != null ? op.getName() : "—",
-                                linkedOpIds.contains(op.getId()));
-                opsByID.put(op.getId(), opNode);
-                orderNode.children().add(opNode);
+        Map<UUID, BusinessLinkNode> ordersById = new LinkedHashMap<>();
+        Map<UUID, BusinessLinkNode> orderPositionsById = new LinkedHashMap<>();
+
+        for (OrderPosition orderPosition : allOrderPositions) {
+            BusinessLinkNode orderNode = ensureOrderNode(ordersById, orderPosition.getOrder());
+            BusinessLinkNode orderPositionNode =
+                    BusinessLinkNode.orderPosition(
+                            orderPosition.getId(),
+                            displayName(orderPosition.getName()),
+                            linkedOpIds.contains(orderPosition.getId()));
+            orderPositionsById.put(orderPosition.getId(), orderPositionNode);
+            orderNode.children().add(orderPositionNode);
+        }
+
+        for (PurchasePosition purchasePosition : allPurchasePositions) {
+            OrderPosition orderPosition = purchasePosition.getOrderPosition();
+            if (orderPosition == null) {
+                continue;
             }
-            opNode.children()
+            BusinessLinkNode orderPositionNode = orderPositionsById.get(orderPosition.getId());
+            if (orderPositionNode == null) {
+                // Edge case: PP exists but its OP wasn't returned by allOrderPositions.
+                BusinessLinkNode orderNode = ensureOrderNode(ordersById, orderPosition.getOrder());
+                orderPositionNode =
+                        BusinessLinkNode.orderPosition(
+                                orderPosition.getId(),
+                                displayName(orderPosition.getName()),
+                                linkedOpIds.contains(orderPosition.getId()));
+                orderPositionsById.put(orderPosition.getId(), orderPositionNode);
+                orderNode.children().add(orderPositionNode);
+            }
+            orderPositionNode.children()
                     .add(
                             BusinessLinkNode.purchasePosition(
-                                    pp.getId(),
-                                    op.getName() != null ? op.getName() : "—",
-                                    pp.getPositionNumber() != null ? pp.getPositionNumber() : "—",
-                                    linkedPpIds.contains(pp.getId())));
+                                    purchasePosition.getId(),
+                                    displayName(orderPosition.getName()),
+                                    displayName(purchasePosition.getPositionNumber()),
+                                    linkedPpIds.contains(purchasePosition.getId())));
         }
 
-        return new ArrayList<>(ordersByID.values());
+        return new ArrayList<>(ordersById.values());
     }
 
-    private BusinessLinkNode ensureOrderNode(Map<UUID, BusinessLinkNode> map, Order order) {
-        UUID key = order != null && order.getId() != null ? order.getId() : new UUID(0, 0);
-        return map.computeIfAbsent(
+    private BusinessLinkNode ensureOrderNode(Map<UUID, BusinessLinkNode> ordersById, Order order) {
+        UUID key = order != null && order.getId() != null ? order.getId() : UNKNOWN_ORDER_ID;
+        return ordersById.computeIfAbsent(
                 key,
-                k ->
+                orderId ->
                         BusinessLinkNode.order(
-                                k,
+                                orderId,
                                 order != null && order.getName() != null
                                         ? order.getName()
                                         : spec.translator.apply("business.tree.unknownOrder"),
                                 order != null && order.getOrderNumber() != null
                                         ? order.getOrderNumber()
-                                        : "—"));
+                                        : EMPTY_VALUE));
+    }
+
+    private static String displayName(String value) {
+        return value != null ? value : EMPTY_VALUE;
+    }
+
+    private static String cssName(String value) {
+        return value.toLowerCase(Locale.ROOT);
     }
 
     private void applyFilter() {
@@ -268,48 +307,49 @@ public class BusinessLinksTree extends Div {
     /** Expand any branch that contains at least one linked descendant. */
     private boolean expandLinked(List<BusinessLinkNode> nodes) {
         boolean anyLinked = false;
-        for (BusinessLinkNode n : nodes) {
-            boolean childLinked = expandLinked(n.children());
-            boolean self = n.linked();
-            if (childLinked || (n.kind() != BusinessLinkNode.Kind.ORDER && self)) {
-                tree.expand(n);
+        for (BusinessLinkNode node : nodes) {
+            boolean childLinked = expandLinked(node.children());
+            boolean nodeLinked = node.linked();
+            if (childLinked || (node.kind() != BusinessLinkNode.Kind.ORDER && nodeLinked)) {
+                tree.expand(node);
                 anyLinked = true;
-            } else if (self) {
+            } else if (nodeLinked) {
                 anyLinked = true;
             }
         }
         return anyLinked;
     }
 
-    private List<BusinessLinkNode> filterTree(List<BusinessLinkNode> nodes, String lc) {
+    private List<BusinessLinkNode> filterTree(List<BusinessLinkNode> nodes, String lowerCaseQuery) {
         List<BusinessLinkNode> kept = new ArrayList<>();
-        for (BusinessLinkNode n : nodes) {
-            boolean self = n.matches(lc);
-            List<BusinessLinkNode> filteredChildren = filterTree(n.children(), lc);
-            if (self || !filteredChildren.isEmpty()) {
-                BusinessLinkNode copy = cloneShallow(n);
-                copy.children().addAll(self ? n.children() : filteredChildren);
+        for (BusinessLinkNode node : nodes) {
+            boolean nodeMatches = node.matches(lowerCaseQuery);
+            List<BusinessLinkNode> filteredChildren =
+                    filterTree(node.children(), lowerCaseQuery);
+            if (nodeMatches || !filteredChildren.isEmpty()) {
+                BusinessLinkNode copy = cloneShallow(node);
+                copy.children().addAll(nodeMatches ? node.children() : filteredChildren);
                 kept.add(copy);
             }
         }
         return kept;
     }
 
-    private BusinessLinkNode cloneShallow(BusinessLinkNode n) {
-        return switch (n.kind()) {
-            case ORDER -> BusinessLinkNode.order(n.entityId(), n.name(), n.number());
+    private BusinessLinkNode cloneShallow(BusinessLinkNode node) {
+        return switch (node.kind()) {
+            case ORDER -> BusinessLinkNode.order(node.entityId(), node.name(), node.number());
             case ORDER_POSITION ->
-                    BusinessLinkNode.orderPosition(n.entityId(), n.name(), n.linked());
+                    BusinessLinkNode.orderPosition(node.entityId(), node.name(), node.linked());
             case PURCHASE_POSITION ->
                     BusinessLinkNode.purchasePosition(
-                            n.entityId(), n.name(), n.number(), n.linked());
+                            node.entityId(), node.name(), node.number(), node.linked());
         };
     }
 
     private void expandAll(List<BusinessLinkNode> nodes) {
-        for (BusinessLinkNode n : nodes) {
-            tree.expand(n);
-            expandAll(n.children());
+        for (BusinessLinkNode node : nodes) {
+            tree.expand(node);
+            expandAll(node.children());
         }
     }
 
@@ -320,7 +360,7 @@ public class BusinessLinksTree extends Div {
     }
 
     public static class Spec {
-        Function<String, String> translator = k -> k;
+        Function<String, String> translator = translationKey -> translationKey;
         Supplier<List<OrderPosition>> linkedOrderPositions = List::of;
         Supplier<List<PurchasePosition>> linkedPurchasePositions = List::of;
         Supplier<List<OrderPosition>> allOrderPositions = List::of;
@@ -332,58 +372,59 @@ public class BusinessLinksTree extends Div {
         String viewKey;
         UserViewPreferenceService preferenceService;
 
-        public Spec translator(Function<String, String> v) {
-            this.translator = v;
+        public Spec translator(Function<String, String> translator) {
+            this.translator = translator;
             return this;
         }
 
-        public Spec linkedOrderPositions(Supplier<List<OrderPosition>> v) {
-            this.linkedOrderPositions = v;
+        public Spec linkedOrderPositions(Supplier<List<OrderPosition>> linkedOrderPositions) {
+            this.linkedOrderPositions = linkedOrderPositions;
             return this;
         }
 
-        public Spec linkedPurchasePositions(Supplier<List<PurchasePosition>> v) {
-            this.linkedPurchasePositions = v;
+        public Spec linkedPurchasePositions(
+                Supplier<List<PurchasePosition>> linkedPurchasePositions) {
+            this.linkedPurchasePositions = linkedPurchasePositions;
             return this;
         }
 
-        public Spec allOrderPositions(Supplier<List<OrderPosition>> v) {
-            this.allOrderPositions = v;
+        public Spec allOrderPositions(Supplier<List<OrderPosition>> allOrderPositions) {
+            this.allOrderPositions = allOrderPositions;
             return this;
         }
 
-        public Spec allPurchasePositions(Supplier<List<PurchasePosition>> v) {
-            this.allPurchasePositions = v;
+        public Spec allPurchasePositions(Supplier<List<PurchasePosition>> allPurchasePositions) {
+            this.allPurchasePositions = allPurchasePositions;
             return this;
         }
 
-        public Spec onLinkOrderPosition(Consumer<UUID> v) {
-            this.onLinkOrderPosition = v;
+        public Spec onLinkOrderPosition(Consumer<UUID> onLinkOrderPosition) {
+            this.onLinkOrderPosition = onLinkOrderPosition;
             return this;
         }
 
-        public Spec onUnlinkOrderPosition(Consumer<UUID> v) {
-            this.onUnlinkOrderPosition = v;
+        public Spec onUnlinkOrderPosition(Consumer<UUID> onUnlinkOrderPosition) {
+            this.onUnlinkOrderPosition = onUnlinkOrderPosition;
             return this;
         }
 
-        public Spec onLinkPurchasePosition(Consumer<UUID> v) {
-            this.onLinkPurchasePosition = v;
+        public Spec onLinkPurchasePosition(Consumer<UUID> onLinkPurchasePosition) {
+            this.onLinkPurchasePosition = onLinkPurchasePosition;
             return this;
         }
 
-        public Spec onUnlinkPurchasePosition(Consumer<UUID> v) {
-            this.onUnlinkPurchasePosition = v;
+        public Spec onUnlinkPurchasePosition(Consumer<UUID> onUnlinkPurchasePosition) {
+            this.onUnlinkPurchasePosition = onUnlinkPurchasePosition;
             return this;
         }
 
-        public Spec viewKey(String v) {
-            this.viewKey = v;
+        public Spec viewKey(String viewKey) {
+            this.viewKey = viewKey;
             return this;
         }
 
-        public Spec preferenceService(UserViewPreferenceService v) {
-            this.preferenceService = v;
+        public Spec preferenceService(UserViewPreferenceService preferenceService) {
+            this.preferenceService = preferenceService;
             return this;
         }
 

@@ -72,21 +72,20 @@ public class GridSettingsButton<T> extends Span {
         header.addClassName("biz-section-title");
         content.add(header);
 
-        Map<String, com.vaadin.flow.component.grid.Grid.Column<T>> byKey = binder.columnsByKey();
-        for (var entry : byKey.entrySet()) {
+        Map<String, com.vaadin.flow.component.grid.Grid.Column<T>> columnsByKey =
+                binder.columnsByKey();
+        for (var entry : columnsByKey.entrySet()) {
             String key = entry.getKey();
-            var col = entry.getValue();
-            String label = labelForKey.apply(key);
-            if (label == null || label.isBlank()) label = key;
-            var cb = new Checkbox(label, col.isVisible());
-            cb.addClassName("grid-settings__cb");
-            cb.addValueChangeListener(
-                    e -> {
-                        col.setVisible(Boolean.TRUE.equals(e.getValue()));
+            var column = entry.getValue();
+            var checkbox = new Checkbox(resolveLabel(key, labelForKey), column.isVisible());
+            checkbox.addClassName("grid-settings__cb");
+            checkbox.addValueChangeListener(
+                    event -> {
+                        column.setVisible(Boolean.TRUE.equals(event.getValue()));
                         binder.saveNow();
                         refreshBadge(binder, hiddenBadge);
                     });
-            content.add(cb);
+            content.add(checkbox);
         }
 
         var divider = new Span();
@@ -117,12 +116,18 @@ public class GridSettingsButton<T> extends Span {
     }
 
     private void refreshBadge(GridPreferenceBinder<T> binder, Span badge) {
-        long hidden = binder.columnsByKey().values().stream().filter(c -> !c.isVisible()).count();
-        if (hidden == 0) {
+        long hiddenColumnCount =
+                binder.columnsByKey().values().stream().filter(column -> !column.isVisible()).count();
+        if (hiddenColumnCount == 0) {
             badge.setVisible(false);
-        } else {
-            badge.setText("+" + hidden);
-            badge.setVisible(true);
+            return;
         }
+        badge.setText("+" + hiddenColumnCount);
+        badge.setVisible(true);
+    }
+
+    private String resolveLabel(String key, Function<String, String> labelForKey) {
+        String label = labelForKey.apply(key);
+        return label == null || label.isBlank() ? key : label;
     }
 }

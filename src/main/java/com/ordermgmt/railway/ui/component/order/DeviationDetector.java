@@ -22,55 +22,64 @@ final class DeviationDetector {
 
     /** Human-readable deviation messages; empty when the position is consistent / has no train. */
     static List<String> detect(
-            OrderPosition pos, PmReferenceTrain train, BiFunction<String, Object[], String> t) {
-        List<String> devs = new ArrayList<>();
-        if (pos == null || train == null) {
-            return devs;
+            OrderPosition position,
+            PmReferenceTrain train,
+            BiFunction<String, Object[], String> translator) {
+        List<String> deviations = new ArrayList<>();
+        if (position == null || train == null) {
+            return deviations;
         }
-        compareOrderVsTrain(pos, train, devs, t);
-        compareVersions(train, devs, t);
-        return devs;
+        compareOrderWithTrain(position, train, deviations, translator);
+        compareVersions(train, deviations, translator);
+        return deviations;
     }
 
-    private static void compareOrderVsTrain(
-            OrderPosition pos,
+    private static void compareOrderWithTrain(
+            OrderPosition position,
             PmReferenceTrain train,
-            List<String> devs,
-            BiFunction<String, Object[], String> t) {
-        List<PmJourneyLocation> locs = locations(latestVersion(train));
-        if (!locs.isEmpty()) {
-            String first = locs.get(0).getPrimaryLocationName();
-            String last = locs.get(locs.size() - 1).getPrimaryLocationName();
-            if (differs(pos.getFromLocation(), first)) {
-                devs.add(
-                        t.apply(
+            List<String> deviations,
+            BiFunction<String, Object[], String> translator) {
+        List<PmJourneyLocation> locations = locations(latestVersion(train));
+        if (!locations.isEmpty()) {
+            String firstLocation = locations.get(0).getPrimaryLocationName();
+            String lastLocation = locations.get(locations.size() - 1).getPrimaryLocationName();
+            if (differs(position.getFromLocation(), firstLocation)) {
+                deviations.add(
+                        translator.apply(
                                 "deviation.from",
-                                new Object[] {nz(pos.getFromLocation()), nz(first)}));
+                                new Object[] {nz(position.getFromLocation()), nz(firstLocation)}));
             }
-            if (differs(pos.getToLocation(), last)) {
-                devs.add(t.apply("deviation.to", new Object[] {nz(pos.getToLocation()), nz(last)}));
+            if (differs(position.getToLocation(), lastLocation)) {
+                deviations.add(
+                        translator.apply(
+                                "deviation.to",
+                                new Object[] {nz(position.getToLocation()), nz(lastLocation)}));
             }
         }
-        if (pos.getStart() != null
+        if (position.getStart() != null
                 && train.getCalendarStart() != null
-                && !pos.getStart().toLocalDate().equals(train.getCalendarStart())) {
-            devs.add(
-                    t.apply(
+                && !position.getStart().toLocalDate().equals(train.getCalendarStart())) {
+            deviations.add(
+                    translator.apply(
                             "deviation.start",
-                            new Object[] {pos.getStart().toLocalDate(), train.getCalendarStart()}));
+                            new Object[] {
+                                position.getStart().toLocalDate(), train.getCalendarStart()
+                            }));
         }
-        if (pos.getEnd() != null
+        if (position.getEnd() != null
                 && train.getCalendarEnd() != null
-                && !pos.getEnd().toLocalDate().equals(train.getCalendarEnd())) {
-            devs.add(
-                    t.apply(
+                && !position.getEnd().toLocalDate().equals(train.getCalendarEnd())) {
+            deviations.add(
+                    translator.apply(
                             "deviation.end",
-                            new Object[] {pos.getEnd().toLocalDate(), train.getCalendarEnd()}));
+                            new Object[] {position.getEnd().toLocalDate(), train.getCalendarEnd()}));
         }
     }
 
     private static void compareVersions(
-            PmReferenceTrain train, List<String> devs, BiFunction<String, Object[], String> t) {
+            PmReferenceTrain train,
+            List<String> deviations,
+            BiFunction<String, Object[], String> translator) {
         if (train.getTrainVersions() == null || train.getTrainVersions().size() < 2) {
             return;
         }
@@ -84,36 +93,44 @@ final class DeviationDetector {
                 || Objects.equals(initial.getVersionNumber(), latest.getVersionNumber())) {
             return;
         }
-        List<PmJourneyLocation> initLocs = locations(initial);
-        List<PmJourneyLocation> latestLocs = locations(latest);
+        List<PmJourneyLocation> initialLocations = locations(initial);
+        List<PmJourneyLocation> latestLocations = locations(latest);
         Object[] versions = {initial.getVersionNumber(), latest.getVersionNumber()};
-        boolean stopsChanged = initLocs.size() != latestLocs.size();
-        int compareCount = Math.min(initLocs.size(), latestLocs.size());
-        int timeChanged = 0;
+        boolean stopsChanged = initialLocations.size() != latestLocations.size();
+        int compareCount = Math.min(initialLocations.size(), latestLocations.size());
+        int changedTimeCount = 0;
         for (int i = 0; i < compareCount; i++) {
-            PmJourneyLocation a = initLocs.get(i);
-            PmJourneyLocation b = latestLocs.get(i);
+            PmJourneyLocation initialLocation = initialLocations.get(i);
+            PmJourneyLocation latestLocation = latestLocations.get(i);
             // A stop swapped at the same sequence is a route change even when the count is equal.
-            if (differs(a.getPrimaryLocationName(), b.getPrimaryLocationName())) {
+            if (differs(
+                    initialLocation.getPrimaryLocationName(),
+                    latestLocation.getPrimaryLocationName())) {
                 stopsChanged = true;
             }
             // Compare the day offset too, so a time that rolls past midnight is not seen as equal.
-            if (differs(a.getArrivalTime(), b.getArrivalTime())
-                    || differs(a.getDepartureTime(), b.getDepartureTime())
-                    || !Objects.equals(a.getArrivalOffset(), b.getArrivalOffset())
-                    || !Objects.equals(a.getDepartureOffset(), b.getDepartureOffset())) {
-                timeChanged++;
+            if (differs(initialLocation.getArrivalTime(), latestLocation.getArrivalTime())
+                    || differs(
+                            initialLocation.getDepartureTime(), latestLocation.getDepartureTime())
+                    || !Objects.equals(
+                            initialLocation.getArrivalOffset(), latestLocation.getArrivalOffset())
+                    || !Objects.equals(
+                            initialLocation.getDepartureOffset(),
+                            latestLocation.getDepartureOffset())) {
+                changedTimeCount++;
             }
         }
         if (stopsChanged) {
-            devs.add(t.apply("deviation.versionStops", versions));
+            deviations.add(translator.apply("deviation.versionStops", versions));
         }
-        if (timeChanged > 0) {
-            devs.add(
-                    t.apply(
+        if (changedTimeCount > 0) {
+            deviations.add(
+                    translator.apply(
                             "deviation.versionTimes",
                             new Object[] {
-                                initial.getVersionNumber(), latest.getVersionNumber(), timeChanged
+                                initial.getVersionNumber(),
+                                latest.getVersionNumber(),
+                                changedTimeCount
                             }));
         }
     }

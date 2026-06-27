@@ -33,6 +33,10 @@ import com.vaadin.flow.component.upload.receivers.MemoryBuffer;
  */
 public class BusinessDocsCard extends Div {
 
+    private static final int MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024;
+    private static final int SUCCESS_NOTIFICATION_DURATION_MS = 1500;
+    private static final int ERROR_NOTIFICATION_DURATION_MS = 3000;
+    private static final String DEFAULT_CONTENT_TYPE = "application/octet-stream";
     private static final DateTimeFormatter DATE_TIME_FMT =
             DateTimeFormatter.ofPattern("dd.MM.yy HH:mm");
 
@@ -80,9 +84,9 @@ public class BusinessDocsCard extends Div {
         var header = new Span(tr.apply("business.documents").toUpperCase());
         header.addClassName("biz-section-title");
 
-        var receiver = new MemoryBuffer();
-        var upload = new Upload(receiver);
-        upload.setMaxFileSize(10 * 1024 * 1024);
+        var uploadBuffer = new MemoryBuffer();
+        var upload = new Upload(uploadBuffer);
+        upload.setMaxFileSize(MAX_UPLOAD_SIZE_BYTES);
         var uploadBtn =
                 new Button(tr.apply("business.uploadDocument"), VaadinIcon.CLOUD_UPLOAD.create());
         uploadBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
@@ -91,24 +95,18 @@ public class BusinessDocsCard extends Div {
 
         upload.addSucceededListener(
                 event -> {
-                    try (InputStream is = receiver.getInputStream()) {
-                        byte[] data = is.readAllBytes();
+                    try (InputStream inputStream = uploadBuffer.getInputStream()) {
+                        byte[] data = inputStream.readAllBytes();
                         onAdd.accept(
-                                receiver.getFileName(),
-                                event.getMIMEType() != null
-                                        ? event.getMIMEType()
-                                        : "application/octet-stream",
+                                uploadBuffer.getFileName(),
+                                contentTypeOrDefault(event.getMIMEType()),
                                 data);
                         refresh();
-                        Notification.show(
-                                        tr.apply("business.documentUploaded"),
-                                        1500,
-                                        Notification.Position.BOTTOM_END)
-                                .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+                        showSuccess("business.documentUploaded");
                     } catch (Exception ex) {
                         Notification.show(
                                         "Fehler: " + ex.getMessage(),
-                                        3000,
+                                        ERROR_NOTIFICATION_DURATION_MS,
                                         Notification.Position.BOTTOM_END)
                                 .addThemeVariants(NotificationVariant.LUMO_ERROR);
                     }
@@ -123,39 +121,35 @@ public class BusinessDocsCard extends Div {
                 GridVariant.LUMO_COMPACT, GridVariant.LUMO_NO_BORDER, GridVariant.LUMO_ROW_STRIPES);
         grid.setSizeFull();
 
-        grid.addColumn(d -> d.filename() != null ? d.filename() : "")
+        grid.addColumn(documentRow -> documentRow.filename() != null ? documentRow.filename() : "")
                 .setHeader(tr.apply("business.documentName"))
                 .setFlexGrow(2);
-        grid.addColumn(d -> d.contentType() != null ? d.contentType() : "")
+        grid.addColumn(
+                        documentRow ->
+                                documentRow.contentType() != null ? documentRow.contentType() : "")
                 .setHeader(tr.apply("business.documentType"))
                 .setWidth("220px")
                 .setFlexGrow(0);
-        grid.addColumn(
-                        d -> {
-                            var ts = d.createdAt();
-                            if (ts == null) return "—";
-                            LocalDateTime ldt = ts.atZone(ZoneId.systemDefault()).toLocalDateTime();
-                            return ldt.format(DATE_TIME_FMT);
-                        })
+        grid.addColumn(documentRow -> formatUploadDate(documentRow.createdAt()))
                 .setHeader(tr.apply("business.documentUploadDate"))
                 .setWidth("160px")
                 .setFlexGrow(0);
 
         grid.addComponentColumn(
-                        d -> {
-                            var btn =
-                                    new Button(
-                                            VaadinIcon.CLOSE_SMALL.create(),
-                                            e -> confirmRemove(d, onRemove));
-                            btn.addThemeVariants(
-                                    ButtonVariant.LUMO_SMALL,
-                                    ButtonVariant.LUMO_TERTIARY,
-                                    ButtonVariant.LUMO_ICON);
-                            return btn;
-                        })
+                        documentRow -> buildRemoveButton(documentRow, onRemove))
                 .setHeader("")
                 .setWidth("44px")
                 .setFlexGrow(0);
+    }
+
+    private Button buildRemoveButton(DocRow documentRow, Consumer<UUID> onRemove) {
+        var button =
+                new Button(
+                        VaadinIcon.CLOSE_SMALL.create(),
+                        e -> confirmRemove(documentRow, onRemove));
+        button.addThemeVariants(
+                ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY, ButtonVariant.LUMO_ICON);
+        return button;
     }
 
     private void confirmRemove(DocRow row, Consumer<UUID> onRemove) {
@@ -169,12 +163,28 @@ public class BusinessDocsCard extends Div {
                 e -> {
                     onRemove.accept(row.id());
                     refresh();
-                    Notification.show(
-                                    tr.apply("business.documentRemoved"),
-                                    1500,
-                                    Notification.Position.BOTTOM_END)
-                            .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+                    showSuccess("business.documentRemoved");
                 });
         dialog.open();
+    }
+
+    private void showSuccess(String translationKey) {
+        Notification.show(
+                        tr.apply(translationKey),
+                        SUCCESS_NOTIFICATION_DURATION_MS,
+                        Notification.Position.BOTTOM_END)
+                .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+    }
+
+    private static String contentTypeOrDefault(String contentType) {
+        return contentType != null ? contentType : DEFAULT_CONTENT_TYPE;
+    }
+
+    private static String formatUploadDate(Instant createdAt) {
+        if (createdAt == null) {
+            return "—";
+        }
+        LocalDateTime localDateTime = createdAt.atZone(ZoneId.systemDefault()).toLocalDateTime();
+        return localDateTime.format(DATE_TIME_FMT);
     }
 }

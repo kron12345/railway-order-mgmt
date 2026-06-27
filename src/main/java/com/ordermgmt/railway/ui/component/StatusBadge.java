@@ -2,19 +2,11 @@ package com.ordermgmt.railway.ui.component;
 
 import com.vaadin.flow.component.html.Span;
 
-/** Color-coded status pill for Bloomberg-style grid display. */
 public class StatusBadge extends Span {
 
     public StatusBadge(String text, StatusType type) {
         setText(text);
-        String color =
-                switch (type) {
-                    case SUCCESS -> "var(--rom-status-active)";
-                    case WARNING -> "var(--rom-status-warning)";
-                    case DANGER -> "var(--rom-status-danger)";
-                    case INFO -> "var(--rom-status-info)";
-                    case NEUTRAL -> "var(--rom-status-neutral)";
-                };
+        String color = colorFor(type);
 
         addClassName("status-badge");
         getStyle()
@@ -30,6 +22,16 @@ public class StatusBadge extends Span {
                 .set("color", color)
                 .set("background", "color-mix(in srgb, " + color + " 12%, transparent)")
                 .set("border", "1px solid " + color);
+    }
+
+    private static String colorFor(StatusType type) {
+        return switch (type) {
+            case SUCCESS -> "var(--rom-status-active)";
+            case WARNING -> "var(--rom-status-warning)";
+            case DANGER -> "var(--rom-status-danger)";
+            case INFO -> "var(--rom-status-info)";
+            case NEUTRAL -> "var(--rom-status-neutral)";
+        };
     }
 
     public enum StatusType {

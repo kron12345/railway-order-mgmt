@@ -1,28 +1,29 @@
 package com.ordermgmt.railway.ui.component;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.YearMonth;
 import java.time.format.TextStyle;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.Span;
+import com.vaadin.flow.component.shared.Tooltip;
 
 import com.ordermgmt.railway.domain.order.model.PurchasePosition;
 import com.ordermgmt.railway.domain.order.model.PurchaseStatus;
 import com.ordermgmt.railway.domain.order.model.ValidityJsonCodec;
 
-/**
- * Compact calendar grid: one row per month, columns = weekday positions (Mo-So × weeks). Each cell
- * shows the day number, colored by purchase status.
- */
 public class PurchaseCalendarGrid extends Div {
 
-    private static final String[] COL_HEADS = {"Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"};
-
-    /** Date when FPJ 2027 begins (timetable year boundary). */
+    private static final String[] WEEKDAY_HEADERS = {"Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"};
+    private static final int DAYS_PER_WEEK = 7;
+    private static final int WEEKEND_START_COLUMN = 5;
+    private static final int DEFAULT_MAX_WEEKS = 5;
     private static final LocalDate TIMETABLE_YEAR_2027_START = LocalDate.of(2026, 12, 12);
 
     public PurchaseCalendarGrid(List<PurchasePosition> purchases, LocalDate from, LocalDate to) {
@@ -34,13 +35,14 @@ public class PurchaseCalendarGrid extends Div {
 
         Map<LocalDate, PurchaseStatus> statusByDate = mapByDate(purchases);
         List<YearMonth> months = buildMonthList(from, to);
-        int maxWeeksPerRow = months.stream().mapToInt(this::weeksNeeded).max().orElse(5);
+        int maxWeeksPerRow =
+                months.stream().mapToInt(this::weeksNeeded).max().orElse(DEFAULT_MAX_WEEKS);
 
         Div table = new Div();
-        int cols = maxWeeksPerRow * 7 + maxWeeksPerRow - 1;
+        int columns = maxWeeksPerRow * DAYS_PER_WEEK + maxWeeksPerRow - 1;
         table.getStyle()
                 .set("display", "grid")
-                .set("grid-template-columns", "100px repeat(" + cols + ", minmax(24px, 1fr))")
+                .set("grid-template-columns", "100px repeat(" + columns + ", minmax(24px, 1fr))")
                 .set("width", "100%")
                 .set("font-family", "'JetBrains Mono', monospace")
                 .set("font-size", "11px");
@@ -55,21 +57,26 @@ public class PurchaseCalendarGrid extends Div {
     }
 
     private void addHeaderRow(Div table, int maxWeeks) {
-        Div corner = headerCell("");
-        corner.getStyle()
+        Div cornerCell = headerCell("");
+        cornerCell
+                .getStyle()
                 .set("background", "var(--rom-bg-secondary)")
                 .set("border-bottom", "1px solid var(--rom-border)")
                 .set("position", "sticky")
                 .set("left", "0")
                 .set("z-index", "2");
-        table.add(corner);
+        table.add(cornerCell);
 
-        for (int w = 0; w < maxWeeks; w++) {
-            if (w > 0) table.add(weekSep(true));
-            for (int d = 0; d < 7; d++) {
-                Div h = headerCell(COL_HEADS[d]);
-                if (d >= 5) h.getStyle().set("color", "rgba(148,163,184,0.3)");
-                table.add(h);
+        for (int week = 0; week < maxWeeks; week++) {
+            if (week > 0) {
+                table.add(weekSeparator(true));
+            }
+            for (int weekday = 0; weekday < DAYS_PER_WEEK; weekday++) {
+                Div headerCell = headerCell(WEEKDAY_HEADERS[weekday]);
+                if (weekday >= WEEKEND_START_COLUMN) {
+                    headerCell.getStyle().set("color", "rgba(148,163,184,0.3)");
+                }
+                table.add(headerCell);
             }
         }
     }
@@ -80,12 +87,42 @@ public class PurchaseCalendarGrid extends Div {
             int maxWeeks,
             Map<LocalDate, PurchaseStatus> statusByDate) {
         LocalDate firstOfMonth = yearMonth.atDay(1);
-        int startCol = firstOfMonth.getDayOfWeek().getValue() - 1; // Mo=0
+        int firstWeekdayColumn = firstOfMonth.getDayOfWeek().getValue() - 1;
         int daysInMonth = yearMonth.lengthOfMonth();
 
-        // Month label
-        String timetableYear =
-                firstOfMonth.isBefore(TIMETABLE_YEAR_2027_START) ? "FPJ 2026" : "FPJ 2027";
+        table.add(monthLabel(yearMonth));
+
+        int dayOfMonth = 1;
+        for (int week = 0; week < maxWeeks; week++) {
+            if (week > 0) {
+                table.add(weekSeparator(false));
+            }
+            for (int weekday = 0; weekday < DAYS_PER_WEEK; weekday++) {
+                int position = week * 7 + weekday;
+                boolean inRange = position >= firstWeekdayColumn && dayOfMonth <= daysInMonth;
+
+                if (inRange) {
+                    LocalDate date = yearMonth.atDay(dayOfMonth);
+                    boolean isWeekend = weekday >= WEEKEND_START_COLUMN;
+                    PurchaseStatus status = statusByDate.get(date);
+                    boolean isTimetableYearBoundary = date.equals(TIMETABLE_YEAR_2027_START);
+
+                    table.add(
+                            dayCell(
+                                    dayOfMonth,
+                                    status,
+                                    isWeekend,
+                                    isTimetableYearBoundary,
+                                    date));
+                    dayOfMonth++;
+                } else {
+                    table.add(emptyCell());
+                }
+            }
+        }
+    }
+
+    private Div monthLabel(YearMonth yearMonth) {
         Div label = new Div();
         label.getStyle()
                 .set("background", "var(--rom-bg-secondary)")
@@ -98,6 +135,7 @@ public class PurchaseCalendarGrid extends Div {
                 .set("display", "flex")
                 .set("flex-direction", "column")
                 .set("justify-content", "center");
+
         Span monthName =
                 new Span(
                         yearMonth.getMonth().getDisplayName(TextStyle.SHORT, Locale.GERMAN)
@@ -108,69 +146,31 @@ public class PurchaseCalendarGrid extends Div {
                 .set("font-weight", "600")
                 .set("font-size", "10px")
                 .set("color", "var(--rom-text-secondary)");
-        Span timetableYearTag = new Span(timetableYear);
+
+        Span timetableYearTag = new Span(timetableYearLabel(yearMonth.atDay(1)));
         timetableYearTag.getStyle().set("font-size", "8px").set("color", "var(--rom-accent)");
+
         label.add(monthName, timetableYearTag);
-        table.add(label);
+        return label;
+    }
 
-        int dayIdx = 1;
-        for (int week = 0; week < maxWeeks; week++) {
-            if (week > 0) table.add(weekSep(false));
-            for (int weekday = 0; weekday < 7; weekday++) {
-                int position = week * 7 + weekday;
-                boolean inRange = position >= startCol && dayIdx <= daysInMonth;
-
-                if (inRange) {
-                    LocalDate date = yearMonth.atDay(dayIdx);
-                    boolean isWeekend = weekday >= 5;
-                    PurchaseStatus status = statusByDate.get(date);
-                    boolean isTimetableYearBoundary = date.equals(TIMETABLE_YEAR_2027_START);
-
-                    table.add(dayCell(dayIdx, status, isWeekend, isTimetableYearBoundary, date));
-                    dayIdx++;
-                } else {
-                    table.add(emptyCell());
-                }
-            }
-        }
+    private String timetableYearLabel(LocalDate date) {
+        return date.isBefore(TIMETABLE_YEAR_2027_START) ? "FPJ 2026" : "FPJ 2027";
     }
 
     private Div dayCell(
-            int day, PurchaseStatus status, boolean weekend, boolean fpjLine, LocalDate date) {
+            int day,
+            PurchaseStatus status,
+            boolean weekend,
+            boolean timetableYearBoundary,
+            LocalDate date) {
         Div cell = new Div();
         cell.addClassName("cal-cell");
         cell.getElement().setAttribute("tabindex", "0");
         cell.getElement().setAttribute("role", "gridcell");
-        // Show day number + status symbol for color-blind users
-        String symbol = statusSymbol(status, weekend);
-        cell.setText(day + symbol);
+        cell.setText(day + statusSymbol(status));
 
-        String bg;
-        String color;
-        if (weekend && status == null) {
-            bg = "rgba(148,163,184,0.02)";
-            color = "rgba(148,163,184,0.15)";
-        } else if (status == null) {
-            bg = "rgba(148,163,184,0.06)";
-            color = "var(--rom-text-muted)";
-        } else {
-            bg =
-                    switch (status) {
-                        case BESTAETIGT -> "rgba(52,211,153,0.2)";
-                        case BESTELLT -> "rgba(96,165,250,0.2)";
-                        case OFFEN -> "rgba(148,163,184,0.06)";
-                        case ABGELEHNT -> "rgba(248,113,113,0.2)";
-                        case STORNIERT -> "rgba(107,114,128,0.1)";
-                    };
-            color =
-                    switch (status) {
-                        case BESTAETIGT -> "var(--rom-status-active)";
-                        case BESTELLT -> "var(--rom-status-info)";
-                        case OFFEN -> "var(--rom-text-muted)";
-                        case ABGELEHNT -> "var(--rom-status-danger)";
-                        case STORNIERT -> "var(--rom-text-muted)";
-                    };
-        }
+        DayCellStyle cellStyle = dayCellStyle(status, weekend);
 
         cell.getStyle()
                 .set("display", "flex")
@@ -178,25 +178,42 @@ public class PurchaseCalendarGrid extends Div {
                 .set("justify-content", "center")
                 .set("min-height", "28px")
                 .set("font-weight", "600")
-                .set("background", bg)
-                .set("color", color)
+                .set("background", cellStyle.background())
+                .set("color", cellStyle.color())
                 .set("border-bottom", "1px solid var(--rom-border)")
                 .set("cursor", "default");
 
-        if (fpjLine) {
+        if (timetableYearBoundary) {
             cell.getStyle().set("border-left", "2px solid var(--rom-accent)");
         }
 
-        String statusText = status != null ? status.name() : (weekend ? "WE" : "—");
-        String tip =
-                String.format(
-                        "%02d.%02d.%d %s", day, date.getMonthValue(), date.getYear(), statusText);
-        cell.getElement().setAttribute("aria-label", tip);
-        com.vaadin.flow.component.shared.Tooltip.forComponent(cell)
-                .withText(tip)
-                .withPosition(com.vaadin.flow.component.shared.Tooltip.TooltipPosition.TOP);
+        String tooltip = tooltipText(day, date, status, weekend);
+        cell.getElement().setAttribute("aria-label", tooltip);
+        Tooltip.forComponent(cell).withText(tooltip).withPosition(Tooltip.TooltipPosition.TOP);
 
         return cell;
+    }
+
+    private DayCellStyle dayCellStyle(PurchaseStatus status, boolean weekend) {
+        if (weekend && status == null) {
+            return new DayCellStyle("rgba(148,163,184,0.02)", "rgba(148,163,184,0.15)");
+        }
+        if (status == null) {
+            return new DayCellStyle("rgba(148,163,184,0.06)", "var(--rom-text-muted)");
+        }
+        return switch (status) {
+            case BESTAETIGT -> new DayCellStyle("rgba(52,211,153,0.2)", "var(--rom-status-active)");
+            case BESTELLT -> new DayCellStyle("rgba(96,165,250,0.2)", "var(--rom-status-info)");
+            case OFFEN -> new DayCellStyle("rgba(148,163,184,0.06)", "var(--rom-text-muted)");
+            case ABGELEHNT -> new DayCellStyle("rgba(248,113,113,0.2)", "var(--rom-status-danger)");
+            case STORNIERT -> new DayCellStyle("rgba(107,114,128,0.1)", "var(--rom-text-muted)");
+        };
+    }
+
+    private String tooltipText(int day, LocalDate date, PurchaseStatus status, boolean weekend) {
+        String statusText = status != null ? status.name() : (weekend ? "WE" : "—");
+        return String.format(
+                "%02d.%02d.%d %s", day, date.getMonthValue(), date.getYear(), statusText);
     }
 
     private Div emptyCell() {
@@ -208,9 +225,10 @@ public class PurchaseCalendarGrid extends Div {
     }
 
     private Div headerCell(String text) {
-        Div h = new Div();
-        h.setText(text);
-        h.getStyle()
+        Div headerCell = new Div();
+        headerCell.setText(text);
+        headerCell
+                .getStyle()
                 .set("text-align", "center")
                 .set("padding", "4px 2px")
                 .set("font-size", "9px")
@@ -219,12 +237,13 @@ public class PurchaseCalendarGrid extends Div {
                 .set("background", "var(--rom-bg-secondary)")
                 .set("border-bottom", "1px solid var(--rom-border)")
                 .set("text-transform", "uppercase");
-        return h;
+        return headerCell;
     }
 
-    private String statusSymbol(PurchaseStatus status, boolean weekend) {
-        if (weekend && status == null) return "";
-        if (status == null) return "";
+    private String statusSymbol(PurchaseStatus status) {
+        if (status == null) {
+            return "";
+        }
         return switch (status) {
             case BESTAETIGT -> "✓";
             case BESTELLT -> "→";
@@ -234,49 +253,51 @@ public class PurchaseCalendarGrid extends Div {
         };
     }
 
-    private Div weekSep(boolean isHeader) {
-        Div sep = new Div();
-        sep.getStyle()
+    private Div weekSeparator(boolean header) {
+        Div separator = new Div();
+        separator
+                .getStyle()
                 .set("width", "3px")
                 .set("min-height", "28px")
-                .set("background", isHeader ? "var(--rom-bg-secondary)" : "var(--rom-bg-primary)")
+                .set("background", header ? "var(--rom-bg-secondary)" : "var(--rom-bg-primary)")
                 .set("border-bottom", "1px solid var(--rom-border)");
-        return sep;
+        return separator;
     }
 
-    private int weeksNeeded(YearMonth ym) {
-        int startCol = ym.atDay(1).getDayOfWeek().getValue() - 1;
-        return (int) Math.ceil((startCol + ym.lengthOfMonth()) / 7.0);
+    private int weeksNeeded(YearMonth yearMonth) {
+        int firstWeekdayColumn = yearMonth.atDay(1).getDayOfWeek().getValue() - 1;
+        return (firstWeekdayColumn + yearMonth.lengthOfMonth() + DAYS_PER_WEEK - 1)
+                / DAYS_PER_WEEK;
     }
 
     private List<YearMonth> buildMonthList(LocalDate from, LocalDate to) {
-        List<YearMonth> list = new java.util.ArrayList<>();
+        List<YearMonth> months = new ArrayList<>();
         YearMonth current = YearMonth.from(from);
         YearMonth end = YearMonth.from(to);
         while (!current.isAfter(end)) {
-            list.add(current);
+            months.add(current);
             current = current.plusMonths(1);
         }
-        return list;
+        return months;
     }
 
     private Map<LocalDate, PurchaseStatus> mapByDate(List<PurchasePosition> purchases) {
-        Map<LocalDate, PurchaseStatus> map = new java.util.HashMap<>();
+        Map<LocalDate, PurchaseStatus> statusByDate = new HashMap<>();
         for (PurchasePosition purchase : purchases) {
             for (LocalDate date : extractDates(purchase)) {
-                map.put(date, purchase.getPurchaseStatus());
+                statusByDate.put(date, purchase.getPurchaseStatus());
             }
         }
-        return map;
+        return statusByDate;
     }
 
     private List<LocalDate> extractDates(PurchasePosition position) {
         List<LocalDate> dates = ValidityJsonCodec.fromJson(position.getValidity());
-        // Fallback: use orderedAt if no validity segments
         if (dates.isEmpty() && position.getOrderedAt() != null) {
-            dates.add(
-                    position.getOrderedAt().atZone(java.time.ZoneId.systemDefault()).toLocalDate());
+            dates.add(position.getOrderedAt().atZone(ZoneId.systemDefault()).toLocalDate());
         }
         return dates;
     }
+
+    private record DayCellStyle(String background, String color) {}
 }

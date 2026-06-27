@@ -1,13 +1,17 @@
 package com.ordermgmt.railway.ui.component.business;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.BiConsumer;
 
 import com.vaadin.flow.component.combobox.ComboBox;
 import com.vaadin.flow.component.combobox.ComboBoxVariant;
+import com.vaadin.flow.component.html.Span;
+import com.vaadin.flow.data.renderer.ComponentRenderer;
 
 import com.ordermgmt.railway.domain.business.model.AssignmentType;
 import com.ordermgmt.railway.infrastructure.keycloak.KeycloakUserService;
@@ -23,6 +27,10 @@ import com.ordermgmt.railway.infrastructure.keycloak.KeycloakUserService;
  * null)} from outside to clear.
  */
 public class AssigneeComboBox extends ComboBox<AssigneeComboBox.Item> {
+
+    private static final String USER_ICON = "👤 ";
+    private static final String GROUP_ICON = "👥 ";
+    private static final String ITEM_KEY_SEPARATOR = ":";
 
     public record Item(AssignmentType type, String value, String label) {}
 
@@ -43,23 +51,29 @@ public class AssigneeComboBox extends ComboBox<AssigneeComboBox.Item> {
         addThemeVariants(ComboBoxVariant.LUMO_SMALL);
         setClearButtonVisible(true);
         setItemLabelGenerator(Item::label);
-        setRenderer(new com.vaadin.flow.data.renderer.ComponentRenderer<>(this::renderItem));
+        setRenderer(new ComponentRenderer<>(this::renderItem));
 
-        // Keycloak does the filtering server-side; we treat the typed text as the query.
         setItems(
                 query -> {
-                    String filter = query.getFilter().orElse("").trim();
-                    return search(filter).stream().skip(query.getOffset()).limit(query.getLimit());
+                    String filterText = query.getFilter().orElse("").trim();
+                    return search(filterText).stream()
+                            .skip(query.getOffset())
+                            .limit(query.getLimit());
                 });
 
         addValueChangeListener(
                 e -> {
                     // Ignore programmatic changes (e.g. preset() during card render) — only act
                     // on user-initiated selections, otherwise every render would persist again.
-                    if (!e.isFromClient()) return;
-                    Item v = e.getValue();
-                    if (v == null) onChange.accept(null, null);
-                    else onChange.accept(v.type(), v.value());
+                    if (!e.isFromClient()) {
+                        return;
+                    }
+                    Item selectedItem = e.getValue();
+                    if (selectedItem == null) {
+                        onChange.accept(null, null);
+                    } else {
+                        onChange.accept(selectedItem.type(), selectedItem.value());
+                    }
                 });
     }
 
@@ -74,63 +88,82 @@ public class AssigneeComboBox extends ComboBox<AssigneeComboBox.Item> {
             setValue(null);
             return;
         }
-        String label = type == AssignmentType.USER ? "👤 " + value : "👥 " + value;
+        String label = type == AssignmentType.USER ? USER_ICON + value : GROUP_ICON + value;
         this.currentItem = new Item(type, value, label);
         setValue(this.currentItem);
     }
 
     private List<Item> search(String filter) {
-        List<Item> result = new ArrayList<>();
-        java.util.Set<String> seen = new java.util.HashSet<>();
+        List<Item> items = new ArrayList<>();
+        Set<String> seenKeys = new HashSet<>();
         // Always surface the current selection so it stays visible regardless of the
         // Keycloak filter — Vaadin needs the value to be present in the data provider.
         if (currentItem != null && matchesFilter(currentItem, filter)) {
-            result.add(currentItem);
-            seen.add(currentItem.type() + ":" + currentItem.value());
+            items.add(currentItem);
+            seenKeys.add(key(currentItem.type(), currentItem.value()));
         }
-        if (keycloakUserService == null) return result;
+        if (keycloakUserService == null) {
+            return items;
+        }
         try {
-            String q = filter == null ? "" : filter;
-            List<Map<String, String>> users = keycloakUserService.searchUsers(q);
-            for (Map<String, String> u : users) {
-                String username = u.getOrDefault("username", "");
-                if (username.isBlank()) continue;
-                if (!seen.add(AssignmentType.USER + ":" + username)) continue;
-                String full =
-                        (u.getOrDefault("firstName", "") + " " + u.getOrDefault("lastName", ""))
-                                .trim();
-                String label = "👤 " + username + (full.isBlank() ? "" : "  ·  " + full);
-                result.add(new Item(AssignmentType.USER, username, label));
-            }
-            List<Map<String, String>> groups = keycloakUserService.searchGroups(q);
-            for (Map<String, String> g : groups) {
-                String name = g.getOrDefault("name", g.getOrDefault("path", ""));
-                if (name.isBlank()) continue;
-                if (!seen.add(AssignmentType.GROUP + ":" + name)) continue;
-                result.add(new Item(AssignmentType.GROUP, name, "👥 " + name));
-            }
-            // Sort by label, with users typically appearing first.
-            result.sort(
-                    (a, b) ->
-                            a.label()
+            String queryText = filter == null ? "" : filter;
+            addUsers(items, seenKeys, keycloakUserService.searchUsers(queryText));
+            addGroups(items, seenKeys, keycloakUserService.searchGroups(queryText));
+            items.sort(
+                    (left, right) ->
+                            left.label()
                                     .toLowerCase(Locale.ROOT)
-                                    .compareTo(b.label().toLowerCase(Locale.ROOT)));
+                                    .compareTo(right.label().toLowerCase(Locale.ROOT)));
         } catch (RuntimeException ex) {
             // Keycloak unreachable in tests / dev: degrade gracefully.
         }
-        return result;
+        return items;
+    }
+
+    private static void addUsers(
+            List<Item> items, Set<String> seenKeys, List<Map<String, String>> users) {
+        for (Map<String, String> user : users) {
+            String username = user.getOrDefault("username", "");
+            if (username.isBlank() || !seenKeys.add(key(AssignmentType.USER, username))) {
+                continue;
+            }
+            String fullName =
+                    (user.getOrDefault("firstName", "")
+                                    + " "
+                                    + user.getOrDefault("lastName", ""))
+                            .trim();
+            String label = USER_ICON + username + (fullName.isBlank() ? "" : "  ·  " + fullName);
+            items.add(new Item(AssignmentType.USER, username, label));
+        }
+    }
+
+    private static void addGroups(
+            List<Item> items, Set<String> seenKeys, List<Map<String, String>> groups) {
+        for (Map<String, String> group : groups) {
+            String name = group.getOrDefault("name", group.getOrDefault("path", ""));
+            if (name.isBlank() || !seenKeys.add(key(AssignmentType.GROUP, name))) {
+                continue;
+            }
+            items.add(new Item(AssignmentType.GROUP, name, GROUP_ICON + name));
+        }
+    }
+
+    private static String key(AssignmentType type, String value) {
+        return type + ITEM_KEY_SEPARATOR + value;
     }
 
     private static boolean matchesFilter(Item item, String filter) {
-        if (filter == null || filter.isBlank()) return true;
+        if (filter == null || filter.isBlank()) {
+            return true;
+        }
         return item.value().toLowerCase(Locale.ROOT).contains(filter.toLowerCase(Locale.ROOT));
     }
 
-    private com.vaadin.flow.component.html.Span renderItem(Item it) {
-        var s = new com.vaadin.flow.component.html.Span(it.label());
-        s.addClassName("assignee-item");
-        s.addClassName("assignee-item--" + it.type().name().toLowerCase());
-        return s;
+    private Span renderItem(Item item) {
+        var span = new Span(item.label());
+        span.addClassName("assignee-item");
+        span.addClassName("assignee-item--" + item.type().name().toLowerCase(Locale.ROOT));
+        return span;
     }
 
     @Override

@@ -49,7 +49,7 @@ class LazyLoadSentinel extends Div {
      * is stored on the stable scroll root (not this per-render element) and the previous one is
      * disconnected first, so re-rendering never leaks observers.
      */
-    void observe(com.vaadin.flow.dom.Element root) {
+    void observe(com.vaadin.flow.dom.Element scrollRoot) {
         getElement()
                 .executeJs(
                         "const s=this, self=this, root=$0;"
@@ -59,6 +59,6 @@ class LazyLoadSentinel extends Div {
                                 + " self.$server.onVisible(); break; } }"
                                 + "},{root:root, rootMargin:'160px'});"
                                 + "obs.observe(s); root.__romObs=obs;",
-                        root);
+                        scrollRoot);
     }
 }

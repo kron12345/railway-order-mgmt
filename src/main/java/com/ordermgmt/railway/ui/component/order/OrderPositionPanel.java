@@ -1,8 +1,15 @@
 package com.ordermgmt.railway.ui.component.order;
 
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 import java.util.function.BiFunction;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
@@ -14,6 +21,8 @@ import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 
+import com.ordermgmt.railway.domain.business.model.Business;
+import com.ordermgmt.railway.domain.business.service.BusinessService;
 import com.ordermgmt.railway.domain.infrastructure.repository.OperationalPointRepository;
 import com.ordermgmt.railway.domain.infrastructure.repository.PredefinedTagRepository;
 import com.ordermgmt.railway.domain.order.model.Order;
@@ -33,7 +42,9 @@ import com.ordermgmt.railway.domain.order.service.ResourceNeedService;
 import com.ordermgmt.railway.domain.pathmanager.model.PathProcessState;
 import com.ordermgmt.railway.domain.pathmanager.model.PmReferenceTrain;
 import com.ordermgmt.railway.domain.pathmanager.service.PathManagerService;
+import com.ordermgmt.railway.domain.timetable.service.TimetableArchiveService;
 import com.ordermgmt.railway.infrastructure.keycloak.CurrentUserHelper;
+import com.ordermgmt.railway.ui.component.business.BusinessChips;
 import com.ordermgmt.railway.ui.component.masterdetail.filter.FilterField;
 import com.ordermgmt.railway.ui.component.masterdetail.filter.FilterPanel;
 import com.ordermgmt.railway.ui.component.masterdetail.filter.PredicateSelectFilterField;
@@ -44,8 +55,6 @@ public class OrderPositionPanel extends Div {
 
     private final Order order;
     private final OrderService orderService;
-    private final com.ordermgmt.railway.domain.timetable.service.TimetableArchiveService
-            timetableArchiveService;
     private final OperationalPointRepository opRepo;
     private final PredefinedTagRepository tagRepo;
     private final PathManagerService pathManagerService;
@@ -53,7 +62,7 @@ public class OrderPositionPanel extends Div {
     private final PurchaseOrderService purchaseOrderService;
     private final ResourceCatalogItemRepository catalogItemRepository;
     private final AuditService auditService;
-    private final com.ordermgmt.railway.domain.business.service.BusinessService businessService;
+    private final BusinessService businessService;
     private final BiFunction<String, Object[], String> translator;
     private final VerticalLayout rowContainer = new VerticalLayout();
 
@@ -63,7 +72,7 @@ public class OrderPositionPanel extends Div {
      */
     private final boolean editable = CurrentUserHelper.hasAnyRole("ADMIN", "DISPATCHER");
 
-    private final java.util.List<OrderPositionRow> rows = new java.util.ArrayList<>();
+    private final List<OrderPositionRow> rows = new ArrayList<>();
     private boolean compactMode = false;
     private boolean allExpanded = true;
     private Button toggleAllButton;
@@ -73,16 +82,13 @@ public class OrderPositionPanel extends Div {
     private PositionBulkBar bulkBar;
     private OrderPositionActions actions;
     // Per-refresh batched lookups (set at the start of refreshPositions).
-    private java.util.Map<java.util.UUID, java.util.List<OrderPositionVersion>> versionsByPosition =
-            java.util.Map.of();
-    private java.util.Map<java.util.UUID, java.util.List<PositionOtnHistory>> otnByPosition =
-            java.util.Map.of();
+    private Map<UUID, List<OrderPositionVersion>> versionsByPosition = Map.of();
+    private Map<UUID, List<PositionOtnHistory>> otnByPosition = Map.of();
 
     public OrderPositionPanel(
             Order order,
             OrderService orderService,
-            com.ordermgmt.railway.domain.timetable.service.TimetableArchiveService
-                    timetableArchiveService,
+            TimetableArchiveService timetableArchiveService,
             OperationalPointRepository opRepo,
             PredefinedTagRepository tagRepo,
             PathManagerService pathManagerService,
@@ -90,11 +96,10 @@ public class OrderPositionPanel extends Div {
             PurchaseOrderService purchaseOrderService,
             ResourceCatalogItemRepository catalogItemRepository,
             AuditService auditService,
-            com.ordermgmt.railway.domain.business.service.BusinessService businessService,
+            BusinessService businessService,
             BiFunction<String, Object[], String> translator) {
         this.order = order;
         this.orderService = orderService;
-        this.timetableArchiveService = timetableArchiveService;
         this.opRepo = opRepo;
         this.tagRepo = tagRepo;
         this.pathManagerService = pathManagerService;
@@ -255,53 +260,24 @@ public class OrderPositionPanel extends Div {
             return;
         }
 
-        // One batched query for all positions' linked businesses (instead of one per row).
-        java.util.Map<
-                        java.util.UUID,
-                        java.util.List<com.ordermgmt.railway.domain.business.model.Business>>
-                businessesByPosition =
-                        businessService.findByLinkedOrderPositions(
-                                positions.stream().map(OrderPosition::getId).toList());
+        Map<UUID, List<Business>> businessesByPosition = loadBusinessesByPosition(positions);
+        loadPositionHistory(positions);
 
-        // Batched version trail + OTN history for all positions (one query each, not per row).
-        java.util.List<java.util.UUID> posIds =
-                positions.stream().map(OrderPosition::getId).toList();
-        versionsByPosition = orderService.findVersionsByPositions(posIds);
-        otnByPosition = orderService.findOtnHistoryByPositions(posIds);
-
-        // Group expressions (Ausprägungen) under their parent train identity; top-level rows =
-        // ZUG identities + legacy flat positions. Children render indented beneath their parent.
-        java.util.Map<java.util.UUID, java.util.List<OrderPosition>> childrenByParent =
-                new java.util.LinkedHashMap<>();
-        java.util.List<OrderPosition> tops = new java.util.ArrayList<>();
-        for (OrderPosition pos : positions) {
-            if (pos.getVariantType() == PositionVariantType.AUSPRAEGUNG
-                    && pos.getVariantOf() != null) {
-                childrenByParent
-                        .computeIfAbsent(
-                                pos.getVariantOf().getId(), k -> new java.util.ArrayList<>())
-                        .add(pos);
-            } else {
-                tops.add(pos);
-            }
-        }
-
-        java.util.Set<java.util.UUID> topIds =
-                tops.stream()
-                        .map(OrderPosition::getId)
-                        .collect(java.util.stream.Collectors.toSet());
-        for (OrderPosition top : tops) {
+        PositionGroups groups = groupPositions(positions);
+        Set<UUID> topIds =
+                groups.topLevel().stream().map(OrderPosition::getId).collect(Collectors.toSet());
+        for (OrderPosition top : groups.topLevel()) {
             boolean isZug = top.getVariantType() == PositionVariantType.ZUG;
             // A ZUG identity is a container; its expressions carry the bookings, so it is not
             // directly selectable for bulk actions. Legacy flat positions stay selectable.
             // A ZUG is a header above its expression cards; a flat position is itself one card.
             OrderPositionRow topRow = renderPosition(top, businessesByPosition, !isZug, !isZug);
-            java.util.List<OrderPositionVersion> trainChanges = new java.util.ArrayList<>();
+            List<OrderPositionVersion> trainChanges = new ArrayList<>();
             for (OrderPosition child :
-                    childrenByParent.getOrDefault(top.getId(), java.util.List.of())) {
+                    groups.childrenByParent().getOrDefault(top.getId(), List.of())) {
                 renderPosition(child, businessesByPosition, true, true);
                 trainChanges.addAll(
-                        versionsByPosition.getOrDefault(child.getId(), java.util.List.of()));
+                        versionsByPosition.getOrDefault(child.getId(), List.of()));
             }
             // Train-level Änderungs-Feed: aggregate every expression change under the ZUG.
             if (isZug && !trainChanges.isEmpty()) {
@@ -309,21 +285,12 @@ public class OrderPositionPanel extends Div {
             }
             // Add an expression (Ausprägung) under any FAHRPLAN train (promotes a flat one to ZUG).
             if (editable && top.getType() == PositionType.FAHRPLAN) {
-                Button addExpr = new Button(t("expression.add.button"), VaadinIcon.PLUS.create());
-                addExpr.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
-                addExpr.getStyle().set("margin", "2px 0 10px 22px");
-                if (OrderPositionActions.canSplit(top)) {
-                    addExpr.addClickListener(e -> actions.openAddExpression(top));
-                } else {
-                    addExpr.setEnabled(false); // flat position with bookings can't be split
-                    addExpr.setTooltipText(t("expression.hasBookings"));
-                }
-                rowContainer.add(addExpr);
+                rowContainer.add(createAddExpressionButton(top));
             }
         }
         // Expressions whose parent train was filtered out still match the filter themselves —
         // render them standalone so a filter (e.g. on status) never hides a matching expression.
-        for (var entry : childrenByParent.entrySet()) {
+        for (var entry : groups.childrenByParent().entrySet()) {
             if (!topIds.contains(entry.getKey())) {
                 for (OrderPosition orphan : entry.getValue()) {
                     renderPosition(orphan, businessesByPosition, true, true);
@@ -332,19 +299,60 @@ public class OrderPositionPanel extends Div {
         }
     }
 
+    private Map<UUID, List<Business>> loadBusinessesByPosition(List<OrderPosition> positions) {
+        return businessService.findByLinkedOrderPositions(
+                positions.stream().map(OrderPosition::getId).toList());
+    }
+
+    private void loadPositionHistory(List<OrderPosition> positions) {
+        List<UUID> positionIds = positions.stream().map(OrderPosition::getId).toList();
+        versionsByPosition = orderService.findVersionsByPositions(positionIds);
+        otnByPosition = orderService.findOtnHistoryByPositions(positionIds);
+    }
+
+    private PositionGroups groupPositions(List<OrderPosition> positions) {
+        Map<UUID, List<OrderPosition>> childrenByParent = new LinkedHashMap<>();
+        List<OrderPosition> topLevel = new ArrayList<>();
+        for (OrderPosition position : positions) {
+            if (isExpressionWithParent(position)) {
+                childrenByParent
+                        .computeIfAbsent(position.getVariantOf().getId(), key -> new ArrayList<>())
+                        .add(position);
+                continue;
+            }
+            topLevel.add(position);
+        }
+        return new PositionGroups(topLevel, childrenByParent);
+    }
+
+    private boolean isExpressionWithParent(OrderPosition position) {
+        return position.getVariantType() == PositionVariantType.AUSPRAEGUNG
+                && position.getVariantOf() != null;
+    }
+
+    private Button createAddExpressionButton(OrderPosition parent) {
+        Button addExpression = new Button(t("expression.add.button"), VaadinIcon.PLUS.create());
+        addExpression.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
+        addExpression.getStyle().set("margin", "2px 0 10px 22px");
+        if (OrderPositionActions.canSplit(parent)) {
+            addExpression.addClickListener(event -> actions.openAddExpression(parent));
+            return addExpression;
+        }
+        addExpression.setEnabled(false);
+        addExpression.setTooltipText(t("expression.hasBookings"));
+        return addExpression;
+    }
+
     /** Renders one position (train identity, expression, or legacy flat) into the container. */
     private OrderPositionRow renderPosition(
-            OrderPosition pos,
-            java.util.Map<
-                            java.util.UUID,
-                            java.util.List<com.ordermgmt.railway.domain.business.model.Business>>
-                    businessesByPosition,
+            OrderPosition position,
+            Map<UUID, List<Business>> businessesByPosition,
             boolean card,
             boolean selectable) {
-        PmReferenceTrain pmTrain = resolveTrain(pos);
+        PmReferenceTrain pmTrain = resolveTrain(position);
         OrderPositionRow row =
                 new OrderPositionRow(
-                        pos,
+                        position,
                         pmTrain != null ? pmTrain.getProcessState() : null,
                         pmTrain != null ? pmTrain.getPlanningStatus() : null,
                         translator,
@@ -363,25 +371,25 @@ public class OrderPositionPanel extends Div {
                     .set("overflow", "hidden")
                     .set("background", "var(--rom-bg-card)");
             // Verkehrstage editor on each FAHRPLAN card (expression or flat) — set/reassign days.
-            if (editable && pos.getType() == PositionType.FAHRPLAN) {
+            if (editable && position.getType() == PositionType.FAHRPLAN) {
                 row.addActionChip(
                         t("position.action.verkehrstage"),
                         VaadinIcon.CALENDAR_O,
-                        () -> actions.openVerkehrstageDialog(pos));
+                        () -> actions.openVerkehrstageDialog(position));
             }
         }
         rows.add(row);
         rowContainer.add(row);
         if (editable && selectable) {
-            java.util.UUID pid = pos.getId();
-            row.enableSelection(sel -> bulkBar.toggle(pid, sel));
+            UUID positionId = position.getId();
+            row.enableSelection(selected -> bulkBar.toggle(positionId, selected));
         }
         // Deviations (order ↔ RailOpt) plus any open infrastructure alterations from the versions.
-        java.util.List<String> deviations =
-                new java.util.ArrayList<>(DeviationDetector.detect(pos, pmTrain, translator));
-        java.util.List<OrderPositionVersion> versions =
-                versionsByPosition.getOrDefault(pos.getId(), java.util.List.of());
-        java.time.LocalDate today = java.time.LocalDate.now();
+        List<String> deviations =
+                new ArrayList<>(DeviationDetector.detect(position, pmTrain, translator));
+        List<OrderPositionVersion> versions =
+                versionsByPosition.getOrDefault(position.getId(), List.of());
+        LocalDate today = LocalDate.now();
         for (OrderPositionVersion v : versions) {
             // Only still-relevant alterations earn a ⚠; expired ones stay in the feed as history.
             boolean active = v.getValidTo() == null || !v.getValidTo().isBefore(today);
@@ -394,8 +402,8 @@ public class OrderPositionPanel extends Div {
         row.setDeviations(deviations);
 
         // OTN history chip: past numbers, so a renamed train stays recognizable.
-        java.util.List<String> pastOtns =
-                otnByPosition.getOrDefault(pos.getId(), java.util.List.of()).stream()
+        List<String> pastOtns =
+                otnByPosition.getOrDefault(position.getId(), List.of()).stream()
                         .filter(h -> h.getValidTo() != null)
                         .map(PositionOtnHistory::getOtn)
                         .distinct()
@@ -403,11 +411,9 @@ public class OrderPositionPanel extends Div {
         row.setOtnHistory(pastOtns);
 
         // Linked businesses for this position (clickable chips → business detail).
-        var linkedBusinesses = businessesByPosition.getOrDefault(pos.getId(), java.util.List.of());
+        var linkedBusinesses = businessesByPosition.getOrDefault(position.getId(), List.of());
         if (!linkedBusinesses.isEmpty()) {
-            var chips =
-                    new com.ordermgmt.railway.ui.component.business.BusinessChips(
-                            linkedBusinesses, this::t);
+            var chips = new BusinessChips(linkedBusinesses, this::t);
             chips.getStyle().set("margin", "0 12px 6px 12px");
             row.addBodyContent(chips);
         }
@@ -419,13 +425,14 @@ public class OrderPositionPanel extends Div {
 
         // Resource panel — lazily built collapsible body. Its constructor loads resources, so a
         // collapsed compact row pays no DB/UI build cost until the user expands it.
-        long resCount = pos.getResourceNeeds() != null ? pos.getResourceNeeds().size() : 0;
-        if (resCount > 0) {
+        long resourceCount =
+                position.getResourceNeeds() != null ? position.getResourceNeeds().size() : 0;
+        if (resourceCount > 0) {
             row.addLazyBodyContent(
                     () -> {
                         ResourcePanel resourcePanel =
                                 new ResourcePanel(
-                                        pos,
+                                        position,
                                         resourceNeedService,
                                         purchaseOrderService,
                                         catalogItemRepository,
@@ -449,12 +456,13 @@ public class OrderPositionPanel extends Div {
      * can show its lifecycle and planning status. Returns {@code null} when not sent or when the
      * train can no longer be resolved (e.g. cleared mock state).
      */
-    private PmReferenceTrain resolveTrain(OrderPosition pos) {
-        if (pos.getType() != PositionType.FAHRPLAN || pos.getPmReferenceTrainId() == null) {
+    private PmReferenceTrain resolveTrain(OrderPosition position) {
+        if (position.getType() != PositionType.FAHRPLAN
+                || position.getPmReferenceTrainId() == null) {
             return null;
         }
         try {
-            return pathManagerService.findByIdWithVersions(pos.getPmReferenceTrainId());
+            return pathManagerService.findByIdWithVersions(position.getPmReferenceTrainId());
         } catch (RuntimeException ex) {
             return null;
         }
@@ -496,19 +504,23 @@ public class OrderPositionPanel extends Div {
                 labels);
     }
 
-    private boolean hasPurchaseWithTtt(OrderPosition pos, PathProcessState state) {
-        return pos.getPurchasePositions() != null
-                && pos.getPurchasePositions().stream()
-                        .anyMatch(pp -> state.name().equals(pp.getPmProcessState()));
+    private boolean hasPurchaseWithTtt(OrderPosition position, PathProcessState state) {
+        return position.getPurchasePositions() != null
+                && position.getPurchasePositions().stream()
+                        .anyMatch(
+                                purchase -> state.name().equals(purchase.getPmProcessState()));
     }
 
-    private boolean hasPurchaseWithStatus(OrderPosition pos, PurchaseStatus status) {
-        return pos.getPurchasePositions() != null
-                && pos.getPurchasePositions().stream()
-                        .anyMatch(pp -> pp.getPurchaseStatus() == status);
+    private boolean hasPurchaseWithStatus(OrderPosition position, PurchaseStatus status) {
+        return position.getPurchasePositions() != null
+                && position.getPurchasePositions().stream()
+                        .anyMatch(purchase -> purchase.getPurchaseStatus() == status);
     }
 
     private String t(String key) {
         return translator.apply(key, new Object[0]);
     }
+
+    private record PositionGroups(
+            List<OrderPosition> topLevel, Map<UUID, List<OrderPosition>> childrenByParent) {}
 }

@@ -32,7 +32,7 @@ public class PredicateSelectFilterField<T, V> implements FilterField<T> {
         this.matcher = matcher;
         select.setLabel(label);
         select.setItems(options);
-        select.setItemLabelGenerator(v -> v == null ? "" : itemLabel.apply(v));
+        select.setItemLabelGenerator(option -> option == null ? "" : itemLabel.apply(option));
         select.setEmptySelectionAllowed(true);
         select.setEmptySelectionCaption("—");
         select.addThemeVariants(SelectVariant.LUMO_SMALL);
@@ -54,20 +54,20 @@ public class PredicateSelectFilterField<T, V> implements FilterField<T> {
 
     @Override
     public Predicate<T> predicate() {
-        V selected = select.getValue();
-        if (selected == null) {
-            return t -> true;
+        V selectedValue = select.getValue();
+        if (selectedValue == null) {
+            return item -> true;
         }
-        return t -> matcher.test(t, selected);
+        return item -> matcher.test(item, selectedValue);
     }
 
     @Override
     public List<FilterChip> chips() {
-        V selected = select.getValue();
-        if (selected == null) {
+        V selectedValue = select.getValue();
+        if (selectedValue == null) {
             return List.of();
         }
-        return List.of(new FilterChip(label + ": " + itemLabel.apply(selected), select::clear));
+        return List.of(new FilterChip(label + ": " + itemLabel.apply(selectedValue), select::clear));
     }
 
     @Override

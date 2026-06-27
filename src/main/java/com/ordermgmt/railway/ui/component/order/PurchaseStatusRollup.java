@@ -43,37 +43,40 @@ final class PurchaseStatusRollup {
         }
 
         // Procurement rollup — count per PurchaseStatus, in enum order.
-        Map<PurchaseStatus, Long> procurement = new LinkedHashMap<>();
-        for (PurchasePosition pp : purchases) {
-            PurchaseStatus s =
-                    pp.getPurchaseStatus() != null ? pp.getPurchaseStatus() : PurchaseStatus.OFFEN;
-            procurement.merge(s, 1L, Long::sum);
+        Map<PurchaseStatus, Long> procurementCounts = new LinkedHashMap<>();
+        for (PurchasePosition purchase : purchases) {
+            PurchaseStatus status =
+                    purchase.getPurchaseStatus() != null
+                            ? purchase.getPurchaseStatus()
+                            : PurchaseStatus.OFFEN;
+            procurementCounts.merge(status, 1L, Long::sum);
         }
-        for (PurchaseStatus s : PurchaseStatus.values()) {
-            long n = procurement.getOrDefault(s, 0L);
-            if (n > 0) {
+        for (PurchaseStatus status : PurchaseStatus.values()) {
+            long count = procurementCounts.getOrDefault(status, 0L);
+            if (count > 0) {
                 cluster.add(
                         ResourceBadges.small(
-                                n + " " + t.apply("purchase.status." + s.name(), new Object[0]),
-                                ResourceBadges.purchaseStatusColor(s)));
+                                count
+                                        + " "
+                                        + t.apply("purchase.status." + status.name(), new Object[0]),
+                                ResourceBadges.purchaseStatusColor(status)));
             }
         }
 
-        // TTT rollup — count per external TTT process state (only purchases that carry one).
-        Map<String, Long> ttt = new LinkedHashMap<>();
-        for (PurchasePosition pp : purchases) {
-            String state = pp.getPmProcessState();
+        Map<String, Long> tttCounts = new LinkedHashMap<>();
+        for (PurchasePosition purchase : purchases) {
+            String state = purchase.getPmProcessState();
             if (state != null && !state.isBlank()) {
-                ttt.merge(state, 1L, Long::sum);
+                tttCounts.merge(state, 1L, Long::sum);
             }
         }
-        if (!ttt.isEmpty()) {
+        if (!tttCounts.isEmpty()) {
             cluster.add(ResourceBadges.small("TTT", "var(--rom-text-muted)"));
-            ttt.forEach(
-                    (state, n) ->
+            tttCounts.forEach(
+                    (state, count) ->
                             cluster.add(
                                     ResourceBadges.small(
-                                            n + " " + tttLabel(state, t), tttColor(state))));
+                                            count + " " + tttLabel(state, t), tttColor(state))));
         }
         return cluster;
     }

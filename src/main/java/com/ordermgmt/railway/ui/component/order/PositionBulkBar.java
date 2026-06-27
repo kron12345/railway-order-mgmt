@@ -78,9 +78,9 @@ class PositionBulkBar extends HorizontalLayout {
     }
 
     private void update() {
-        boolean any = !selected.isEmpty();
-        setVisible(any);
-        if (!any) {
+        boolean hasSelection = !selected.isEmpty();
+        setVisible(hasSelection);
+        if (!hasSelection) {
             statusSelect.clear(); // don't carry a stale status into the next selection
         }
         countLabel.setText(t.apply("bulk.selected", new Object[] {selected.size()}));
@@ -91,9 +91,9 @@ class PositionBulkBar extends HorizontalLayout {
         if (status == null || selected.isEmpty()) {
             return;
         }
-        int n = orderService.setPositionInternalStatusBulk(new HashSet<>(selected), status);
+        int updatedCount = orderService.setPositionInternalStatusBulk(new HashSet<>(selected), status);
         Notification.show(
-                        t.apply("bulk.done", new Object[] {n}),
+                        t.apply("bulk.done", new Object[] {updatedCount}),
                         2500,
                         Notification.Position.BOTTOM_END)
                 .addThemeVariants(NotificationVariant.LUMO_SUCCESS);

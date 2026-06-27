@@ -2,6 +2,7 @@ package com.ordermgmt.railway.ui.component.business;
 
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashSet;
+import java.util.Locale;
 import java.util.Set;
 import java.util.function.Function;
 
@@ -31,6 +32,8 @@ import com.ordermgmt.railway.infrastructure.keycloak.KeycloakUserService;
  */
 public class BusinessCard extends Div {
 
+    private static final String EMPTY_VALUE = "—";
+    private static final String STATUS_TRANSLATION_PREFIX = "business.status.";
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("dd.MM.yy");
 
     public BusinessCard(
@@ -40,30 +43,21 @@ public class BusinessCard extends Div {
             KeycloakUserService keycloakUserService,
             Runnable onChange) {
         addClassName("biz-card-tile");
-        addClassName("biz-card-tile--" + business.status().name().toLowerCase());
+        addClassName("biz-card-tile--" + cssName(business.status().name()));
 
-        getElement()
-                .setAttribute(
-                        "aria-label",
-                        tr.apply("business.title")
-                                + ": "
-                                + safe(business.title())
-                                + ", "
-                                + tr.apply("business.status.aria")
-                                + " "
-                                + tr.apply("business.status." + business.status().name()));
+        getElement().setAttribute("aria-label", buildAriaLabel(business, tr));
 
-        Div gutter = new Div();
+        var gutter = new Div();
         gutter.addClassName("biz-card-tile__gutter");
         gutter.getElement().setAttribute("aria-hidden", "true");
         add(gutter);
 
-        Div body = new Div();
+        var body = new Div();
         body.addClassName("biz-card-tile__body");
 
         body.add(buildStatusControl(business, tr, businessService, onChange));
 
-        Span title = new Span(safe(business.title()).isEmpty() ? "—" : safe(business.title()));
+        var title = new Span(displayText(business.title()));
         title.addClassName("biz-card-tile__title");
         body.add(title);
 
@@ -86,35 +80,31 @@ public class BusinessCard extends Div {
         if (!CurrentUserHelper.hasAnyRole("ADMIN", "DISPATCHER")) {
             return buildStaticStatusPill(business.status(), tr);
         }
-        // Terminal status (no transitions allowed) → static pill, not editable.
         Set<BusinessStatus> next = business.status().nextTargets();
         if (next.isEmpty()) {
             return buildStaticStatusPill(business.status(), tr);
         }
 
-        // Otherwise: a Select that includes current + valid transitions, styled like the pill.
         Set<BusinessStatus> options = new LinkedHashSet<>();
         options.add(business.status());
         options.addAll(next);
 
         Select<BusinessStatus> select = new Select<>();
         select.addClassName("biz-card-tile__status-select");
-        select.addClassName("biz-status-pill-icon--" + business.status().name().toLowerCase());
+        select.addClassName("biz-status-pill-icon--" + cssName(business.status().name()));
         select.setItems(options);
         select.setValue(business.status());
-        select.setItemLabelGenerator(s -> tr.apply("business.status." + s.name()));
+        select.setItemLabelGenerator(status -> tr.apply(statusKey(status)));
         select.getElement().setAttribute("aria-label", tr.apply("business.status"));
-        // Stop card click → detail when interacting with the select.
-        select.getElement()
-                .addEventListener("click", e -> {})
-                .addEventData("event.stopPropagation()");
-        select.getElement()
-                .addEventListener("mousedown", e -> {})
-                .addEventData("event.stopPropagation()");
+        stopCardSelectionOnMouse(select);
         select.addValueChangeListener(
                 e -> {
-                    if (e.getValue() == null || !e.isFromClient()) return;
-                    if (e.getValue() == e.getOldValue()) return;
+                    if (e.getValue() == null || !e.isFromClient()) {
+                        return;
+                    }
+                    if (e.getValue() == e.getOldValue()) {
+                        return;
+                    }
                     try {
                         businessService.setStatus(business.id(), e.getValue());
                         onChange.run();
@@ -130,7 +120,7 @@ public class BusinessCard extends Div {
         var pill = new HorizontalLayout();
         pill.addClassName("biz-status-pill-icon");
         pill.addClassName("biz-card-tile__status-pill");
-        pill.addClassName("biz-status-pill-icon--" + status.name().toLowerCase());
+        pill.addClassName("biz-status-pill-icon--" + cssName(status.name()));
         pill.setPadding(false);
         pill.setSpacing(false);
 
@@ -147,7 +137,7 @@ public class BusinessCard extends Div {
         icon.getElement().setAttribute("aria-hidden", "true");
         pill.add(icon);
 
-        Span label = new Span(tr.apply("business.status." + status.name()));
+        var label = new Span(tr.apply(statusKey(status)));
         label.addClassName("biz-status-pill-icon__label");
         pill.add(label);
         return pill;
@@ -175,22 +165,17 @@ public class BusinessCard extends Div {
         picker.addClassName("biz-card-tile__assignee-select");
         picker.preset(
                 AssignmentType.fromString(business.assignmentType()), business.assignmentName());
-        picker.setPlaceholder("— " + tr.apply("business.unassigned"));
+        picker.setPlaceholder(EMPTY_VALUE + " " + tr.apply("business.unassigned"));
         picker.getElement().setAttribute("aria-label", tr.apply("business.assignment"));
-        picker.getElement()
-                .addEventListener("click", e -> {})
-                .addEventData("event.stopPropagation()");
-        picker.getElement()
-                .addEventListener("mousedown", e -> {})
-                .addEventData("event.stopPropagation()");
+        stopCardSelectionOnMouse(picker);
         return picker;
     }
 
     private Div buildMetaRow(BusinessListItem business, Function<String, String> tr) {
-        Div meta = new Div();
+        var meta = new Div();
         meta.addClassName("biz-card-tile__meta");
 
-        Span counts =
+        var counts =
                 new Span(
                         business.linkedOrderPositionCount()
                                 + " "
@@ -202,12 +187,9 @@ public class BusinessCard extends Div {
         counts.addClassName("biz-card-tile__counts");
         meta.add(counts);
 
-        Span sep = new Span(" · ");
-        sep.addClassName("biz-card-tile__sep");
-        sep.getElement().setAttribute("aria-hidden", "true");
-        meta.add(sep);
+        meta.add(buildSeparator());
 
-        Span due = new Span();
+        var due = new Span();
         due.addClassName("biz-card-tile__due");
         if (business.validTo() != null) {
             due.setText(tr.apply("business.validTo") + " " + business.validTo().format(DATE_FMT));
@@ -220,7 +202,46 @@ public class BusinessCard extends Div {
         return meta;
     }
 
-    private static String safe(String s) {
-        return s == null ? "" : s;
+    private static Span buildSeparator() {
+        var separator = new Span(" · ");
+        separator.addClassName("biz-card-tile__sep");
+        separator.getElement().setAttribute("aria-hidden", "true");
+        return separator;
+    }
+
+    private static void stopCardSelectionOnMouse(Component component) {
+        component.getElement()
+                .addEventListener("click", e -> {})
+                .addEventData("event.stopPropagation()");
+        component.getElement()
+                .addEventListener("mousedown", e -> {})
+                .addEventData("event.stopPropagation()");
+    }
+
+    private static String buildAriaLabel(BusinessListItem business, Function<String, String> tr) {
+        return tr.apply("business.title")
+                + ": "
+                + safe(business.title())
+                + ", "
+                + tr.apply("business.status.aria")
+                + " "
+                + tr.apply(statusKey(business.status()));
+    }
+
+    private static String statusKey(BusinessStatus status) {
+        return STATUS_TRANSLATION_PREFIX + status.name();
+    }
+
+    private static String displayText(String value) {
+        String safeValue = safe(value);
+        return safeValue.isEmpty() ? EMPTY_VALUE : safeValue;
+    }
+
+    private static String safe(String value) {
+        return value == null ? "" : value;
+    }
+
+    private static String cssName(String value) {
+        return value.toLowerCase(Locale.ROOT);
     }
 }

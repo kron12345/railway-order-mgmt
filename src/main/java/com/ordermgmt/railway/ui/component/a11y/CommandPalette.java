@@ -1,8 +1,11 @@
 package com.ordermgmt.railway.ui.component.a11y;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
+import java.util.UUID;
 
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
@@ -32,6 +35,10 @@ public class CommandPalette extends Dialog {
 
     public record Item(String type, String label, String detail, String route, String searchKey) {}
 
+    private static final int VALUE_CHANGE_TIMEOUT_MS = 120;
+    private static final int DEFAULT_RESULT_LIMIT = 30;
+    private static final int FILTERED_RESULT_LIMIT = 60;
+
     private final TextField input = new TextField();
     private final VerticalLayout results = new VerticalLayout();
     private final List<Item> all = new ArrayList<>();
@@ -55,15 +62,11 @@ public class CommandPalette extends Dialog {
         input.addThemeVariants(TextFieldVariant.LUMO_SMALL);
         input.setWidthFull();
         input.setValueChangeMode(ValueChangeMode.LAZY);
-        input.setValueChangeTimeout(120);
+        input.setValueChangeTimeout(VALUE_CHANGE_TIMEOUT_MS);
         input.getElement().setAttribute("aria-label", "Command Palette Suche");
         input.getElement().setAttribute("autocomplete", "off");
         input.addValueChangeListener(
-                e ->
-                        applyFilter(
-                                e.getValue() == null
-                                        ? ""
-                                        : e.getValue().trim().toLowerCase(Locale.ROOT)));
+                e -> applyFilter(normalizeSearch(e.getValue())));
 
         results.addClassName("cmd-palette__results");
         results.setSpacing(false);
@@ -103,62 +106,62 @@ public class CommandPalette extends Dialog {
         all.clear();
         // Orders + their positions, from a flat projection (one row per order/position; no entity
         // collections are initialized). An order may appear on several rows -> add it once.
-        java.util.Set<java.util.UUID> seenOrders = new java.util.HashSet<>();
+        Set<UUID> seenOrderIds = new HashSet<>();
         for (var row : orderService.commandPaletteRows()) {
-            String orderNumber = row.orderNumber() == null ? "" : row.orderNumber();
-            if (seenOrders.add(row.orderId())) {
+            String orderNumber = textOrBlank(row.orderNumber());
+            if (seenOrderIds.add(row.orderId())) {
                 String label =
                         (orderNumber.isEmpty() ? "—" : orderNumber)
                                 + " "
-                                + (row.orderName() == null ? "" : row.orderName());
+                                + textOrBlank(row.orderName());
                 all.add(
                         new Item(
                                 "Auftrag",
                                 label,
-                                row.customerName() == null ? "" : row.customerName(),
+                                textOrBlank(row.customerName()),
                                 "orders/" + row.orderId(),
-                                label.toLowerCase(Locale.ROOT)));
+                                normalizeSearch(label)));
             }
             if (row.positionId() != null) {
-                String pLabel = row.positionName() == null ? "—" : row.positionName();
+                String positionLabel = row.positionName() == null ? "—" : row.positionName();
                 all.add(
                         new Item(
                                 "Position",
-                                pLabel,
+                                positionLabel,
                                 orderNumber,
                                 "orders/" + row.orderId() + "/positions/" + row.positionId(),
-                                (pLabel + " " + orderNumber).toLowerCase(Locale.ROOT)));
+                                normalizeSearch(positionLabel + " " + orderNumber)));
             }
         }
         businessService
                 .listAll()
                 .forEach(
-                        b -> {
-                            String label = b.getTitle() == null ? "—" : b.getTitle();
+                        business -> {
+                            String label =
+                                    business.getTitle() == null ? "—" : business.getTitle();
+                            String description = textOrBlank(business.getDescription());
                             all.add(
                                     new Item(
                                             "Geschäft",
                                             label,
-                                            b.getDescription() == null ? "" : b.getDescription(),
-                                            "businesses/" + b.getId(),
-                                            (label
-                                                            + " "
-                                                            + (b.getDescription() == null
-                                                                    ? ""
-                                                                    : b.getDescription()))
-                                                    .toLowerCase(Locale.ROOT)));
+                                            description,
+                                            "businesses/" + business.getId(),
+                                            normalizeSearch(label + " " + description)));
                         });
     }
 
-    private void applyFilter(String q) {
+    private void applyFilter(String query) {
         filtered.clear();
-        if (q.isBlank()) {
-            // Show top 30 by default.
-            filtered.addAll(all.subList(0, Math.min(30, all.size())));
+        if (query.isBlank()) {
+            filtered.addAll(all.subList(0, Math.min(DEFAULT_RESULT_LIMIT, all.size())));
         } else {
-            for (Item it : all) {
-                if (it.searchKey().contains(q)) filtered.add(it);
-                if (filtered.size() >= 60) break;
+            for (Item item : all) {
+                if (item.searchKey().contains(query)) {
+                    filtered.add(item);
+                }
+                if (filtered.size() >= FILTERED_RESULT_LIMIT) {
+                    break;
+                }
             }
         }
         activeIndex = filtered.isEmpty() ? -1 : 0;
@@ -172,30 +175,32 @@ public class CommandPalette extends Dialog {
         }
     }
 
-    private Component buildRow(Item it, int index) {
+    private Component buildRow(Item item, int index) {
         var row = new HorizontalLayout();
         row.addClassName("cmd-palette__row");
-        if (index == activeIndex) row.addClassName("cmd-palette__row--active");
+        if (index == activeIndex) {
+            row.addClassName("cmd-palette__row--active");
+        }
         row.setWidthFull();
         row.setSpacing(true);
         row.setPadding(false);
         row.getElement().setAttribute("role", "option");
         row.getElement().setAttribute("aria-selected", index == activeIndex ? "true" : "false");
 
-        Span tag = new Span(it.type().toUpperCase());
+        Span tag = new Span(item.type().toUpperCase());
         tag.addClassName("cmd-palette__tag");
-        tag.addClassName("cmd-palette__tag--" + it.type().toLowerCase());
+        tag.addClassName("cmd-palette__tag--" + item.type().toLowerCase());
 
-        Span lbl = new Span(it.label());
-        lbl.addClassName("cmd-palette__label");
+        Span label = new Span(item.label());
+        label.addClassName("cmd-palette__label");
 
-        Span detail = new Span(it.detail() == null ? "" : it.detail());
+        Span detail = new Span(textOrBlank(item.detail()));
         detail.addClassName("cmd-palette__detail");
 
         Div spacer = new Div();
         spacer.getStyle().set("flex", "1");
 
-        row.add(tag, lbl, spacer, detail);
+        row.add(tag, label, spacer, detail);
         row.addClickListener(
                 e -> {
                     activeIndex = index;
@@ -209,16 +214,31 @@ public class CommandPalette extends Dialog {
             activeIndex = -1;
             return;
         }
-        if (newIndex < 0) newIndex = 0;
-        if (newIndex >= filtered.size()) newIndex = filtered.size() - 1;
-        activeIndex = newIndex;
+        activeIndex = clampResultIndex(newIndex);
         renderResults();
     }
 
     private void activate() {
-        if (activeIndex < 0 || activeIndex >= filtered.size()) return;
-        Item it = filtered.get(activeIndex);
+        if (activeIndex < 0 || activeIndex >= filtered.size()) {
+            return;
+        }
+        Item item = filtered.get(activeIndex);
         close();
-        UI.getCurrent().navigate(it.route());
+        UI.getCurrent().navigate(item.route());
+    }
+
+    private String normalizeSearch(String value) {
+        return textOrBlank(value).trim().toLowerCase(Locale.ROOT);
+    }
+
+    private int clampResultIndex(int index) {
+        if (index < 0) {
+            return 0;
+        }
+        return Math.min(index, filtered.size() - 1);
+    }
+
+    private String textOrBlank(String value) {
+        return value != null ? value : "";
     }
 }

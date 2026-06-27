@@ -161,22 +161,10 @@ public class OrderFormPanel extends Div {
 
     public boolean validate() {
         boolean valid = true;
-        if (orderNumber.getValue().isBlank()) {
-            orderNumber.setInvalid(true);
-            valid = false;
-        }
-        if (name.getValue().isBlank()) {
-            name.setInvalid(true);
-            valid = false;
-        }
-        if (validFrom.getValue() == null) {
-            validFrom.setInvalid(true);
-            valid = false;
-        }
-        if (validTo.getValue() == null) {
-            validTo.setInvalid(true);
-            valid = false;
-        }
+        valid &= validateRequired(orderNumber);
+        valid &= validateRequired(name);
+        valid &= validateRequired(validFrom);
+        valid &= validateRequired(validTo);
         if (validFrom.getValue() != null
                 && validTo.getValue() != null
                 && validTo.getValue().isBefore(validFrom.getValue())) {
@@ -192,12 +180,24 @@ public class OrderFormPanel extends Div {
         return valid;
     }
 
-    private String t(String key) {
-        return translator.apply(key, new Object[0]);
+    private boolean validateRequired(TextField field) {
+        if (field.getValue().isBlank()) {
+            field.setInvalid(true);
+            return false;
+        }
+        return true;
     }
 
-    private String t(String key, Object... params) {
-        return translator.apply(key, params);
+    private boolean validateRequired(DatePicker field) {
+        if (field.getValue() == null) {
+            field.setInvalid(true);
+            return false;
+        }
+        return true;
+    }
+
+    private String t(String key) {
+        return translator.apply(key, new Object[0]);
     }
 
     private List<PredefinedTag> loadAvailableTags(PredefinedTagRepository predefinedTagRepository) {

@@ -13,45 +13,45 @@ import com.vaadin.flow.component.checkbox.Checkbox;
 public class ToggleFilterField<T> implements FilterField<T> {
 
     private final String label;
-    private final Checkbox box;
+    private final Checkbox checkbox;
     private final Predicate<T> activePredicate;
 
     public ToggleFilterField(String label, Predicate<T> activePredicate) {
         this.label = label;
         this.activePredicate = activePredicate;
-        this.box = new Checkbox(label);
-        box.addClassName("md-filter-field");
+        this.checkbox = new Checkbox(label);
+        checkbox.addClassName("md-filter-field");
     }
 
     @Override
     public Component control() {
-        return box;
+        return checkbox;
     }
 
     /** Whether the toggle is on — read by lazy views to build a server query. */
     public boolean isToggled() {
-        return Boolean.TRUE.equals(box.getValue());
+        return Boolean.TRUE.equals(checkbox.getValue());
     }
 
     @Override
     public Predicate<T> predicate() {
-        return Boolean.TRUE.equals(box.getValue()) ? activePredicate : t -> true;
+        return Boolean.TRUE.equals(checkbox.getValue()) ? activePredicate : item -> true;
     }
 
     @Override
     public List<FilterChip> chips() {
-        return Boolean.TRUE.equals(box.getValue())
-                ? List.of(new FilterChip(label, () -> box.setValue(false)))
+        return Boolean.TRUE.equals(checkbox.getValue())
+                ? List.of(new FilterChip(label, () -> checkbox.setValue(false)))
                 : List.of();
     }
 
     @Override
     public void reset() {
-        box.setValue(false);
+        checkbox.setValue(false);
     }
 
     @Override
     public void onChange(Runnable listener) {
-        box.addValueChangeListener(e -> listener.run());
+        checkbox.addValueChangeListener(e -> listener.run());
     }
 }

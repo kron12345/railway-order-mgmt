@@ -69,10 +69,10 @@ class LazyListController<T> {
         }
         loading = true;
         try {
-            SliceResult<T> result = loader.apply(filterText, loaded.size());
-            if (result != null) {
-                loaded.addAll(result.items());
-                hasMore = result.hasNext();
+            SliceResult<T> nextPage = loader.apply(filterText, loaded.size());
+            if (nextPage != null) {
+                loaded.addAll(nextPage.items());
+                hasMore = nextPage.hasNext();
             } else {
                 hasMore = false;
             }

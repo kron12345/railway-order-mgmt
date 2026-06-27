@@ -63,6 +63,50 @@ public class ResourceDialog extends Dialog {
     }
 
     private void buildForm() {
+        ResourceFormFields fields = createFormFields();
+        RouteFields routeFields = createRouteFields();
+        boolean timetablePosition = position.getType() == PositionType.FAHRPLAN;
+        CalendarBounds calendarBounds = resolveCalendarBounds();
+        ValidityCalendar calendar = createCalendar(calendarBounds);
+
+        Div form =
+                new Div(
+                        fields.type(),
+                        fields.coverage(),
+                        fields.catalog(),
+                        fields.quantity(),
+                        fields.description());
+        if (timetablePosition) {
+            form.add(routeFields.from(), routeFields.to());
+        }
+        form.add(createCalendarWrapper(calendar));
+        form.getStyle()
+                .set("display", "flex")
+                .set("flex-direction", "column")
+                .set("gap", "var(--lumo-space-s)");
+        add(form);
+
+        Button cancel = new Button(tr("common.cancel"));
+        cancel.addClickListener(event -> close());
+
+        Button save = new Button(tr("common.save"));
+        save.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
+        save.getStyle()
+                .set("background", "var(--rom-accent)")
+                .set("color", "var(--rom-bg-primary)");
+        save.addClickListener(
+                event ->
+                        saveResource(
+                                fields,
+                                routeFields,
+                                calendar,
+                                calendarBounds.operatingDays(),
+                                timetablePosition));
+
+        getFooter().add(cancel, save);
+    }
+
+    private ResourceFormFields createFormFields() {
         Select<ResourceType> typeSelect = new Select<>();
         typeSelect.setLabel(tr("resource.type"));
         typeSelect.setItems(ResourceType.values());
@@ -95,9 +139,11 @@ public class ResourceDialog extends Dialog {
         TextField description = new TextField(tr("resource.description"));
         description.setWidthFull();
 
-        boolean isFahrplan = position.getType() == PositionType.FAHRPLAN;
+        return new ResourceFormFields(
+                typeSelect, coverageSelect, catalogCombo, quantity, description);
+    }
 
-        // von/nach — only meaningful for a FAHRPLAN position (lazy OP search, no 19k load).
+    private RouteFields createRouteFields() {
         OperationalPointComboBox fromOp = new OperationalPointComboBox(opRepo);
         fromOp.setLabel(tr("position.from"));
         fromOp.setClearButtonVisible(true);
@@ -106,12 +152,10 @@ public class ResourceDialog extends Dialog {
         toOp.setLabel(tr("position.to"));
         toOp.setClearButtonVisible(true);
         toOp.setWidthFull();
+        return new RouteFields(fromOp, toOp);
+    }
 
-        // A Bedarf's Verkehrstage must stay within the position's operating days (Bedarf ⊆
-        // expression).
-        // When the position is scheduled, the calendar is bounded AND restricted to those exact
-        // days
-        // and defaults to all of them; an unscheduled position falls back to its plain date range.
+    private CalendarBounds resolveCalendarBounds() {
         List<LocalDate> operatingDays =
                 OperatingDays.of(position).stream().sorted().distinct().toList();
         LocalDate min;
@@ -126,94 +170,79 @@ public class ResourceDialog extends Dialog {
         if (max.isBefore(min)) {
             max = min;
         }
-        ValidityCalendar calendar = new ValidityCalendar(min, max);
+        return new CalendarBounds(min, max, operatingDays);
+    }
+
+    private ValidityCalendar createCalendar(CalendarBounds bounds) {
+        ValidityCalendar calendar = new ValidityCalendar(bounds.min(), bounds.max());
         calendar.setCompact(true);
-        if (!operatingDays.isEmpty()) {
-            calendar.setAllowedDates(operatingDays);
-            calendar.setSelectedDates(
-                    operatingDays); // default: the Bedarf covers all expression days
+        if (!bounds.operatingDays().isEmpty()) {
+            calendar.setAllowedDates(bounds.operatingDays());
+            calendar.setSelectedDates(bounds.operatingDays());
         }
+        return calendar;
+    }
+
+    private Div createCalendarWrapper(ValidityCalendar calendar) {
         Span calLabel = new Span(tr("resource.verkehrstage"));
         calLabel.getStyle().set("font-size", "13px").set("color", "var(--rom-text-secondary)");
         Div calWrap = new Div(calLabel, calendar);
         calWrap.getStyle().set("display", "flex").set("flex-direction", "column").set("gap", "4px");
+        return calWrap;
+    }
 
-        Div form = new Div(typeSelect, coverageSelect, catalogCombo, quantity, description);
-        if (isFahrplan) {
-            form.add(fromOp, toOp);
+    private void saveResource(
+            ResourceFormFields fields,
+            RouteFields routeFields,
+            ValidityCalendar calendar,
+            List<LocalDate> operatingDays,
+            boolean timetablePosition) {
+        ResourceType type = fields.type().getValue();
+        CoverageType coverage = fields.coverage().getValue();
+        if (type == null || coverage == null) {
+            return;
         }
-        form.add(calWrap);
-        form.getStyle()
-                .set("display", "flex")
-                .set("flex-direction", "column")
-                .set("gap", "var(--lumo-space-s)");
-        add(form);
 
-        Button cancel = new Button(tr("common.cancel"));
-        cancel.addClickListener(e -> close());
+        try {
+            List<LocalDate> selectedDays = calendar.getSelectedDates();
+            if (!operatingDays.isEmpty() && selectedDays.isEmpty()) {
+                Notification.show(tr("verkehrstage.empty"), 3000, Notification.Position.MIDDLE)
+                        .addThemeVariants(NotificationVariant.LUMO_ERROR);
+                return;
+            }
 
-        Button save = new Button(tr("common.save"));
-        save.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
-        save.getStyle()
-                .set("background", "var(--rom-accent)")
-                .set("color", "var(--rom-bg-primary)");
-        save.addClickListener(
-                e -> {
-                    ResourceType type = typeSelect.getValue();
-                    CoverageType coverage = coverageSelect.getValue();
-                    if (type == null || coverage == null) {
-                        return;
-                    }
-                    int qty = quantity.getValue() != null ? quantity.getValue() : 1;
-                    ResourceCatalogItem catalogItem = catalogCombo.getValue();
+            String validity =
+                    selectedDays.isEmpty() ? null : ValidityJsonCodec.toJson(selectedDays);
+            String fromLocation = selectedRouteName(timetablePosition, routeFields.from());
+            String toLocation = selectedRouteName(timetablePosition, routeFields.to());
+            ResourceCatalogItem catalogItem = fields.catalog().getValue();
+            int quantity = fields.quantity().getValue() != null ? fields.quantity().getValue() : 1;
 
-                    try {
-                        List<LocalDate> days = calendar.getSelectedDates();
-                        if (!operatingDays.isEmpty() && days.isEmpty()) {
-                            // The position is scheduled, so the calendar was pre-filled with all
-                            // its
-                            // days; an empty selection is a mistake (an unscheduled position still
-                            // allows empty = all). Mirror the Verkehrstage editor's guard.
-                            Notification.show(
-                                            tr("verkehrstage.empty"),
-                                            3000,
-                                            Notification.Position.MIDDLE)
-                                    .addThemeVariants(NotificationVariant.LUMO_ERROR);
-                            return;
-                        }
-                        String validity = days.isEmpty() ? null : ValidityJsonCodec.toJson(days);
-                        String fromLoc =
-                                isFahrplan && fromOp.getValue() != null
-                                        ? fromOp.getValue().getName()
-                                        : null;
-                        String toLoc =
-                                isFahrplan && toOp.getValue() != null
-                                        ? toOp.getValue().getName()
-                                        : null;
-                        var saved =
-                                resourceNeedService.addResource(
-                                        position.getId(),
-                                        type,
-                                        catalogItem != null ? catalogItem.getId() : null,
-                                        qty,
-                                        coverage,
-                                        description.getValue());
-                        if (validity != null || fromLoc != null || toLoc != null) {
-                            resourceNeedService.updateVerkehrstageAndRoute(
-                                    saved.getId(), validity, fromLoc, toLoc);
-                        }
+            var saved =
+                    resourceNeedService.addResource(
+                            position.getId(),
+                            type,
+                            catalogItem != null ? catalogItem.getId() : null,
+                            quantity,
+                            coverage,
+                            fields.description().getValue());
+            if (validity != null || fromLocation != null || toLocation != null) {
+                resourceNeedService.updateVerkehrstageAndRoute(
+                        saved.getId(), validity, fromLocation, toLocation);
+            }
 
-                        Notification.show("OK", 2000, Notification.Position.BOTTOM_END)
-                                .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
-                        close();
-                        fireEvent(new SaveEvent(this));
-                    } catch (Exception ex) {
-                        Notification.show(ex.getMessage(), 4000, Notification.Position.BOTTOM_END)
-                                .addThemeVariants(NotificationVariant.LUMO_ERROR);
-                    }
-                });
+            Notification.show("OK", 2000, Notification.Position.BOTTOM_END)
+                    .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+            close();
+            fireEvent(new SaveEvent(this));
+        } catch (Exception ex) {
+            Notification.show(ex.getMessage(), 4000, Notification.Position.BOTTOM_END)
+                    .addThemeVariants(NotificationVariant.LUMO_ERROR);
+        }
+    }
 
-        getFooter().add(cancel, save);
+    private String selectedRouteName(boolean timetablePosition, OperationalPointComboBox field) {
+        return timetablePosition && field.getValue() != null ? field.getValue().getName() : null;
     }
 
     private void updateCatalogItems(ResourceType type, ComboBox<ResourceCatalogItem> combo) {
@@ -250,4 +279,15 @@ public class ResourceDialog extends Dialog {
     private String tr(String key) {
         return translator.apply(key, new Object[0]);
     }
+
+    private record ResourceFormFields(
+            Select<ResourceType> type,
+            Select<CoverageType> coverage,
+            ComboBox<ResourceCatalogItem> catalog,
+            IntegerField quantity,
+            TextField description) {}
+
+    private record RouteFields(OperationalPointComboBox from, OperationalPointComboBox to) {}
+
+    private record CalendarBounds(LocalDate min, LocalDate max, List<LocalDate> operatingDays) {}
 }

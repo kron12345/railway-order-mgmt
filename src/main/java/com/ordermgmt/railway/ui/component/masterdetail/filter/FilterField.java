@@ -16,7 +16,7 @@ public interface FilterField<T> {
     Component control();
 
     /**
-     * Current contribution to the combined filter; {@code t -> true} when this field is inactive.
+     * Current contribution to the combined filter; always true when this field is inactive.
      */
     Predicate<T> predicate();
 

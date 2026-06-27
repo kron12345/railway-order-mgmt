@@ -11,34 +11,20 @@ import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.order.model.PurchasePosition;
 import com.ordermgmt.railway.domain.order.model.PurchaseStatus;
 
-/**
- * Full purchase calendar panel: summary stats + compact calendar grid + detail table. Shown inline
- * below an order position when toggled.
- */
 public class PurchaseCalendarPanel extends Div {
 
-    /**
-     * Timetable year change date: the date when FPJ 2027 begins (mid-December timetable switch).
-     * Used for the TTR bar display and calendar range defaults.
-     */
     private static final String TIMETABLE_YEAR_CHANGE_DATE = "12.12.2026";
-
-    /** Next timetable year label displayed in the TTR bar. */
     private static final String NEXT_TIMETABLE_YEAR = "2027";
-
-    /** Default calendar preview range start (first month of the upcoming timetable period). */
     private static final LocalDate CALENDAR_PREVIEW_START = LocalDate.of(2026, 12, 1);
-
-    /** Default calendar preview range end. */
     private static final LocalDate CALENDAR_PREVIEW_END = LocalDate.of(2027, 3, 31);
 
-    private final BiFunction<String, Object[], String> t;
+    private final BiFunction<String, Object[], String> translator;
 
     public PurchaseCalendarPanel(
             OrderPosition position,
             List<PurchasePosition> purchases,
             BiFunction<String, Object[], String> translator) {
-        this.t = translator;
+        this.translator = translator;
         setWidthFull();
         getStyle()
                 .set("background", "var(--rom-bg-primary)")
@@ -55,7 +41,7 @@ public class PurchaseCalendarPanel extends Div {
         add(createDetailTable(purchases));
     }
 
-    private Div createHeader(OrderPosition pos, List<PurchasePosition> purchases) {
+    private Div createHeader(OrderPosition position, List<PurchasePosition> purchases) {
         Div header = new Div();
         header.getStyle()
                 .set("display", "flex")
@@ -65,51 +51,52 @@ public class PurchaseCalendarPanel extends Div {
                 .set("gap", "8px")
                 .set("margin-bottom", "12px");
 
-        Span title = new Span(tr("purchase.calendar") + " — " + pos.getName());
+        Span title = new Span(tr("purchase.calendar") + " — " + position.getName());
         title.getStyle()
                 .set("font-weight", "600")
                 .set("font-size", "13px")
                 .set("color", "var(--rom-text-primary)");
 
+        header.add(title, createStats(purchases));
+        return header;
+    }
+
+    private Div createStats(List<PurchasePosition> purchases) {
         Div stats = new Div();
         stats.getStyle().set("display", "flex").set("gap", "12px").set("flex-wrap", "wrap");
 
-        long confirmed =
-                purchases.stream()
-                        .filter(p -> p.getPurchaseStatus() == PurchaseStatus.BESTAETIGT)
-                        .count();
-        long ordered =
-                purchases.stream()
-                        .filter(p -> p.getPurchaseStatus() == PurchaseStatus.BESTELLT)
-                        .count();
-        long open =
-                purchases.stream()
-                        .filter(p -> p.getPurchaseStatus() == PurchaseStatus.OFFEN)
-                        .count();
-        long rejected =
-                purchases.stream()
-                        .filter(p -> p.getPurchaseStatus() == PurchaseStatus.ABGELEHNT)
-                        .count();
-
         stats.add(
                 statBadge(
-                        confirmed,
+                        countStatus(purchases, PurchaseStatus.BESTAETIGT),
                         tr("purchase.calendar.legend.confirmed"),
                         "var(--rom-status-active)"));
         stats.add(
                 statBadge(
-                        ordered, tr("purchase.calendar.legend.ordered"), "var(--rom-status-info)"));
-        stats.add(statBadge(open, tr("purchase.calendar.legend.open"), "var(--rom-text-muted)"));
-        if (rejected > 0) {
+                        countStatus(purchases, PurchaseStatus.BESTELLT),
+                        tr("purchase.calendar.legend.ordered"),
+                        "var(--rom-status-info)"));
+        stats.add(
+                statBadge(
+                        countStatus(purchases, PurchaseStatus.OFFEN),
+                        tr("purchase.calendar.legend.open"),
+                        "var(--rom-text-muted)"));
+
+        long rejectedCount = countStatus(purchases, PurchaseStatus.ABGELEHNT);
+        if (rejectedCount > 0) {
             stats.add(
                     statBadge(
-                            rejected,
+                            rejectedCount,
                             tr("purchase.calendar.legend.rejected"),
                             "var(--rom-status-danger)"));
         }
 
-        header.add(title, stats);
-        return header;
+        return stats;
+    }
+
+    private long countStatus(List<PurchasePosition> purchases, PurchaseStatus status) {
+        return purchases.stream()
+                .filter(purchase -> purchase.getPurchaseStatus() == status)
+                .count();
     }
 
     private Div createTtrBar() {
@@ -136,12 +123,11 @@ public class PurchaseCalendarPanel extends Div {
     }
 
     private Div createCalendar(List<PurchasePosition> purchases) {
-        LocalDate from = CALENDAR_PREVIEW_START;
-        LocalDate to = CALENDAR_PREVIEW_END;
-        Div wrap = new Div();
-        wrap.getStyle().set("margin-bottom", "12px");
-        wrap.add(new PurchaseCalendarGrid(purchases, from, to));
-        return wrap;
+        Div wrapper = new Div();
+        wrapper.getStyle().set("margin-bottom", "12px");
+        wrapper.add(
+                new PurchaseCalendarGrid(purchases, CALENDAR_PREVIEW_START, CALENDAR_PREVIEW_END));
+        return wrapper;
     }
 
     private Div createLegend() {
@@ -199,7 +185,7 @@ public class PurchaseCalendarPanel extends Div {
             return section;
         }
 
-        section.add(new PurchaseDetailTable(purchases, t));
+        section.add(new PurchaseDetailTable(purchases, translator));
         return section;
     }
 
@@ -212,19 +198,20 @@ public class PurchaseCalendarPanel extends Div {
                 .set("height", "8px")
                 .set("border-radius", "2px")
                 .set("background", color);
-        Span num = new Span(String.valueOf(count));
-        num.getStyle()
+        Span countText = new Span(String.valueOf(count));
+        countText
+                .getStyle()
                 .set("font-family", "'JetBrains Mono', monospace")
                 .set("font-size", "13px")
                 .set("font-weight", "700")
                 .set("color", "var(--rom-text-primary)");
-        Span lbl = new Span(label);
-        lbl.getStyle().set("font-size", "10px").set("color", "var(--rom-text-muted)");
-        badge.add(dot, num, lbl);
+        Span labelText = new Span(label);
+        labelText.getStyle().set("font-size", "10px").set("color", "var(--rom-text-muted)");
+        badge.add(dot, countText, labelText);
         return badge;
     }
 
-    private Span ttrBadge(String text, String color, String bg) {
+    private Span ttrBadge(String text, String color, String background) {
         Span badge = new Span(text);
         badge.getStyle()
                 .set("font-family", "'JetBrains Mono', monospace")
@@ -233,12 +220,12 @@ public class PurchaseCalendarPanel extends Div {
                 .set("padding", "2px 8px")
                 .set("border-radius", "3px")
                 .set("color", color)
-                .set("background", bg)
+                .set("background", background)
                 .set("border", "1px solid " + color);
         return badge;
     }
 
-    private Div legendItem(String label, String bg, String color) {
+    private Div legendItem(String label, String background, String color) {
         Div item = new Div();
         item.getStyle().set("display", "flex").set("align-items", "center").set("gap", "4px");
         Div box = new Div();
@@ -246,17 +233,17 @@ public class PurchaseCalendarPanel extends Div {
                 .set("width", "12px")
                 .set("height", "12px")
                 .set("border-radius", "2px")
-                .set("background", bg)
+                .set("background", background)
                 .set("border", "1px solid " + color);
         item.add(box, new Span(label));
         return item;
     }
 
     private String tr(String key) {
-        return t.apply(key, new Object[0]);
+        return translator.apply(key, new Object[0]);
     }
 
     private String tr(String key, String param) {
-        return t.apply(key, new Object[] {param});
+        return translator.apply(key, new Object[] {param});
     }
 }

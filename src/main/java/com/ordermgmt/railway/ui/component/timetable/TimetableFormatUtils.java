@@ -5,6 +5,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.html.Div;
@@ -25,6 +26,7 @@ import com.ordermgmt.railway.domain.timetable.model.TimetableRowData;
  */
 public final class TimetableFormatUtils {
 
+    public static final String DASH = "—";
     public static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
 
     private TimetableFormatUtils() {}
@@ -33,7 +35,7 @@ public final class TimetableFormatUtils {
 
     public static String roleLabel(RoutePointRole role, Component ctx) {
         if (role == null) {
-            return "—";
+            return DASH;
         }
         return switch (role) {
             case ORIGIN -> ctx.getTranslation("timetable.role.origin");
@@ -45,7 +47,7 @@ public final class TimetableFormatUtils {
 
     public static String timeModeLabel(TimeConstraintMode mode, Component ctx) {
         if (mode == null) {
-            return "—";
+            return DASH;
         }
         return switch (mode) {
             case NONE -> ctx.getTranslation("timetable.mode.none");
@@ -71,13 +73,12 @@ public final class TimetableFormatUtils {
                                             findActivityOption(code, options)
                                                     .map(TimetableFormatUtils::activityOptionLabel)
                                                     .orElse(code))
-                            .reduce((left, right) -> left + ", " + right)
-                            .orElse("—");
-            return label.isBlank() ? "—" : label;
+                            .collect(Collectors.joining(", "));
+            return label.isBlank() ? DASH : label;
         }
         return findActivityOption(row.getActivityCode(), options)
                 .map(TimetableFormatUtils::activityOptionLabel)
-                .orElse("—");
+                .orElse(DASH);
     }
 
     public static Optional<TimetableActivityOption> findActivityOption(
@@ -116,7 +117,7 @@ public final class TimetableFormatUtils {
             String commercial) {
         TimeConstraintMode resolved = defaultMode(mode);
         return switch (resolved) {
-            case NONE -> "—";
+            case NONE -> DASH;
             case EXACT -> timeOrDash(exact);
             case WINDOW -> timeOrDash(earliest) + "–" + timeOrDash(latest);
             case AFTER -> "≥ " + timeOrDash(earliest);
@@ -141,7 +142,7 @@ public final class TimetableFormatUtils {
     }
 
     public static String timeOrDash(String value) {
-        return value == null || value.isBlank() ? "—" : value;
+        return value == null || value.isBlank() ? DASH : value;
     }
 
     public static TimeConstraintMode defaultMode(TimeConstraintMode mode) {
@@ -168,7 +169,7 @@ public final class TimetableFormatUtils {
     }
 
     public static String nvl(String value) {
-        return value != null ? value : "—";
+        return value != null ? value : DASH;
     }
 
     // ── shared UI component builders ───────────────────────────────────

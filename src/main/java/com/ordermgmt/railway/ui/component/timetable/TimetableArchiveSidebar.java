@@ -1,5 +1,7 @@
 package com.ordermgmt.railway.ui.component.timetable;
 
+import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.DASH;
+
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -57,7 +59,7 @@ public class TimetableArchiveSidebar extends VerticalLayout {
 
         List<LocalDate> dates = archiveService.parseValidityDates(position.getValidity());
         if (dates.isEmpty()) {
-            card.add(sidebarValue("\u2014"));
+            card.add(sidebarValue(DASH));
         } else {
             List<LocalDate> sorted = dates.stream().sorted().toList();
             LocalDate first = sorted.getFirst();
@@ -115,23 +117,23 @@ public class TimetableArchiveSidebar extends VerticalLayout {
     }
 
     private Span sidebarValue(String text) {
-        Span val = new Span(text);
-        val.getStyle()
+        Span value = new Span(text);
+        value.getStyle()
                 .set("display", "block")
                 .set("font-size", "13px")
                 .set("font-family", "'JetBrains Mono', monospace")
                 .set("color", "var(--rom-text-primary)");
-        return val;
+        return value;
     }
 
     private Span sidebarMuted(String text) {
-        Span val = new Span(text);
-        val.getStyle()
+        Span value = new Span(text);
+        value.getStyle()
                 .set("display", "block")
                 .set("font-size", "11px")
                 .set("color", "var(--rom-text-muted)")
                 .set("margin-top", "2px");
-        return val;
+        return value;
     }
 
     private Div metaRow(String label, String value) {
@@ -142,19 +144,20 @@ public class TimetableArchiveSidebar extends VerticalLayout {
                 .set("padding", "3px 0")
                 .set("font-size", "11px")
                 .set("border-bottom", "1px solid var(--rom-border-subtle)");
-        Span lbl = new Span(label);
-        lbl.getStyle().set("color", "var(--rom-text-muted)");
-        Span val = new Span(value != null ? value : "\u2014");
-        val.getStyle()
+        Span labelSpan = new Span(label);
+        labelSpan.getStyle().set("color", "var(--rom-text-muted)");
+        Span valueSpan = new Span(value != null ? value : DASH);
+        valueSpan
+                .getStyle()
                 .set("font-family", "'JetBrains Mono', monospace")
                 .set("color", "var(--rom-text-primary)");
-        row.add(lbl, val);
+        row.add(labelSpan, valueSpan);
         return row;
     }
 
     private String formatInstant(Instant instant) {
         if (instant == null) {
-            return "\u2014";
+            return DASH;
         }
         return instant.atZone(ZoneId.systemDefault()).format(DATETIME_FMT);
     }

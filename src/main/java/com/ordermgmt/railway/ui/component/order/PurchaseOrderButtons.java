@@ -24,23 +24,23 @@ final class PurchaseOrderButtons {
 
     /** TTT path-request order for a CAPACITY purchase — opens the attribute dialog. */
     static Button ttt(
-            PurchasePosition pp,
+            PurchasePosition purchasePosition,
             String otn,
             String routeLabel,
             PurchaseOrderService service,
             BiFunction<String, Object[], String> translator,
             Runnable onChanged) {
-        Button btn =
+        Button button =
                 styled(
                         translator.apply("purchase.triggerTtt", new Object[0]),
                         "var(--rom-status-warning)",
                         "rgba(255,184,0,0.08)");
-        btn.addClickListener(
+        button.addClickListener(
                 e -> {
                     TttOrderDialog dialog =
                             new TttOrderDialog(
-                                    pp.getId(),
-                                    pp.getPositionNumber(),
+                                    purchasePosition.getId(),
+                                    purchasePosition.getPositionNumber(),
                                     otn,
                                     routeLabel,
                                     translator);
@@ -55,43 +55,48 @@ final class PurchaseOrderButtons {
                                             onChanged));
                     dialog.open();
                 });
-        return btn;
+        return button;
     }
 
     /** Mock R²P order for a non-capacity external purchase — sets status BESTELLT. */
     static Button r2p(
-            PurchasePosition pp,
+            PurchasePosition purchasePosition,
             PurchaseOrderService service,
             BiFunction<String, Object[], String> translator,
             Runnable onChanged) {
-        Button btn =
+        Button button =
                 styled(
                         translator.apply("purchase.r2p.order", new Object[0]),
                         "var(--rom-status-info)",
                         "rgba(68,138,255,0.08)");
-        btn.addClickListener(e -> run(() -> service.triggerR2pOrder(pp.getId()), "R²P", onChanged));
-        return btn;
+        button.addClickListener(
+                event ->
+                        run(
+                                () -> service.triggerR2pOrder(purchasePosition.getId()),
+                                "R²P",
+                                onChanged));
+        return button;
     }
 
     /** Re-sync the TTT status of an already-ordered CAPACITY purchase from the path manager. */
     static Button sync(
-            PurchasePosition pp,
+            PurchasePosition purchasePosition,
             PurchaseOrderService service,
             BiFunction<String, Object[], String> translator,
             Runnable onChanged) {
-        Button btn = new Button(VaadinIcon.REFRESH.create());
-        btn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
-        btn.getStyle()
+        Button button = new Button(VaadinIcon.REFRESH.create());
+        button.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
+        button.getStyle()
                 .set("color", "var(--rom-text-muted)")
                 .set("min-width", "24px")
                 .set("padding", "0");
-        btn.setTooltipText(translator.apply("purchase.synced", new Object[0]));
-        btn.addClickListener(
+        button.setTooltipText(translator.apply("purchase.synced", new Object[0]));
+        button.addClickListener(
                 e -> {
-                    service.syncTttStatus(pp.getId());
+                    service.syncTttStatus(purchasePosition.getId());
                     onChanged.run();
                 });
-        return btn;
+        return button;
     }
 
     private static void run(Runnable action, String okLabel, Runnable onChanged) {
@@ -107,14 +112,14 @@ final class PurchaseOrderButtons {
     }
 
     private static Button styled(String text, String color, String bg) {
-        Button btn = new Button(text);
-        btn.addThemeVariants(ButtonVariant.LUMO_SMALL);
-        btn.getStyle()
+        Button button = new Button(text);
+        button.addThemeVariants(ButtonVariant.LUMO_SMALL);
+        button.getStyle()
                 .set("font-size", "10px")
                 .set("color", color)
                 .set("border", "1px solid " + color)
                 .set("background", bg)
                 .set("padding", "1px 6px");
-        return btn;
+        return button;
     }
 }

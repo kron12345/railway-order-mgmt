@@ -33,15 +33,19 @@ public class IntervalTimetablePanel extends Div {
             String otnStart) {}
 
     private static final DateTimeFormatter HH_MM = DateTimeFormatter.ofPattern("HH:mm");
+    private static final int MIN_INTERVAL_MINUTES = 5;
+    private static final int MAX_INTERVAL_MINUTES = 240;
+    private static final int DEFAULT_INTERVAL_MINUTES = 30;
+    private static final int MINUTES_PER_DAY = 1_440;
 
-    private final TimePicker firstDep = createTimePicker();
-    private final TimePicker lastDep = createTimePicker();
+    private final TimePicker firstDepartureField = createTimePicker();
+    private final TimePicker lastDepartureField = createTimePicker();
     private final Checkbox crossMidnight = new Checkbox();
-    private final IntegerField interval = new IntegerField();
+    private final IntegerField intervalField = new IntegerField();
     private final TextField namePrefix = new TextField();
     private final TextField otnStart = new TextField();
     private final Span preview = new Span();
-    private final Button generateBtn = new Button();
+    private final Button generateButton = new Button();
 
     private Consumer<IntervalConfig> onGenerate;
 
@@ -66,16 +70,16 @@ public class IntervalTimetablePanel extends Div {
                 .set("margin-bottom", "10px");
 
         // Configure fields
-        firstDep.setLabel(t("timetable.interval.firstDeparture"));
-        lastDep.setLabel(t("timetable.interval.lastDeparture"));
+        firstDepartureField.setLabel(t("timetable.interval.firstDeparture"));
+        lastDepartureField.setLabel(t("timetable.interval.lastDeparture"));
         crossMidnight.setLabel(t("timetable.interval.crossMidnight"));
 
-        interval.setLabel(t("timetable.interval.interval"));
-        interval.setMin(5);
-        interval.setMax(240);
-        interval.setValue(30);
-        interval.setStepButtonsVisible(true);
-        interval.setWidthFull();
+        intervalField.setLabel(t("timetable.interval.interval"));
+        intervalField.setMin(MIN_INTERVAL_MINUTES);
+        intervalField.setMax(MAX_INTERVAL_MINUTES);
+        intervalField.setValue(DEFAULT_INTERVAL_MINUTES);
+        intervalField.setStepButtonsVisible(true);
+        intervalField.setWidthFull();
 
         namePrefix.setLabel(t("timetable.interval.namePrefix"));
         namePrefix.setPlaceholder("IC 717");
@@ -101,33 +105,40 @@ public class IntervalTimetablePanel extends Div {
                 .set("color", "var(--rom-text-secondary)")
                 .set("padding", "8px 0");
 
-        generateBtn.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
-        generateBtn.setIcon(VaadinIcon.CALENDAR_CLOCK.create());
-        generateBtn
+        generateButton.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
+        generateButton.setIcon(VaadinIcon.CALENDAR_CLOCK.create());
+        generateButton
                 .getStyle()
                 .set("background", "var(--rom-accent)")
                 .set("color", "var(--rom-bg-primary)");
-        generateBtn.addClickListener(e -> fireGenerate());
+        generateButton.addClickListener(e -> fireGenerate());
 
         // Auto-detect midnight crossing
-        lastDep.addValueChangeListener(
+        lastDepartureField.addValueChangeListener(
                 e -> {
-                    if (e.getValue() != null && firstDep.getValue() != null) {
-                        crossMidnight.setValue(e.getValue().isBefore(firstDep.getValue()));
+                    if (e.getValue() != null && firstDepartureField.getValue() != null) {
+                        crossMidnight.setValue(
+                                e.getValue().isBefore(firstDepartureField.getValue()));
                     }
                     updatePreview();
                 });
-        firstDep.addValueChangeListener(e -> updatePreview());
-        interval.addValueChangeListener(e -> updatePreview());
+        firstDepartureField.addValueChangeListener(e -> updatePreview());
+        intervalField.addValueChangeListener(e -> updatePreview());
 
         // Layout
         FormLayout form = new FormLayout();
         form.setWidthFull();
         form.setResponsiveSteps(
                 new FormLayout.ResponsiveStep("0", 1), new FormLayout.ResponsiveStep("400px", 2));
-        form.add(firstDep, lastDep, crossMidnight, interval, namePrefix, otnStart);
+        form.add(
+                firstDepartureField,
+                lastDepartureField,
+                crossMidnight,
+                intervalField,
+                namePrefix,
+                otnStart);
 
-        add(title, form, preview, generateBtn);
+        add(title, form, preview, generateButton);
         updatePreview();
     }
 
@@ -136,8 +147,8 @@ public class IntervalTimetablePanel extends Div {
     }
 
     public void setDefaultDeparture(LocalTime departure) {
-        if (departure != null && firstDep.getValue() == null) {
-            firstDep.setValue(departure);
+        if (departure != null && firstDepartureField.getValue() == null) {
+            firstDepartureField.setValue(departure);
         }
     }
 
@@ -150,12 +161,12 @@ public class IntervalTimetablePanel extends Div {
             return;
         }
         boolean valid = true;
-        if (firstDep.getValue() == null) {
-            firstDep.setInvalid(true);
+        if (firstDepartureField.getValue() == null) {
+            firstDepartureField.setInvalid(true);
             valid = false;
         }
-        if (lastDep.getValue() == null) {
-            lastDep.setInvalid(true);
+        if (lastDepartureField.getValue() == null) {
+            lastDepartureField.setInvalid(true);
             valid = false;
         }
         if (namePrefix.getValue().isBlank()) {
@@ -168,45 +179,50 @@ public class IntervalTimetablePanel extends Div {
         }
         onGenerate.accept(
                 new IntervalConfig(
-                        firstDep.getValue(),
-                        lastDep.getValue(),
+                        firstDepartureField.getValue(),
+                        lastDepartureField.getValue(),
                         Boolean.TRUE.equals(crossMidnight.getValue()),
-                        interval.getValue() != null ? interval.getValue() : 30,
+                        intervalField.getValue() != null
+                                ? intervalField.getValue()
+                                : DEFAULT_INTERVAL_MINUTES,
                         namePrefix.getValue().trim(),
                         otnStart.getValue()));
     }
 
     private void updatePreview() {
-        if (firstDep.getValue() == null
-                || lastDep.getValue() == null
-                || interval.getValue() == null
-                || interval.getValue() < 5) {
+        if (firstDepartureField.getValue() == null
+                || lastDepartureField.getValue() == null
+                || intervalField.getValue() == null
+                || intervalField.getValue() < MIN_INTERVAL_MINUTES) {
             preview.setText("");
-            generateBtn.setText(t("timetable.interval.generate", 0));
-            generateBtn.setEnabled(false);
+            generateButton.setText(t("timetable.interval.generate", 0));
+            generateButton.setEnabled(false);
             return;
         }
 
         int count = calculateCount();
-        String first = firstDep.getValue().format(HH_MM);
-        String last = lastDep.getValue().format(HH_MM);
-        preview.setText(t("timetable.interval.preview", count, first, last));
-        generateBtn.setText(t("timetable.interval.generate", count));
-        generateBtn.setEnabled(count > 0);
+        String firstDeparture = firstDepartureField.getValue().format(HH_MM);
+        String lastDeparture = lastDepartureField.getValue().format(HH_MM);
+        preview.setText(t("timetable.interval.preview", count, firstDeparture, lastDeparture));
+        generateButton.setText(t("timetable.interval.generate", count));
+        generateButton.setEnabled(count > 0);
     }
 
     private int calculateCount() {
-        int firstMin = firstDep.getValue().getHour() * 60 + firstDep.getValue().getMinute();
-        int lastMin = lastDep.getValue().getHour() * 60 + lastDep.getValue().getMinute();
-        boolean cross = Boolean.TRUE.equals(crossMidnight.getValue());
-        if (cross && lastMin <= firstMin) {
-            lastMin += 1440;
+        int firstDepartureMinute =
+                firstDepartureField.getValue().getHour() * 60
+                        + firstDepartureField.getValue().getMinute();
+        int lastDepartureMinute =
+                lastDepartureField.getValue().getHour() * 60
+                        + lastDepartureField.getValue().getMinute();
+        boolean crossesMidnight = Boolean.TRUE.equals(crossMidnight.getValue());
+        if (crossesMidnight && lastDepartureMinute <= firstDepartureMinute) {
+            lastDepartureMinute += MINUTES_PER_DAY;
         }
-        if (lastMin < firstMin) {
+        if (lastDepartureMinute < firstDepartureMinute) {
             return 0;
         }
-        int iv = interval.getValue();
-        return ((lastMin - firstMin) / iv) + 1;
+        return ((lastDepartureMinute - firstDepartureMinute) / intervalField.getValue()) + 1;
     }
 
     private TimePicker createTimePicker() {

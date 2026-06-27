@@ -1,5 +1,6 @@
 package com.ordermgmt.railway.ui.component.timetable;
 
+import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.DASH;
 import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.arrivalConstraintLabel;
 import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.departureConstraintLabel;
 import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.timeOrDash;
@@ -47,15 +48,15 @@ public class TimetableArchiveTable extends VerticalLayout {
                 .set("color", "var(--rom-text-primary)")
                 .set("padding", "12px 16px 8px 16px");
 
-        Span sub = new Span(routeSummary);
-        sub.getStyle()
+        Span subtitle = new Span(routeSummary);
+        subtitle.getStyle()
                 .set("font-size", "11px")
                 .set("font-family", "'JetBrains Mono', monospace")
                 .set("color", "var(--rom-text-muted)")
                 .set("padding", "0 16px 12px 16px")
                 .set("display", "block");
 
-        wrapper.add(heading, sub);
+        wrapper.add(heading, subtitle);
         return wrapper;
     }
 
@@ -129,7 +130,7 @@ public class TimetableArchiveTable extends VerticalLayout {
     }
 
     private Span nameCell(TimetableRowData row) {
-        Span cell = new Span(row.getName() != null ? row.getName() : "\u2014");
+        Span cell = new Span(row.getName() != null ? row.getName() : DASH);
         cell.getStyle()
                 .set("font-weight", isOriginOrDestination(row) ? "600" : "400")
                 .set("overflow", "hidden")
@@ -148,7 +149,7 @@ public class TimetableArchiveTable extends VerticalLayout {
         String text =
                 row.getDwellMinutes() != null && row.getDwellMinutes() > 0
                         ? "+" + row.getDwellMinutes()
-                        : "\u2014";
+                        : DASH;
         Span cell = new Span(text);
         cell.getStyle()
                 .set("font-family", "'JetBrains Mono', monospace")
@@ -159,7 +160,7 @@ public class TimetableArchiveTable extends VerticalLayout {
 
     private Span activityCell(TimetableRowData row) {
         String code = row.getActivityCode();
-        String display = code != null && !code.isBlank() ? code : "\u2014";
+        String display = code != null && !code.isBlank() ? code : DASH;
         String otn = row.getAssociatedTrainOtn();
         if (otn != null && !otn.isBlank()) {
             if ("0044".equals(code)) {
@@ -179,7 +180,7 @@ public class TimetableArchiveTable extends VerticalLayout {
         String arrQual = timingQualifierCode(row.getArrivalMode(), true);
         String depQual = timingQualifierCode(row.getDepartureMode(), false);
         String combined = joinQualifiers(arrQual, depQual);
-        Span cell = new Span(combined != null ? combined : "\u2014");
+        Span cell = new Span(combined != null ? combined : DASH);
         cell.getStyle()
                 .set("font-family", "'JetBrains Mono', monospace")
                 .set("font-size", "10px")
@@ -218,7 +219,7 @@ public class TimetableArchiveTable extends VerticalLayout {
 
     private String arrivalDisplay(TimetableRowData row) {
         String constraint = arrivalConstraintLabel(row);
-        if (!"\u2014".equals(constraint)) {
+        if (!DASH.equals(constraint)) {
             return constraint;
         }
         return timeOrDash(row.getEstimatedArrival());
@@ -226,7 +227,7 @@ public class TimetableArchiveTable extends VerticalLayout {
 
     private String departureDisplay(TimetableRowData row) {
         String constraint = departureConstraintLabel(row);
-        if (!"\u2014".equals(constraint)) {
+        if (!DASH.equals(constraint)) {
             return constraint;
         }
         return timeOrDash(row.getEstimatedDeparture());

@@ -29,27 +29,30 @@ public class BreadcrumbBar extends Nav {
     public void setCrumbs(List<Crumb> crumbs) {
         removeAll();
         for (int i = 0; i < crumbs.size(); i++) {
-            Crumb c = crumbs.get(i);
-            boolean last = i == crumbs.size() - 1;
-            if (last || c.route() == null) {
-                Span s = new Span(c.label());
-                s.addClassName("biz-breadcrumb__current");
-                if (last) s.getElement().setAttribute("aria-current", "page");
-                add(s);
+            Crumb crumb = crumbs.get(i);
+            boolean isLastCrumb = i == crumbs.size() - 1;
+            if (isLastCrumb || crumb.route() == null) {
+                Span currentCrumb = new Span(crumb.label());
+                currentCrumb.addClassName("biz-breadcrumb__current");
+                if (isLastCrumb) {
+                    currentCrumb.getElement().setAttribute("aria-current", "page");
+                }
+                add(currentCrumb);
             } else {
-                Anchor a = new Anchor("", c.label());
-                a.addClassName("biz-breadcrumb__link");
-                String route = c.route();
-                a.getElement()
+                Anchor breadcrumbLink = new Anchor("", crumb.label());
+                breadcrumbLink.addClassName("biz-breadcrumb__link");
+                String route = crumb.route();
+                breadcrumbLink
+                        .getElement()
                         .addEventListener("click", e -> UI.getCurrent().navigate(route))
                         .addEventData("event.preventDefault()");
-                add(a);
+                add(breadcrumbLink);
             }
-            if (!last) {
-                Span sep = new Span("›");
-                sep.addClassName("biz-breadcrumb__sep");
-                sep.getElement().setAttribute("aria-hidden", "true");
-                add(sep);
+            if (!isLastCrumb) {
+                Span separator = new Span("›");
+                separator.addClassName("biz-breadcrumb__sep");
+                separator.getElement().setAttribute("aria-hidden", "true");
+                add(separator);
             }
         }
     }

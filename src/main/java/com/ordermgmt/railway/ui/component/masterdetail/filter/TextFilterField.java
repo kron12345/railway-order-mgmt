@@ -47,10 +47,10 @@ public class TextFilterField<T> implements FilterField<T> {
     public Predicate<T> predicate() {
         String query = normalize(field.getValue());
         if (query.isEmpty()) {
-            return t -> true;
+            return item -> true;
         }
-        return t -> {
-            String value = extractor.apply(t);
+        return item -> {
+            String value = extractor.apply(item);
             return value != null && value.toLowerCase(Locale.ROOT).contains(query);
         };
     }
@@ -74,7 +74,7 @@ public class TextFilterField<T> implements FilterField<T> {
         field.addValueChangeListener(e -> listener.run());
     }
 
-    private static String normalize(String raw) {
-        return raw == null ? "" : raw.trim().toLowerCase(Locale.ROOT);
+    private static String normalize(String rawValue) {
+        return rawValue == null ? "" : rawValue.trim().toLowerCase(Locale.ROOT);
     }
 }

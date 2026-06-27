@@ -18,6 +18,8 @@ import com.ordermgmt.railway.domain.business.model.Business;
  */
 public class BusinessChips extends Div {
 
+    private static final String EMPTY_TITLE = "—";
+
     public BusinessChips(List<Business> businesses, Function<String, String> tr) {
         if (businesses == null || businesses.isEmpty()) {
             return;
@@ -30,26 +32,32 @@ public class BusinessChips extends Div {
         add(label);
 
         for (Business business : businesses) {
-            String title =
-                    business.getTitle() == null || business.getTitle().isBlank()
-                            ? "—"
-                            : business.getTitle();
-            Span chip = new Span(title);
-            chip.addClassName("biz-chip");
-            chip.getElement().setAttribute("title", tr.apply("business.openBusiness"));
-            chip.getElement().setAttribute("role", "link");
-            chip.getElement().setAttribute("tabindex", "0");
-            chip.getElement()
-                    .addEventListener("click", e -> navigate(business))
-                    .addEventData("event.stopPropagation()");
-            chip.getElement()
-                    .addEventListener("keydown", e -> navigate(business))
-                    .setFilter("event.key === 'Enter'");
-            add(chip);
+            add(buildChip(business, tr));
         }
+    }
+
+    private Span buildChip(Business business, Function<String, String> tr) {
+        var chip = new Span(displayTitle(business));
+        chip.addClassName("biz-chip");
+        chip.getElement().setAttribute("title", tr.apply("business.openBusiness"));
+        chip.getElement().setAttribute("role", "link");
+        chip.getElement().setAttribute("tabindex", "0");
+        chip.getElement()
+                .addEventListener("click", e -> navigate(business))
+                .addEventData("event.stopPropagation()");
+        chip.getElement()
+                .addEventListener("keydown", e -> navigate(business))
+                .setFilter("event.key === 'Enter'");
+        return chip;
     }
 
     private void navigate(Business business) {
         UI.getCurrent().navigate("businesses/" + business.getId());
+    }
+
+    private static String displayTitle(Business business) {
+        return business.getTitle() == null || business.getTitle().isBlank()
+                ? EMPTY_TITLE
+                : business.getTitle();
     }
 }

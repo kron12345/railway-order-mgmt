@@ -222,31 +222,32 @@ public class TttOrderDialog extends Dialog {
 
     private boolean validateRequired() {
         boolean valid = true;
-        if (debitCode.isEmpty()) {
-            debitCode.setInvalid(true);
-            valid = false;
-        }
-        if (trainType.isEmpty()) {
-            trainType.setInvalid(true);
-            valid = false;
-        }
-        if (trafficTypeCode.isEmpty()) {
-            trafficTypeCode.setInvalid(true);
-            valid = false;
-        }
-        if (contactName.isEmpty()) {
-            contactName.setInvalid(true);
-            valid = false;
-        }
+        valid &= validateTextField(debitCode);
+        valid &= validateComboBox(trainType);
+        valid &= validateComboBox(trafficTypeCode);
+        valid &= validateTextField(contactName);
         if (contactEmail.isEmpty() || contactEmail.isInvalid()) {
             contactEmail.setInvalid(true);
             valid = false;
         }
-        if (trainAndBrakeSequence.isEmpty()) {
-            trainAndBrakeSequence.setInvalid(true);
-            valid = false;
-        }
+        valid &= validateComboBox(trainAndBrakeSequence);
         return valid;
+    }
+
+    private boolean validateTextField(TextField field) {
+        if (field.isEmpty()) {
+            field.setInvalid(true);
+            return false;
+        }
+        return true;
+    }
+
+    private boolean validateComboBox(ComboBox<String> field) {
+        if (field.isEmpty()) {
+            field.setInvalid(true);
+            return false;
+        }
+        return true;
     }
 
     private String buildJson() {

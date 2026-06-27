@@ -36,8 +36,8 @@ public sealed interface TreeNode {
     record TrainNode(PmReferenceTrain train) implements TreeNode {
         @Override
         public String label() {
-            String otn = train.getOperationalTrainNumber();
-            return otn != null ? otn : train.getTridCore();
+            String operationalTrainNumber = train.getOperationalTrainNumber();
+            return operationalTrainNumber != null ? operationalTrainNumber : train.getTridCore();
         }
 
         @Override

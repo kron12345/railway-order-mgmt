@@ -2,6 +2,7 @@ package com.ordermgmt.railway.ui.component.business;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 /**
@@ -12,6 +13,8 @@ import java.util.UUID;
  * cannot be unlinked.
  */
 public class BusinessLinkNode {
+
+    private static final String EMPTY_VALUE = "";
 
     public enum Kind {
         ORDER("AU"),
@@ -39,8 +42,8 @@ public class BusinessLinkNode {
     private BusinessLinkNode(Kind kind, UUID entityId, String name, String number, boolean linked) {
         this.kind = kind;
         this.entityId = entityId;
-        this.name = name == null ? "" : name;
-        this.number = number == null ? "" : number;
+        this.name = name == null ? EMPTY_VALUE : name;
+        this.number = number == null ? EMPTY_VALUE : number;
         this.linked = linked;
     }
 
@@ -83,9 +86,11 @@ public class BusinessLinkNode {
 
     /** Returns true if any field of this node contains the (lower-cased) text. */
     public boolean matches(String lowerText) {
-        if (lowerText == null || lowerText.isBlank()) return true;
-        return name.toLowerCase().contains(lowerText)
-                || number.toLowerCase().contains(lowerText)
-                || kind.tag().toLowerCase().contains(lowerText);
+        if (lowerText == null || lowerText.isBlank()) {
+            return true;
+        }
+        return name.toLowerCase(Locale.ROOT).contains(lowerText)
+                || number.toLowerCase(Locale.ROOT).contains(lowerText)
+                || kind.tag().toLowerCase(Locale.ROOT).contains(lowerText);
     }
 }

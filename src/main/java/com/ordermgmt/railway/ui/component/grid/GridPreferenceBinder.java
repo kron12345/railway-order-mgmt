@@ -34,7 +34,6 @@ public class GridPreferenceBinder<T> {
     private final String viewKey;
     private final UserViewPreferenceService prefs;
 
-    /** Default snapshot taken at install time, used by reset(). */
     private final List<ColumnState> defaults = new ArrayList<>();
 
     private long pendingSaveScheduledAt = 0;
@@ -64,15 +63,19 @@ public class GridPreferenceBinder<T> {
     public void reset() {
         prefs.delete(viewKey);
         applyState(defaults);
-        if (onChanged != null) onChanged.run();
+        notifyChanged();
     }
 
     public List<ColumnState> currentState() {
         List<ColumnState> states = new ArrayList<>();
-        for (Grid.Column<T> col : grid.getColumns()) {
-            String key = col.getKey();
-            if (key == null) continue;
-            states.add(new ColumnState(key, col.isVisible(), col.getWidth(), col.getFlexGrow()));
+        for (Grid.Column<T> column : grid.getColumns()) {
+            String key = column.getKey();
+            if (key == null) {
+                continue;
+            }
+            states.add(
+                    new ColumnState(
+                            key, column.isVisible(), column.getWidth(), column.getFlexGrow()));
         }
         return states;
     }
@@ -83,11 +86,13 @@ public class GridPreferenceBinder<T> {
 
     /** Map columns by stable key for visibility-toggle UIs. */
     public Map<String, Grid.Column<T>> columnsByKey() {
-        Map<String, Grid.Column<T>> byKey = new LinkedHashMap<>();
-        for (Grid.Column<T> col : grid.getColumns()) {
-            if (col.getKey() != null) byKey.put(col.getKey(), col);
+        Map<String, Grid.Column<T>> columnsByKey = new LinkedHashMap<>();
+        for (Grid.Column<T> column : grid.getColumns()) {
+            if (column.getKey() != null) {
+                columnsByKey.put(column.getKey(), column);
+            }
         }
-        return byKey;
+        return columnsByKey;
     }
 
     /** Public so the visibility popover can trigger an immediate save. */
@@ -95,13 +100,11 @@ public class GridPreferenceBinder<T> {
         try {
             String json = MAPPER.writeValueAsString(currentState());
             prefs.saveJson(viewKey, json);
-            if (onChanged != null) onChanged.run();
+            notifyChanged();
         } catch (Exception ex) {
             log.warn("Failed to persist grid preferences for viewKey={}", viewKey, ex);
         }
     }
-
-    // ─── internals ─────────
 
     private void snapshotDefaults() {
         defaults.clear();
@@ -110,7 +113,9 @@ public class GridPreferenceBinder<T> {
 
     private void applySaved() {
         Optional<String> json = prefs.loadJson(viewKey);
-        if (json.isEmpty()) return;
+        if (json.isEmpty()) {
+            return;
+        }
         try {
             List<ColumnState> saved =
                     MAPPER.readValue(json.get(), new TypeReference<List<ColumnState>>() {});
@@ -122,30 +127,37 @@ public class GridPreferenceBinder<T> {
     }
 
     private void applyState(List<ColumnState> states) {
-        Map<String, Grid.Column<T>> byKey = columnsByKey();
-        Map<String, ColumnState> byKeyState = new HashMap<>();
-        for (ColumnState s : states) byKeyState.put(s.key(), s);
+        Map<String, Grid.Column<T>> columnsByKey = columnsByKey();
+        Map<String, ColumnState> stateByKey = new HashMap<>();
+        for (ColumnState state : states) {
+            stateByKey.put(state.key(), state);
+        }
 
-        // Apply per-column properties for keys that exist in both saved state and grid.
-        for (ColumnState s : states) {
-            Grid.Column<T> col = byKey.get(s.key());
-            if (col == null) continue;
-            col.setVisible(s.visible());
-            if (s.width() != null) col.setWidth(s.width());
-            col.setFlexGrow(s.flexGrow());
+        for (ColumnState state : states) {
+            Grid.Column<T> column = columnsByKey.get(state.key());
+            if (column == null) {
+                continue;
+            }
+            column.setVisible(state.visible());
+            if (state.width() != null) {
+                column.setWidth(state.width());
+            }
+            column.setFlexGrow(state.flexGrow());
         }
 
         // Reorder: known keys in saved order first, unknown keys (newly added columns) appended.
         List<Grid.Column<T>> ordered = new ArrayList<>();
-        for (ColumnState s : states) {
-            Grid.Column<T> col = byKey.get(s.key());
-            if (col != null) ordered.add(col);
+        for (ColumnState state : states) {
+            Grid.Column<T> column = columnsByKey.get(state.key());
+            if (column != null) {
+                ordered.add(column);
+            }
         }
-        for (Grid.Column<T> col : grid.getColumns()) {
-            if (col.getKey() != null
-                    && !byKeyState.containsKey(col.getKey())
-                    && !ordered.contains(col)) {
-                ordered.add(col);
+        for (Grid.Column<T> column : grid.getColumns()) {
+            if (column.getKey() != null
+                    && !stateByKey.containsKey(column.getKey())
+                    && !ordered.contains(column)) {
+                ordered.add(column);
             }
         }
         if (!ordered.isEmpty()) {
@@ -172,6 +184,12 @@ public class GridPreferenceBinder<T> {
                                 saveNow();
                             }
                         });
+    }
+
+    private void notifyChanged() {
+        if (onChanged != null) {
+            onChanged.run();
+        }
     }
 
     /** Serializable per-column state. Width is a CSS string ("120px") or null for flex-only. */

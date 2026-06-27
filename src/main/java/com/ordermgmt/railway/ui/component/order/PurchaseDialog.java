@@ -22,6 +22,8 @@ import com.ordermgmt.railway.domain.order.service.PurchaseOrderService;
 /** Dialog for creating a purchase position for a resource need. */
 public class PurchaseDialog extends Dialog {
 
+    private static final String SUCCESS_MESSAGE = "OK";
+
     private final UUID resourceNeedId;
     private final boolean isCapacity;
     private final String positionValidity;
@@ -92,56 +94,69 @@ public class PurchaseDialog extends Dialog {
                 .set("gap", "var(--lumo-space-s)");
         add(form);
 
-        Button cancel = new Button(tr("common.cancel"));
-        cancel.addClickListener(e -> close());
+        getFooter().add(createCancelButton(), createSaveButton(description, viaTtt));
+    }
 
+    private Button createCancelButton() {
+        Button cancel = new Button(tr("common.cancel"));
+        cancel.addClickListener(event -> close());
+        return cancel;
+    }
+
+    private Button createSaveButton(TextField description, Checkbox viaTtt) {
         Button save = new Button(tr("common.save"));
         save.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
         save.getStyle()
                 .set("background", "var(--rom-accent)")
                 .set("color", "var(--rom-bg-primary)");
-        save.addClickListener(
-                e -> {
-                    try {
-                        PurchasePosition pp =
-                                purchaseOrderService.createPurchasePosition(
-                                        resourceNeedId, description.getValue(), positionValidity);
+        save.addClickListener(event -> savePurchase(description.getValue(), viaTtt.getValue()));
+        return save;
+    }
 
-                        if (isCapacity && viaTtt.getValue()) {
-                            close();
-                            TttOrderDialog tttDialog =
-                                    new TttOrderDialog(
-                                            pp.getId(),
-                                            pp.getPositionNumber(),
-                                            positionOtn,
-                                            positionRouteLabel,
-                                            translator);
-                            tttDialog.addSubmitListener(
-                                    evt -> {
-                                        purchaseOrderService.triggerTttOrder(
-                                                evt.getPurchasePositionId(),
-                                                evt.getTttAttributesJson());
-                                        Notification.show(
-                                                        "OK",
-                                                        2000,
-                                                        Notification.Position.BOTTOM_END)
-                                                .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
-                                        fireEvent(new SaveEvent(this));
-                                    });
-                            tttDialog.open();
-                        } else {
-                            Notification.show("OK", 2000, Notification.Position.BOTTOM_END)
-                                    .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
-                            close();
-                            fireEvent(new SaveEvent(this));
-                        }
-                    } catch (Exception ex) {
-                        Notification.show(ex.getMessage(), 4000, Notification.Position.BOTTOM_END)
-                                .addThemeVariants(NotificationVariant.LUMO_ERROR);
-                    }
+    private void savePurchase(String description, boolean triggerTtt) {
+        try {
+            PurchasePosition purchasePosition =
+                    purchaseOrderService.createPurchasePosition(
+                            resourceNeedId, description, positionValidity);
+            if (isCapacity && triggerTtt) {
+                openTttDialog(purchasePosition);
+                return;
+            }
+            completeSave();
+        } catch (Exception ex) {
+            Notification.show(ex.getMessage(), 4000, Notification.Position.BOTTOM_END)
+                    .addThemeVariants(NotificationVariant.LUMO_ERROR);
+        }
+    }
+
+    private void openTttDialog(PurchasePosition purchasePosition) {
+        close();
+        TttOrderDialog dialog =
+                new TttOrderDialog(
+                        purchasePosition.getId(),
+                        purchasePosition.getPositionNumber(),
+                        positionOtn,
+                        positionRouteLabel,
+                        translator);
+        dialog.addSubmitListener(
+                event -> {
+                    purchaseOrderService.triggerTttOrder(
+                            event.getPurchasePositionId(), event.getTttAttributesJson());
+                    showSuccess();
+                    fireEvent(new SaveEvent(this));
                 });
+        dialog.open();
+    }
 
-        getFooter().add(cancel, save);
+    private void completeSave() {
+        showSuccess();
+        close();
+        fireEvent(new SaveEvent(this));
+    }
+
+    private void showSuccess() {
+        Notification.show(SUCCESS_MESSAGE, 2000, Notification.Position.BOTTOM_END)
+                .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
     }
 
     /** Fired after a purchase position is successfully saved. */

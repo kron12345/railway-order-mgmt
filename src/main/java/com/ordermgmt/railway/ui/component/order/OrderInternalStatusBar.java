@@ -44,20 +44,7 @@ public class OrderInternalStatusBar extends HorizontalLayout {
         add(label);
 
         if (canMutate) {
-            Select<PositionStatus> select = new Select<>();
-            select.setItems(PositionStatus.values());
-            select.setItemLabelGenerator(s -> s == null ? "—" : t("position.status." + s.name()));
-            select.setEmptySelectionAllowed(true);
-            select.setEmptySelectionCaption("—");
-            select.setValue(order.getInternalStatus());
-            select.addThemeVariants(SelectVariant.LUMO_SMALL);
-            select.addValueChangeListener(
-                    e -> {
-                        if (e.isFromClient()) {
-                            changeStatus(order, orderService, e.getValue(), onChanged);
-                        }
-                    });
-            add(select);
+            add(createStatusSelect(order, orderService, onChanged));
         } else {
             add(badge(order.getInternalStatus()));
         }
@@ -70,6 +57,25 @@ public class OrderInternalStatusBar extends HorizontalLayout {
             lock.addClassName("order-detail__lock-hint");
             add(lock);
         }
+    }
+
+    private Select<PositionStatus> createStatusSelect(
+            Order order, OrderService orderService, Runnable onChanged) {
+        Select<PositionStatus> select = new Select<>();
+        select.setItems(PositionStatus.values());
+        select.setItemLabelGenerator(
+                status -> status == null ? "—" : t("position.status." + status.name()));
+        select.setEmptySelectionAllowed(true);
+        select.setEmptySelectionCaption("—");
+        select.setValue(order.getInternalStatus());
+        select.addThemeVariants(SelectVariant.LUMO_SMALL);
+        select.addValueChangeListener(
+                event -> {
+                    if (event.isFromClient()) {
+                        changeStatus(order, orderService, event.getValue(), onChanged);
+                    }
+                });
+        return select;
     }
 
     private Span badge(PositionStatus status) {

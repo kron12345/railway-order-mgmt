@@ -18,18 +18,18 @@ public class SkipLinks extends Div {
         addClassName("skip-links");
         getElement().setAttribute("role", "navigation");
         getElement().setAttribute("aria-label", "Skip links");
-        for (SkipTarget t : targets) {
-            Anchor a = new Anchor("#" + t.id(), t.label());
-            a.addClassName("skip-links__link");
+        for (SkipTarget target : targets) {
+            Anchor link = new Anchor("#" + target.id(), target.label());
+            link.addClassName("skip-links__link");
             // Move focus to target on activation (anchor scrolling alone may not focus).
-            a.getElement()
+            link.getElement()
                     .addEventListener("click", e -> {})
                     .addEventData(
                             "event.target.dispatchEvent(new CustomEvent('skip-target', "
                                     + "{detail: '"
-                                    + t.id()
+                                    + target.id()
                                     + "'}))");
-            add(a);
+            add(link);
         }
     }
 

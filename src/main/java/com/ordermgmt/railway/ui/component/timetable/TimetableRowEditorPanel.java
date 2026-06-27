@@ -33,6 +33,7 @@ import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.select.Select;
+import com.vaadin.flow.component.textfield.IntegerField;
 import com.vaadin.flow.component.textfield.TextArea;
 import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.component.timepicker.TimePicker;
@@ -54,6 +55,9 @@ import com.ordermgmt.railway.domain.timetable.model.TimetableRowData;
  */
 class TimetableRowEditorPanel extends Div {
 
+    private static final int TIME_VALIDATION_NOTIFICATION_DURATION_MS = 3000;
+    private static final Duration TIME_PICKER_STEP = Duration.ofMinutes(1);
+
     private final List<TimetableActivityOption> activityOptions;
 
     // ── Header fields ────────────────────────────────────────────────────
@@ -65,8 +69,7 @@ class TimetableRowEditorPanel extends Div {
     private final Select<JourneyLocationType> journeyLocationTypeField = new Select<>();
     private final Checkbox tttRelevantField = new Checkbox();
     private final Checkbox haltField = new Checkbox();
-    private final com.vaadin.flow.component.textfield.IntegerField dwellMinutesField =
-            new com.vaadin.flow.component.textfield.IntegerField();
+    private final IntegerField dwellMinutesField = new IntegerField();
     private final MultiSelectComboBox<TimetableActivityOption> activityField =
             new MultiSelectComboBox<>();
     private final TextField associatedTrainField = new TextField();
@@ -84,8 +87,7 @@ class TimetableRowEditorPanel extends Div {
     private final Div arrivalWindowWrapper = new Div();
     private final Div arrivalCommercialWrapper = new Div();
     private final Div arrivalSection = new Div();
-    private final com.vaadin.flow.component.textfield.IntegerField arrivalOffsetField =
-            new com.vaadin.flow.component.textfield.IntegerField();
+    private final IntegerField arrivalOffsetField = new IntegerField();
 
     // ── Departure Section ────────────────────────────────────────────────
 
@@ -98,8 +100,7 @@ class TimetableRowEditorPanel extends Div {
     private final Div departureWindowWrapper = new Div();
     private final Div departureCommercialWrapper = new Div();
     private final Div departureSection = new Div();
-    private final com.vaadin.flow.component.textfield.IntegerField departureOffsetField =
-            new com.vaadin.flow.component.textfield.IntegerField();
+    private final IntegerField departureOffsetField = new IntegerField();
 
     // ── Propagation ──────────────────────────────────────────────────────
 
@@ -269,7 +270,9 @@ class TimetableRowEditorPanel extends Div {
             if (activityField.getSelectedItems().isEmpty()) {
                 if (showNotifications) {
                     Notification.show(
-                                    t("timetable.stop.activityRequired"), 3000, Position.BOTTOM_END)
+                                    t("timetable.stop.activityRequired"),
+                                    TIME_VALIDATION_NOTIFICATION_DURATION_MS,
+                                    Position.BOTTOM_END)
                             .addThemeVariants(NotificationVariant.LUMO_ERROR);
                 }
                 return false;
@@ -519,7 +522,7 @@ class TimetableRowEditorPanel extends Div {
         departureExactField.setHelperText(relativeHelp);
     }
 
-    private void configureOffsetField(com.vaadin.flow.component.textfield.IntegerField field) {
+    private void configureOffsetField(IntegerField field) {
         field.setLabel(t("timetable.editor.dayOffset"));
         field.setHelperText(t("timetable.editor.dayOffset.help"));
         field.setMin(-1);
@@ -538,9 +541,6 @@ class TimetableRowEditorPanel extends Div {
         field.addValueChangeListener(
                 e -> {
                     if (e.isFromClient()) {
-                        // Mode-switch preservation (Edge-Case #3 / option a): copy any current
-                        // value from the old mode's picker(s) into the new mode's picker(s) so
-                        // the user doesn't silently lose what they typed.
                         preserveValueAcrossMode(isArrival, e.getOldValue(), e.getValue());
                     }
                     updateModeVisibility();
@@ -550,13 +550,20 @@ class TimetableRowEditorPanel extends Div {
     /** Move whatever single value the user had under the old mode into the new-mode pickers. */
     private void preserveValueAcrossMode(
             boolean isArrival, TimeConstraintMode oldMode, TimeConstraintMode newMode) {
-        if (oldMode == null || newMode == null || oldMode == newMode) return;
-        java.time.LocalTime source = sourceForMode(isArrival, oldMode);
-        if (source == null) return;
+        if (oldMode == null || newMode == null || oldMode == newMode) {
+            return;
+        }
+        LocalTime source = sourceForMode(isArrival, oldMode);
+        if (source == null) {
+            return;
+        }
         switch (newMode) {
             case EXACT -> {
-                if (isArrival) arrivalExactField.setValue(source);
-                else departureExactField.setValue(source);
+                if (isArrival) {
+                    arrivalExactField.setValue(source);
+                } else {
+                    departureExactField.setValue(source);
+                }
             }
             case WINDOW -> {
                 if (isArrival) {
@@ -569,17 +576,26 @@ class TimetableRowEditorPanel extends Div {
             }
             case AFTER -> {
                 // Half-window "≥ X": only earliest is meaningful
-                if (isArrival) arrivalEarliestField.setValue(source);
-                else departureEarliestField.setValue(source);
+                if (isArrival) {
+                    arrivalEarliestField.setValue(source);
+                } else {
+                    departureEarliestField.setValue(source);
+                }
             }
             case BEFORE -> {
                 // Half-window "≤ X": only latest is meaningful
-                if (isArrival) arrivalLatestField.setValue(source);
-                else departureLatestField.setValue(source);
+                if (isArrival) {
+                    arrivalLatestField.setValue(source);
+                } else {
+                    departureLatestField.setValue(source);
+                }
             }
             case COMMERCIAL -> {
-                if (isArrival) arrivalCommercialField.setValue(source);
-                else departureCommercialField.setValue(source);
+                if (isArrival) {
+                    arrivalCommercialField.setValue(source);
+                } else {
+                    departureCommercialField.setValue(source);
+                }
             }
             case NONE -> {
                 /* user explicitly cleared */
@@ -587,8 +603,10 @@ class TimetableRowEditorPanel extends Div {
         }
     }
 
-    private java.time.LocalTime sourceForMode(boolean isArrival, TimeConstraintMode mode) {
-        if (mode == null) return null;
+    private LocalTime sourceForMode(boolean isArrival, TimeConstraintMode mode) {
+        if (mode == null) {
+            return null;
+        }
         return switch (mode) {
             case EXACT -> isArrival ? arrivalExactField.getValue() : departureExactField.getValue();
             case WINDOW -> {
@@ -611,8 +629,8 @@ class TimetableRowEditorPanel extends Div {
         };
     }
 
-    private java.time.LocalTime firstNonNullTime(java.time.LocalTime a, java.time.LocalTime b) {
-        return a != null ? a : b;
+    private LocalTime firstNonNullTime(LocalTime first, LocalTime second) {
+        return first != null ? first : second;
     }
 
     private Div buildPropagationSection() {
@@ -832,7 +850,10 @@ class TimetableRowEditorPanel extends Div {
         if (showNotifications) {
             String sideLabel =
                     t(arrival ? "timetable.editor.arrival" : "timetable.editor.departure");
-            Notification.show(sideLabel + ": " + t(key), 3000, Position.BOTTOM_END)
+            Notification.show(
+                            sideLabel + ": " + t(key),
+                            TIME_VALIDATION_NOTIFICATION_DURATION_MS,
+                            Position.BOTTOM_END)
                     .addThemeVariants(NotificationVariant.LUMO_ERROR);
         }
         // Bring the offending field into view and focus it so the user sees what's missing.
@@ -947,7 +968,7 @@ class TimetableRowEditorPanel extends Div {
 
     private TimePicker createTimePicker() {
         TimePicker picker = new TimePicker();
-        picker.setStep(Duration.ofMinutes(1));
+        picker.setStep(TIME_PICKER_STEP);
         picker.setAllowedCharPattern("[0-9:]");
         picker.setPlaceholder("HH:mm");
         picker.setLocale(getLocale() != null ? getLocale() : Locale.GERMANY);

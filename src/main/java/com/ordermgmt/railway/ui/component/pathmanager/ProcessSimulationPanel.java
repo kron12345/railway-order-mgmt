@@ -1,5 +1,6 @@
 package com.ordermgmt.railway.ui.component.pathmanager;
 
+import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -35,6 +36,9 @@ import com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils;
 
 /** Interactive TTT process simulation: state badge, action buttons, history grid. */
 public class ProcessSimulationPanel extends VerticalLayout {
+
+    private static final int PROCESS_ERROR_NOTIFICATION_DURATION_MS = 4000;
+    private static final int HISTORY_GRID_HEIGHT_PX = 250;
 
     private static final DateTimeFormatter TS_FMT =
             DateTimeFormatter.ofPattern("dd.MM.yy HH:mm:ss").withZone(ZoneId.systemDefault());
@@ -152,7 +156,7 @@ public class ProcessSimulationPanel extends VerticalLayout {
         if (year == null || year.getStartDate() == null) {
             return;
         }
-        java.time.LocalDate today = java.time.LocalDate.now();
+        LocalDate today = LocalDate.now();
         TtrPhase phase = ttrPhaseResolver.resolvePhase(year, today);
         PathProcessType processType = ttrPhaseResolver.resolveProcessType(year, today);
 
@@ -278,7 +282,7 @@ public class ProcessSimulationPanel extends VerticalLayout {
 
         historyGrid = new Grid<>();
         historyGrid.setWidthFull();
-        historyGrid.setHeight("250px");
+        historyGrid.setHeight(HISTORY_GRID_HEIGHT_PX + "px");
         historyGrid.setAllRowsVisible(false);
 
         historyGrid
@@ -334,7 +338,10 @@ public class ProcessSimulationPanel extends VerticalLayout {
                 onTransitionExecuted.accept(train);
             }
         } catch (IllegalStateException ex) {
-            Notification.show(ex.getMessage(), 4000, Notification.Position.BOTTOM_END)
+            Notification.show(
+                            ex.getMessage(),
+                            PROCESS_ERROR_NOTIFICATION_DURATION_MS,
+                            Notification.Position.BOTTOM_END)
                     .addThemeVariants(NotificationVariant.LUMO_ERROR);
         }
     }

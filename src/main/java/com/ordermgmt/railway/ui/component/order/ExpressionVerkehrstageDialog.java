@@ -56,49 +56,57 @@ class ExpressionVerkehrstageDialog extends Dialog {
         Button cancel = new Button(t.apply("common.cancel", new Object[0]), e -> close());
         Button save = new Button(t.apply("common.save", new Object[0]));
         save.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
-        save.addClickListener(
-                e -> {
-                    List<LocalDate> days = calendar.getSelectedDates();
-                    if (days.isEmpty()) {
-                        // An expression without operating days is degenerate — mirror the
-                        // at-least-one-day rule enforced by ExpressionDialog /
-                        // ServicePositionDialog.
-                        Notification.show(
-                                        t.apply("verkehrstage.empty", new Object[0]),
-                                        3000,
-                                        Notification.Position.MIDDLE)
-                                .addThemeVariants(NotificationVariant.LUMO_ERROR);
-                        return;
-                    }
-                    Set<LocalDate> claimed =
-                            days.stream().filter(occupied::containsKey).collect(Collectors.toSet());
-                    if (claimed.isEmpty()) {
-                        onSave.accept(days);
-                        close();
-                        return;
-                    }
-                    // Reassignment shortens sibling expressions → confirm before handing days over.
-                    String owners =
-                            claimed.stream()
-                                    .map(occupied::get)
-                                    .distinct()
-                                    .collect(Collectors.joining(", "));
-                    ConfirmDialog confirm = new ConfirmDialog();
-                    confirm.setHeader(t.apply("verkehrstage.reassign.title", new Object[0]));
-                    confirm.setText(
-                            t.apply(
-                                    "verkehrstage.reassign.text",
-                                    new Object[] {claimed.size(), owners}));
-                    confirm.setCancelable(true);
-                    confirm.setCancelText(t.apply("common.cancel", new Object[0]));
-                    confirm.setConfirmText(t.apply("verkehrstage.reassign.confirm", new Object[0]));
-                    confirm.addConfirmListener(
-                            ev -> {
-                                onSave.accept(days);
-                                close();
-                            });
-                    confirm.open();
-                });
+        save.addClickListener(e -> save(calendar, occupied, t, onSave));
         getFooter().add(cancel, save);
+    }
+
+    private void save(
+            ValidityCalendar calendar,
+            Map<LocalDate, String> occupied,
+            BiFunction<String, Object[], String> translator,
+            Consumer<List<LocalDate>> onSave) {
+        List<LocalDate> selectedDays = calendar.getSelectedDates();
+        if (selectedDays.isEmpty()) {
+            Notification.show(
+                            translator.apply("verkehrstage.empty", new Object[0]),
+                            3000,
+                            Notification.Position.MIDDLE)
+                    .addThemeVariants(NotificationVariant.LUMO_ERROR);
+            return;
+        }
+
+        Set<LocalDate> claimedDays =
+                selectedDays.stream().filter(occupied::containsKey).collect(Collectors.toSet());
+        if (claimedDays.isEmpty()) {
+            onSave.accept(selectedDays);
+            close();
+            return;
+        }
+
+        confirmReassignment(claimedDays, selectedDays, occupied, translator, onSave);
+    }
+
+    private void confirmReassignment(
+            Set<LocalDate> claimedDays,
+            List<LocalDate> selectedDays,
+            Map<LocalDate, String> occupied,
+            BiFunction<String, Object[], String> translator,
+            Consumer<List<LocalDate>> onSave) {
+        String owners =
+                claimedDays.stream().map(occupied::get).distinct().collect(Collectors.joining(", "));
+        ConfirmDialog confirm = new ConfirmDialog();
+        confirm.setHeader(translator.apply("verkehrstage.reassign.title", new Object[0]));
+        confirm.setText(
+                translator.apply(
+                        "verkehrstage.reassign.text", new Object[] {claimedDays.size(), owners}));
+        confirm.setCancelable(true);
+        confirm.setCancelText(translator.apply("common.cancel", new Object[0]));
+        confirm.setConfirmText(translator.apply("verkehrstage.reassign.confirm", new Object[0]));
+        confirm.addConfirmListener(
+                event -> {
+                    onSave.accept(selectedDays);
+                    close();
+                });
+        confirm.open();
     }
 }

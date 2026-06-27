@@ -21,7 +21,7 @@ import com.ordermgmt.railway.ui.component.StatusBadge;
  */
 class VersionFeed extends Div {
 
-    private static final DateTimeFormatter D = DateTimeFormatter.ofPattern("dd.MM.yy");
+    private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd.MM.yy");
 
     VersionFeed(List<OrderPositionVersion> versions, BiFunction<String, Object[], String> t) {
         getStyle()
@@ -43,25 +43,34 @@ class VersionFeed extends Div {
                         Comparator.comparing(
                                 OrderPositionVersion::getVersionNumber,
                                 Comparator.nullsFirst(Comparator.naturalOrder())))
-                .forEach(v -> add(line(v, t)));
+                .forEach(version -> add(line(version, t)));
     }
 
-    private HorizontalLayout line(OrderPositionVersion v, BiFunction<String, Object[], String> t) {
-        PositionChangeSource src =
-                v.getSource() != null ? v.getSource() : PositionChangeSource.INITIAL;
+    private HorizontalLayout line(
+            OrderPositionVersion version, BiFunction<String, Object[], String> t) {
+        PositionChangeSource source =
+                version.getSource() != null ? version.getSource() : PositionChangeSource.INITIAL;
         StatusBadge badge =
                 new StatusBadge(
-                        t.apply("version.source." + src.name(), new Object[0]), badgeType(src));
+                        t.apply("version.source." + source.name(), new Object[0]),
+                        badgeType(source));
 
         String range = "";
-        if (v.getValidFrom() != null) {
+        if (version.getValidFrom() != null) {
             range =
-                    D.format(v.getValidFrom())
+                    DATE_FORMAT.format(version.getValidFrom())
                             + " – "
-                            + (v.getValidTo() != null ? D.format(v.getValidTo()) : "…")
+                            + (version.getValidTo() != null
+                                    ? DATE_FORMAT.format(version.getValidTo())
+                                    : "…")
                             + " · ";
         }
-        Span text = new Span(range + (v.getChangeSummary() != null ? v.getChangeSummary() : ""));
+        Span text =
+                new Span(
+                        range
+                                + (version.getChangeSummary() != null
+                                        ? version.getChangeSummary()
+                                        : ""));
         text.getStyle().set("font-size", "12px").set("color", "var(--rom-text-primary)");
 
         HorizontalLayout row = new HorizontalLayout(badge, text);

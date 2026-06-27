@@ -19,7 +19,8 @@ import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
  */
 public class DateRangeFilterField<T> implements FilterField<T> {
 
-    private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("dd.MM.yy");
+    private static final DateTimeFormatter CHIP_DATE_FORMAT =
+            DateTimeFormatter.ofPattern("dd.MM.yy");
 
     private final String labelFrom;
     private final String labelTo;
@@ -69,18 +70,18 @@ public class DateRangeFilterField<T> implements FilterField<T> {
 
     @Override
     public Predicate<T> predicate() {
-        LocalDate f = from.getValue();
-        LocalDate t = to.getValue();
-        if (f == null && t == null) {
-            return x -> true;
+        LocalDate fromDate = from.getValue();
+        LocalDate toDate = to.getValue();
+        if (fromDate == null && toDate == null) {
+            return item -> true;
         }
-        return x -> {
-            LocalDate start = startExtractor.apply(x);
-            LocalDate end = endExtractor.apply(x);
-            if (f != null && end != null && end.isBefore(f)) {
+        return item -> {
+            LocalDate itemStart = startExtractor.apply(item);
+            LocalDate itemEnd = endExtractor.apply(item);
+            if (fromDate != null && itemEnd != null && itemEnd.isBefore(fromDate)) {
                 return false;
             }
-            if (t != null && start != null && start.isAfter(t)) {
+            if (toDate != null && itemStart != null && itemStart.isAfter(toDate)) {
                 return false;
             }
             return true;
@@ -91,10 +92,15 @@ public class DateRangeFilterField<T> implements FilterField<T> {
     public List<FilterChip> chips() {
         List<FilterChip> chips = new ArrayList<>();
         if (from.getValue() != null) {
-            chips.add(new FilterChip(labelFrom + " " + from.getValue().format(FMT), from::clear));
+            chips.add(
+                    new FilterChip(
+                            labelFrom + " " + from.getValue().format(CHIP_DATE_FORMAT),
+                            from::clear));
         }
         if (to.getValue() != null) {
-            chips.add(new FilterChip(labelTo + " " + to.getValue().format(FMT), to::clear));
+            chips.add(
+                    new FilterChip(
+                            labelTo + " " + to.getValue().format(CHIP_DATE_FORMAT), to::clear));
         }
         return chips;
     }

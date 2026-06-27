@@ -75,8 +75,8 @@ public class OrderCard extends Div {
                                     : StatusBadge.StatusType.WARNING));
         }
 
-        Span title =
-                new Span(safe(order.orderNumber()).isEmpty() ? "—" : safe(order.orderNumber()));
+        String orderNumber = safe(order.orderNumber());
+        Span title = new Span(orderNumber.isEmpty() ? "—" : orderNumber);
         title.addClassName("order-card-tile__number");
         body.add(title);
 
@@ -163,35 +163,40 @@ public class OrderCard extends Div {
         counts.addClassName("order-card-tile__counts");
         meta.add(counts);
 
-        Span sep = new Span(" · ");
-        sep.getElement().setAttribute("aria-hidden", "true");
-        meta.add(sep);
+        meta.add(separator());
 
         Span validity = new Span();
         validity.addClassName("order-card-tile__validity");
-        if (order.validFrom() != null && order.validTo() != null) {
-            validity.setText(
-                    order.validFrom().format(DATE_FMT) + " → " + order.validTo().format(DATE_FMT));
-        } else if (order.validTo() != null) {
-            validity.setText(tr.apply("order.validTo") + " " + order.validTo().format(DATE_FMT));
-        } else if (order.validFrom() != null) {
-            validity.setText(
-                    tr.apply("order.validFrom") + " " + order.validFrom().format(DATE_FMT));
-        } else {
-            validity.setText("—");
-        }
+        validity.setText(validityLabel(order, tr));
         meta.add(validity);
 
         if (order.customerName() != null && !order.customerName().isBlank()) {
-            Span sep2 = new Span(" · ");
-            sep2.getElement().setAttribute("aria-hidden", "true");
-            meta.add(sep2);
+            meta.add(separator());
             Span customer = new Span(order.customerName());
             customer.addClassName("order-card-tile__customer");
             meta.add(customer);
         }
 
         return meta;
+    }
+
+    private Span separator() {
+        Span separator = new Span(" · ");
+        separator.getElement().setAttribute("aria-hidden", "true");
+        return separator;
+    }
+
+    private String validityLabel(OrderListItem order, Function<String, String> tr) {
+        if (order.validFrom() != null && order.validTo() != null) {
+            return order.validFrom().format(DATE_FMT) + " → " + order.validTo().format(DATE_FMT);
+        }
+        if (order.validTo() != null) {
+            return tr.apply("order.validTo") + " " + order.validTo().format(DATE_FMT);
+        }
+        if (order.validFrom() != null) {
+            return tr.apply("order.validFrom") + " " + order.validFrom().format(DATE_FMT);
+        }
+        return "—";
     }
 
     private static String safe(String s) {

@@ -59,12 +59,12 @@ class OrderPositionActions {
         return t.apply(key, new Object[0]);
     }
 
-    void editPosition(OrderPosition pos) {
-        if (pos.getType() == PositionType.LEISTUNG) {
-            openServiceDialog(pos);
-        } else {
-            openTimetableBuilder(pos);
+    void editPosition(OrderPosition position) {
+        if (position.getType() == PositionType.LEISTUNG) {
+            openServiceDialog(position);
+            return;
         }
+        openTimetableBuilder(position);
     }
 
     void openServiceDialog(OrderPosition existing) {
@@ -75,27 +75,27 @@ class OrderPositionActions {
         dialog.open();
     }
 
-    void confirmDelete(OrderPosition pos) {
+    void confirmDelete(OrderPosition position) {
         ConfirmDialog dialog = new ConfirmDialog();
-        dialog.setHeader(tr("common.delete") + ": " + pos.getName() + "?");
+        dialog.setHeader(tr("common.delete") + ": " + position.getName() + "?");
         dialog.setCancelable(true);
         dialog.setCancelText(tr("common.cancel"));
         dialog.setConfirmText(tr("common.delete"));
         dialog.setConfirmButtonTheme("error primary");
         dialog.addConfirmListener(
                 e -> {
-                    orderService.deletePosition(pos.getId());
+                    orderService.deletePosition(position.getId());
                     onRefresh.run();
                 });
         dialog.open();
     }
 
     void openTimetableBuilder(OrderPosition existing) {
-        String target = "orders/" + order.getId() + "/timetable-builder";
+        String route = "orders/" + order.getId() + "/timetable-builder";
         if (existing != null) {
-            target += "?positionId=" + existing.getId();
+            route += "?positionId=" + existing.getId();
         }
-        UI.getCurrent().navigate(target);
+        UI.getCurrent().navigate(route);
     }
 
     /** Opens the Verkehrstage editor for an expression: pick days, reassign from siblings. */
@@ -149,17 +149,17 @@ class OrderPositionActions {
      * promoted, so the UI disables the action up front. A train identity (typed) is always
      * splittable.
      */
-    static boolean canSplit(OrderPosition pos) {
-        if (pos.getVariantType() != null) {
+    static boolean canSplit(OrderPosition position) {
+        if (position.getVariantType() != null) {
             return true; // a train identity is already split-ready
         }
-        // Only real purchase orders block a split (a CAPACITY resource need does not).
-        return pos.getPurchasePositions() == null || pos.getPurchasePositions().isEmpty();
+        return position.getPurchasePositions() == null
+                || position.getPurchasePositions().isEmpty();
     }
 
-    void respondToAlteration(OrderPosition pos, boolean accept) {
+    void respondToAlteration(OrderPosition position, boolean accept) {
         try {
-            purchaseOrderService.respondToAlteration(pos.getId(), accept);
+            purchaseOrderService.respondToAlteration(position.getId(), accept);
             Notification.show(
                             tr(accept ? "order.alteration.accepted" : "order.alteration.rejected"),
                             2500,

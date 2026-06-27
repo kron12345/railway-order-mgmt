@@ -1,6 +1,7 @@
 package com.ordermgmt.railway.ui.component.business;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.function.Function;
 
 import com.vaadin.flow.component.Component;
@@ -24,6 +25,9 @@ import com.ordermgmt.railway.domain.business.model.Business;
  */
 public class LinkedBusinessesPanel extends Div {
 
+    private static final String EMPTY_TITLE = "—";
+    private static final int SPACER_FLEX_GROW = 1;
+
     public LinkedBusinessesPanel(List<Business> businesses, Function<String, String> tr) {
         addClassName("biz-card");
 
@@ -37,15 +41,15 @@ public class LinkedBusinessesPanel extends Div {
             add(empty);
             return;
         }
-        Div list = new Div();
+        var list = new Div();
         list.addClassName("biz-link-list");
-        for (Business b : businesses) {
-            list.add(buildRow(b, tr));
+        for (Business business : businesses) {
+            list.add(buildRow(business, tr));
         }
         add(list);
     }
 
-    private Component buildRow(Business b, Function<String, String> tr) {
+    private Component buildRow(Business business, Function<String, String> tr) {
         var row = new HorizontalLayout();
         row.addClassName("biz-link-row");
         row.setWidthFull();
@@ -53,32 +57,41 @@ public class LinkedBusinessesPanel extends Div {
         row.setPadding(false);
         row.setAlignItems(FlexComponent.Alignment.CENTER);
 
-        Span tag = new Span("BIZ");
+        var tag = new Span("BIZ");
         tag.addClassName("biz-tree-tag");
         tag.addClassName("biz-tree-tag--order");
 
-        Span title = new Span(b.getTitle() == null || b.getTitle().isBlank() ? "—" : b.getTitle());
+        var title = new Span(displayTitle(business));
         title.addClassName("biz-link-row__name");
 
-        Span status = new Span(tr.apply("business.status." + b.getStatus().name()));
+        var status = new Span(tr.apply("business.status." + business.getStatus().name()));
         status.addClassName("biz-status-pill-icon");
-        status.addClassName("biz-status-pill-icon--" + b.getStatus().name().toLowerCase());
+        status.addClassName(
+                "biz-status-pill-icon--" + business.getStatus().name().toLowerCase(Locale.ROOT));
 
-        Div spacer = new Div();
+        var spacer = new Div();
         spacer.getStyle().set("flex", "1");
 
         var goBtn = new Button(VaadinIcon.ARROW_RIGHT.create());
         goBtn.addThemeVariants(
                 ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY, ButtonVariant.LUMO_ICON);
         goBtn.getElement().setAttribute("aria-label", tr.apply("business.openBusiness"));
-        goBtn.addClickListener(e -> UI.getCurrent().navigate("businesses/" + b.getId()));
+        goBtn.addClickListener(e -> navigateToBusiness(business));
 
         row.add(tag, title, status, spacer, goBtn);
-        row.setFlexGrow(1, spacer);
+        row.setFlexGrow(SPACER_FLEX_GROW, spacer);
         row.getElement().getStyle().set("cursor", "pointer");
-        row.getElement()
-                .addEventListener(
-                        "click", e -> UI.getCurrent().navigate("businesses/" + b.getId()));
+        row.getElement().addEventListener("click", e -> navigateToBusiness(business));
         return row;
+    }
+
+    private static String displayTitle(Business business) {
+        return business.getTitle() == null || business.getTitle().isBlank()
+                ? EMPTY_TITLE
+                : business.getTitle();
+    }
+
+    private static void navigateToBusiness(Business business) {
+        UI.getCurrent().navigate("businesses/" + business.getId());
     }
 }

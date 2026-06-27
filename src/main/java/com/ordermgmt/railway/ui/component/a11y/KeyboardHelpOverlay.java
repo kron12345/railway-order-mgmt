@@ -48,23 +48,28 @@ public class KeyboardHelpOverlay extends Dialog {
     }
 
     private Div buildSection(String title, List<Div> rows) {
-        Div sec = new Div();
-        sec.addClassName("kbd-help__section");
-        H3 h = new H3(title);
-        h.addClassName("kbd-help__heading");
-        sec.add(h);
-        rows.forEach(sec::add);
-        return sec;
+        Div section = new Div();
+        section.addClassName("kbd-help__section");
+
+        H3 heading = new H3(title);
+        heading.addClassName("kbd-help__heading");
+
+        section.add(heading);
+        rows.forEach(section::add);
+        return section;
     }
 
     private Div row(String key, String description) {
-        Div r = new Div();
-        r.addClassName("kbd-help__row");
-        Span k = new Span(key);
-        k.addClassName("kbd-help__key");
-        Span d = new Span(description);
-        d.addClassName("kbd-help__desc");
-        r.add(k, d);
-        return r;
+        Div row = new Div();
+        row.addClassName("kbd-help__row");
+
+        Span keyLabel = new Span(key);
+        keyLabel.addClassName("kbd-help__key");
+
+        Span descriptionLabel = new Span(description);
+        descriptionLabel.addClassName("kbd-help__desc");
+
+        row.add(keyLabel, descriptionLabel);
+        return row;
     }
 }

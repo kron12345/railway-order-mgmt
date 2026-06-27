@@ -2,6 +2,7 @@ package com.ordermgmt.railway.ui.component.timetable;
 
 import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.activityOptionLabel;
 
+import java.time.Duration;
 import java.time.LocalTime;
 import java.util.List;
 
@@ -35,6 +36,9 @@ import com.ordermgmt.railway.ui.component.OperationalPointComboBox;
  * mode carries a value.
  */
 class AddStopForm extends Div {
+
+    private static final int FORM_WARNING_DURATION_MS = 2500;
+    private static final Duration TIME_PICKER_STEP = Duration.ofMinutes(1);
 
     private final ComboBox<OperationalPoint> pointCombo = new ComboBox<>();
     private final ComboBox<TimetableActivityOption> activityCombo = new ComboBox<>();
@@ -103,10 +107,10 @@ class AddStopForm extends Div {
         arrivalMode.addValueChangeListener(e -> updateFieldVisibility());
         departureMode.addValueChangeListener(e -> updateFieldVisibility());
 
-        arrivalPrimary.setStep(java.time.Duration.ofMinutes(1));
-        arrivalSecondary.setStep(java.time.Duration.ofMinutes(1));
-        departurePrimary.setStep(java.time.Duration.ofMinutes(1));
-        departureSecondary.setStep(java.time.Duration.ofMinutes(1));
+        configureTimePicker(arrivalPrimary);
+        configureTimePicker(arrivalSecondary);
+        configureTimePicker(departurePrimary);
+        configureTimePicker(departureSecondary);
 
         addButton.setIcon(VaadinIcon.CHECK.create());
         addButton.addThemeVariants(ButtonVariant.LUMO_PRIMARY, ButtonVariant.LUMO_SMALL);
@@ -142,23 +146,23 @@ class AddStopForm extends Div {
         select.setWidth("160px");
     }
 
-    private String modeLabel(TimeConstraintMode m) {
+    private String modeLabel(TimeConstraintMode mode) {
         try {
-            return getTranslation("timetable.timeMode." + m.name());
+            return getTranslation("timetable.timeMode." + mode.name());
         } catch (RuntimeException ex) {
-            return m.name();
+            return mode.name();
         }
     }
 
     private void updateFieldVisibility() {
-        TimeConstraintMode am = arrivalMode.getValue();
-        arrivalSecondary.setVisible(am == TimeConstraintMode.WINDOW);
-        arrivalPrimary.setLabel(primaryLabel(am, true));
+        TimeConstraintMode selectedArrivalMode = arrivalMode.getValue();
+        arrivalSecondary.setVisible(selectedArrivalMode == TimeConstraintMode.WINDOW);
+        arrivalPrimary.setLabel(primaryLabel(selectedArrivalMode, true));
         arrivalSecondary.setLabel(getTranslation("timetable.editor.latestArrival"));
 
-        TimeConstraintMode dm = departureMode.getValue();
-        departureSecondary.setVisible(dm == TimeConstraintMode.WINDOW);
-        departurePrimary.setLabel(primaryLabel(dm, false));
+        TimeConstraintMode selectedDepartureMode = departureMode.getValue();
+        departureSecondary.setVisible(selectedDepartureMode == TimeConstraintMode.WINDOW);
+        departurePrimary.setLabel(primaryLabel(selectedDepartureMode, false));
         departureSecondary.setLabel(getTranslation("timetable.editor.earliestDeparture"));
     }
 
@@ -200,13 +204,14 @@ class AddStopForm extends Div {
             warn("timetable.stop.missingOpOrActivity");
             return;
         }
-        TimeConstraintMode am = arrivalMode.getValue();
-        TimeConstraintMode dm = departureMode.getValue();
+        TimeConstraintMode selectedArrivalMode = arrivalMode.getValue();
+        TimeConstraintMode selectedDepartureMode = departureMode.getValue();
         if (arrivalPrimary.getValue() == null) {
             warn("timetable.stop.missingArrival");
             return;
         }
-        if (am == TimeConstraintMode.WINDOW && arrivalSecondary.getValue() == null) {
+        if (selectedArrivalMode == TimeConstraintMode.WINDOW
+                && arrivalSecondary.getValue() == null) {
             warn("timetable.stop.missingArrivalLatest");
             return;
         }
@@ -214,17 +219,17 @@ class AddStopForm extends Div {
             warn("timetable.stop.missingDeparture");
             return;
         }
-        if (dm == TimeConstraintMode.WINDOW && departureSecondary.getValue() == null) {
+        if (selectedDepartureMode == TimeConstraintMode.WINDOW
+                && departureSecondary.getValue() == null) {
             warn("timetable.stop.missingDepartureEarliest");
             return;
         }
-        // WINDOW order: earliest ≤ latest
-        if (am == TimeConstraintMode.WINDOW
+        if (selectedArrivalMode == TimeConstraintMode.WINDOW
                 && arrivalPrimary.getValue().isAfter(arrivalSecondary.getValue())) {
             warn("timetable.stop.windowOrder");
             return;
         }
-        if (dm == TimeConstraintMode.WINDOW
+        if (selectedDepartureMode == TimeConstraintMode.WINDOW
                 && departureSecondary.getValue().isAfter(departurePrimary.getValue())) {
             warn("timetable.stop.windowOrder");
             return;
@@ -232,10 +237,10 @@ class AddStopForm extends Div {
 
         StopTimes times =
                 new StopTimes(
-                        am,
+                        selectedArrivalMode,
                         arrivalPrimary.getValue(),
                         arrivalSecondary.getValue(),
-                        dm,
+                        selectedDepartureMode,
                         departurePrimary.getValue(),
                         departureSecondary.getValue());
         onAdd.accept(
@@ -244,8 +249,15 @@ class AddStopForm extends Div {
     }
 
     private void warn(String key) {
-        Notification.show(getTranslation(key), 2500, Notification.Position.BOTTOM_END)
+        Notification.show(
+                        getTranslation(key),
+                        FORM_WARNING_DURATION_MS,
+                        Notification.Position.BOTTOM_END)
                 .addThemeVariants(NotificationVariant.LUMO_ERROR);
+    }
+
+    private void configureTimePicker(TimePicker picker) {
+        picker.setStep(TIME_PICKER_STEP);
     }
 
     /** Show the form. {@code afterRowName} is the visible name of the row we insert AFTER. */

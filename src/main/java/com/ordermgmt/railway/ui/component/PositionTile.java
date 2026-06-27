@@ -12,19 +12,41 @@ import com.ordermgmt.railway.domain.order.model.PositionStatus;
 import com.ordermgmt.railway.domain.order.model.PositionType;
 import com.ordermgmt.railway.ui.util.StringUtils;
 
-/** Card-style tile for displaying an order position with route, schedule, tags, and status. */
 public class PositionTile extends Div {
 
-    private static final DateTimeFormatter DT_FMT = DateTimeFormatter.ofPattern("dd.MM. HH:mm");
+    private static final DateTimeFormatter DATE_TIME_FORMATTER =
+            DateTimeFormatter.ofPattern("dd.MM. HH:mm");
     private static final int MAX_TAGS = 2;
+
     private final BiFunction<String, Object[], String> translator;
 
-    public PositionTile(OrderPosition pos, BiFunction<String, Object[], String> translator) {
+    public PositionTile(OrderPosition position, BiFunction<String, Object[], String> translator) {
         this.translator = translator;
         addClassName("position-tile");
         getElement().setAttribute("tabindex", "0");
         getElement().setAttribute("role", "button");
-        getElement().setAttribute("aria-label", pos.getName());
+        getElement().setAttribute("aria-label", position.getName());
+        applyTileStyle();
+
+        getElement()
+                .executeJs(
+                        "this.addEventListener('mouseover', function(){this.style.borderColor='var(--rom-accent)'});"
+                                + "this.addEventListener('mouseout', function(){this.style.borderColor=''});");
+
+        add(createHeader(position));
+        add(createRoute(position));
+        Div comment = createComment(position);
+        if (comment != null) {
+            add(comment);
+        }
+        Div meta = createMeta(position);
+        if (meta.getComponentCount() > 0) {
+            add(meta);
+        }
+        add(createFooter(position));
+    }
+
+    private void applyTileStyle() {
         getStyle()
                 .set("background", "var(--rom-bg-primary)")
                 .set("border", "1px solid var(--rom-border-subtle, var(--rom-border))")
@@ -35,74 +57,62 @@ public class PositionTile extends Div {
                 .set("gap", "8px")
                 .set("cursor", "pointer")
                 .set("transition", "border-color 0.15s, transform 0.15s");
-
-        getElement()
-                .executeJs(
-                        "this.addEventListener('mouseover', function(){this.style.borderColor='var(--rom-accent)'});"
-                                + "this.addEventListener('mouseout', function(){this.style.borderColor=''});");
-
-        add(createHeader(pos));
-        add(createRoute(pos));
-        Div comment = createComment(pos);
-        if (comment != null) {
-            add(comment);
-        }
-        Div meta = createMeta(pos);
-        if (meta.getComponentCount() > 0) {
-            add(meta);
-        }
-        add(createFooter(pos));
     }
 
-    private Div createHeader(OrderPosition pos) {
+    private Div createHeader(OrderPosition position) {
         Div header = new Div();
         header.getStyle()
                 .set("display", "flex")
                 .set("justify-content", "space-between")
                 .set("align-items", "center");
 
-        Span name = new Span(pos.getName());
+        Span name = new Span(position.getName());
         name.getStyle()
                 .set("font-weight", "600")
                 .set("font-size", "13px")
                 .set("color", "var(--rom-text-primary)");
 
-        Span typeBadge = createTypeBadge(pos);
-        header.add(name, typeBadge);
+        header.add(name, createTypeBadge(position));
         return header;
     }
 
-    private Div createRoute(OrderPosition pos) {
+    private Div createRoute(OrderPosition position) {
         Div route = new Div();
         route.getStyle()
                 .set("font-family", "'JetBrains Mono', monospace")
                 .set("font-size", "12px")
                 .set("color", "var(--rom-text-secondary)");
 
-        String otn = pos.getOperationalTrainNumber();
-        String from = pos.getFromLocation();
-        String to = pos.getToLocation();
-        String prefix = otn != null && !otn.isBlank() ? "OTN " + otn + " · " : "";
-        if (from != null && to != null) {
-            route.setText(prefix + from + " → " + to);
-        } else if (from != null) {
-            route.setText(from);
-        } else if (to != null) {
-            route.setText(to);
-        } else {
-            route.setText("—");
-        }
-
+        route.setText(formatRoute(position));
         return route;
     }
 
-    private Div createComment(OrderPosition pos) {
-        if (pos.getComment() == null || pos.getComment().isBlank()) {
+    private String formatRoute(OrderPosition position) {
+        String trainNumber = position.getOperationalTrainNumber();
+        String fromLocation = position.getFromLocation();
+        String toLocation = position.getToLocation();
+        String trainPrefix =
+                trainNumber != null && !trainNumber.isBlank() ? "OTN " + trainNumber + " · " : "";
+
+        if (fromLocation != null && toLocation != null) {
+            return trainPrefix + fromLocation + " → " + toLocation;
+        }
+        if (fromLocation != null) {
+            return fromLocation;
+        }
+        if (toLocation != null) {
+            return toLocation;
+        }
+        return "—";
+    }
+
+    private Div createComment(OrderPosition position) {
+        if (position.getComment() == null || position.getComment().isBlank()) {
             return null;
         }
 
         Div comment = new Div();
-        comment.setText(pos.getComment());
+        comment.setText(position.getComment());
         comment.getStyle()
                 .set("font-size", "11px")
                 .set("line-height", "1.4")
@@ -114,18 +124,18 @@ public class PositionTile extends Div {
         return comment;
     }
 
-    private Div createMeta(OrderPosition pos) {
+    private Div createMeta(OrderPosition position) {
         Div meta = new Div();
         meta.getStyle().set("display", "flex").set("flex-wrap", "wrap").set("gap", "6px");
 
-        if (pos.getStart() != null || pos.getEnd() != null) {
-            meta.add(createMetaBadge(formatTimeWindow(pos), "var(--rom-status-info)"));
+        if (position.getStart() != null || position.getEnd() != null) {
+            meta.add(createMetaBadge(formatTimeWindow(position), "var(--rom-status-info)"));
         }
-        if (pos.getServiceType() != null && !pos.getServiceType().isBlank()) {
-            meta.add(createMetaBadge(pos.getServiceType(), "var(--rom-status-warning)"));
+        if (position.getServiceType() != null && !position.getServiceType().isBlank()) {
+            meta.add(createMetaBadge(position.getServiceType(), "var(--rom-status-warning)"));
         }
 
-        List<String> tags = StringUtils.splitTags(pos.getTags());
+        List<String> tags = StringUtils.splitTags(position.getTags());
         for (int i = 0; i < Math.min(tags.size(), MAX_TAGS); i++) {
             meta.add(createMetaBadge("#" + tags.get(i), "var(--rom-text-muted)"));
         }
@@ -136,7 +146,7 @@ public class PositionTile extends Div {
         return meta;
     }
 
-    private Div createFooter(OrderPosition pos) {
+    private Div createFooter(OrderPosition position) {
         Div footer = new Div();
         footer.getStyle()
                 .set("display", "flex")
@@ -146,14 +156,15 @@ public class PositionTile extends Div {
                 .set("padding-top", "8px")
                 .set("border-top", "1px solid var(--rom-border-subtle, var(--rom-border))");
 
-        Span statusBadge = createStatusBadge(pos.getInternalStatus());
-        footer.add(createPurchaseBadge(pos), statusBadge);
+        footer.add(createPurchaseBadge(position), createStatusBadge(position.getInternalStatus()));
         return footer;
     }
 
-    private Span createPurchaseBadge(OrderPosition pos) {
+    private Span createPurchaseBadge(OrderPosition position) {
         int purchaseCount =
-                pos.getPurchasePositions() != null ? pos.getPurchasePositions().size() : 0;
+                position.getPurchasePositions() != null
+                        ? position.getPurchasePositions().size()
+                        : 0;
         Span badge = new Span(purchaseCount + " " + t("purchase.calendar.btn"));
         badge.getStyle()
                 .set("font-size", "10px")
@@ -173,8 +184,8 @@ public class PositionTile extends Div {
         return badge;
     }
 
-    private Span createTypeBadge(OrderPosition pos) {
-        PositionType type = pos.getType();
+    private Span createTypeBadge(OrderPosition position) {
+        PositionType type = position.getType();
         boolean isTimetable = type == PositionType.FAHRPLAN;
         String color = isTimetable ? "var(--rom-status-info)" : "var(--rom-status-warning)";
         String bgColor = isTimetable ? "rgba(96,165,250,0.12)" : "rgba(251,191,36,0.12)";
@@ -244,13 +255,17 @@ public class PositionTile extends Div {
         return badge;
     }
 
-    private String formatTimeWindow(OrderPosition pos) {
-        String start = pos.getStart() != null ? pos.getStart().format(DT_FMT) : "—";
-        String end = pos.getEnd() != null ? pos.getEnd().format(DT_FMT) : "—";
-        if (pos.getStart() != null && pos.getEnd() != null) {
+    private String formatTimeWindow(OrderPosition position) {
+        String start =
+                position.getStart() != null
+                        ? position.getStart().format(DATE_TIME_FORMATTER)
+                        : "—";
+        String end =
+                position.getEnd() != null ? position.getEnd().format(DATE_TIME_FORMATTER) : "—";
+        if (position.getStart() != null && position.getEnd() != null) {
             return start + " → " + end;
         }
-        return pos.getStart() != null ? start : end;
+        return position.getStart() != null ? start : end;
     }
 
     private String t(String key) {

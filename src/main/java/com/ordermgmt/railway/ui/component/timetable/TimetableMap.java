@@ -51,19 +51,22 @@ public class TimetableMap extends Div {
     }
 
     /** Renders the given operational points (the current viewport's set) as background markers. */
-    public void setBackgroundOperationalPoints(List<OperationalPoint> ops) {
-        JsonArray jsonOps = Json.createArray();
-        int idx = 0;
-        for (OperationalPoint op : ops) {
-            if (op.getLatitude() == null || op.getLongitude() == null) continue;
+    public void setBackgroundOperationalPoints(List<OperationalPoint> operationalPoints) {
+        JsonArray jsonOperationalPoints = Json.createArray();
+        int jsonIndex = 0;
+        for (OperationalPoint operationalPoint : operationalPoints) {
+            if (operationalPoint.getLatitude() == null
+                    || operationalPoint.getLongitude() == null) {
+                continue;
+            }
             JsonObject item = Json.createObject();
-            item.put("uopid", op.getUopid());
-            item.put("name", op.getName());
-            item.put("latitude", op.getLatitude());
-            item.put("longitude", op.getLongitude());
-            jsonOps.set(idx++, item);
+            item.put("uopid", operationalPoint.getUopid());
+            item.put("name", operationalPoint.getName());
+            item.put("latitude", operationalPoint.getLatitude());
+            item.put("longitude", operationalPoint.getLongitude());
+            jsonOperationalPoints.set(jsonIndex++, item);
         }
-        getElement().callJsFunction("setOperationalPoints", jsonOps);
+        getElement().callJsFunction("setOperationalPoints", jsonOperationalPoints);
     }
 
     /** Registers a callback that fires when the user clicks an OP marker on the map. */
@@ -90,13 +93,13 @@ public class TimetableMap extends Div {
                 .addEventListener(
                         "bounds-changed",
                         event -> {
-                            var d = event.getEventData();
+                            var eventData = event.getEventData();
                             listener.onBoundsChanged(
-                                    d.getNumber("event.detail.south"),
-                                    d.getNumber("event.detail.west"),
-                                    d.getNumber("event.detail.north"),
-                                    d.getNumber("event.detail.east"),
-                                    (int) d.getNumber("event.detail.zoom"));
+                                    eventData.getNumber("event.detail.south"),
+                                    eventData.getNumber("event.detail.west"),
+                                    eventData.getNumber("event.detail.north"),
+                                    eventData.getNumber("event.detail.east"),
+                                    (int) eventData.getNumber("event.detail.zoom"));
                         })
                 .addEventData("event.detail.south")
                 .addEventData("event.detail.west")
