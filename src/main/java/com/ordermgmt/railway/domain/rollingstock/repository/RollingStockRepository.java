@@ -11,8 +11,7 @@ import com.ordermgmt.railway.domain.rollingstock.model.RollingStockItem;
 
 /**
  * JPA repository for {@link RollingStockItem}. Combines standard CRUD with {@link
- * RevisionRepository} so callers can read the Envers history of a vehicle. Convenience finders
- * return active (non-retired) items sorted by designation for admin and planning screens.
+ * RevisionRepository} so callers can read the Envers history of a vehicle.
  */
 @Repository
 public interface RollingStockRepository

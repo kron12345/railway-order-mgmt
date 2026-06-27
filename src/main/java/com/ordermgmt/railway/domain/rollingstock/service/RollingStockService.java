@@ -12,30 +12,30 @@ import com.ordermgmt.railway.domain.rollingstock.repository.RollingStockReposito
 
 /**
  * CRUD facade for {@link RollingStockItem} master data. Wraps {@link RollingStockRepository} with
- * active/category filters used by the rolling-stock admin view.
+ * transaction and authorization boundaries used by the rolling-stock admin view.
  */
 @Service
 @Transactional
 public class RollingStockService {
 
-    private final RollingStockRepository repository;
+    private final RollingStockRepository rollingStockRepository;
 
-    public RollingStockService(RollingStockRepository repository) {
-        this.repository = repository;
+    public RollingStockService(RollingStockRepository rollingStockRepository) {
+        this.rollingStockRepository = rollingStockRepository;
     }
 
     @Transactional(readOnly = true)
     public List<RollingStockItem> findAll() {
-        return repository.findAllByOrderByDesignationAsc();
+        return rollingStockRepository.findAllByOrderByDesignationAsc();
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
-    public RollingStockItem save(RollingStockItem item) {
-        return repository.save(item);
+    public RollingStockItem save(RollingStockItem rollingStockItem) {
+        return rollingStockRepository.save(rollingStockItem);
     }
 
     @PreAuthorize("hasRole('ADMIN')")
     public void delete(UUID id) {
-        repository.deleteById(id);
+        rollingStockRepository.deleteById(id);
     }
 }
