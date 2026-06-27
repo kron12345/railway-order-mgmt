@@ -7,6 +7,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Function;
 
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
@@ -33,6 +34,7 @@ import com.ordermgmt.railway.domain.order.model.PurchasePosition;
 import com.ordermgmt.railway.domain.order.service.AuditService;
 import com.ordermgmt.railway.infrastructure.keycloak.CurrentUserHelper;
 import com.ordermgmt.railway.ui.component.AuditHistoryDialog;
+import com.ordermgmt.railway.ui.util.StringUtils;
 
 /**
  * Read-only detail view for a {@link Business}. Default mode in /businesses/{id}. Edit / create
@@ -50,7 +52,7 @@ public class BusinessReadView extends VerticalLayout {
 
     private final BusinessService businessService;
     private final AuditService auditService;
-    private final java.util.function.Function<String, String> tr;
+    private final Function<String, String> tr;
     private final Business business;
     private final List<OrderPosition> linkedOrderPositions;
     private final List<PurchasePosition> linkedPurchasePositions;
@@ -60,7 +62,7 @@ public class BusinessReadView extends VerticalLayout {
             BusinessService businessService,
             AuditService auditService,
             UUID businessId,
-            java.util.function.Function<String, String> tr) {
+            Function<String, String> tr) {
         this.businessService = businessService;
         this.auditService = auditService;
         this.tr = tr;
@@ -90,8 +92,6 @@ public class BusinessReadView extends VerticalLayout {
         add(buildLinkedPurchasePositionsCard());
         add(buildDocumentsCard());
     }
-
-    // ─── Header ────────────────────────────────────────────────
 
     private HorizontalLayout buildHeader() {
         var bar = new HorizontalLayout();
@@ -144,9 +144,8 @@ public class BusinessReadView extends VerticalLayout {
     }
 
     /** Status pill with icon, matching the master-card style. */
-    private com.vaadin.flow.component.orderedlayout.HorizontalLayout buildStatusPillWithIcon(
-            java.util.function.Function<String, String> tr) {
-        var pill = new com.vaadin.flow.component.orderedlayout.HorizontalLayout();
+    private HorizontalLayout buildStatusPillWithIcon(Function<String, String> tr) {
+        var pill = new HorizontalLayout();
         pill.addClassName("biz-status-pill-icon");
         pill.addClassName("biz-status-pill-icon--" + business.getStatus().name().toLowerCase());
         pill.setPadding(false);
@@ -168,8 +167,6 @@ public class BusinessReadView extends VerticalLayout {
         pill.add(label);
         return pill;
     }
-
-    // ─── Stammdaten ────────────────────────────────────────────
 
     private Component buildStammdatenCard() {
         var card = new Div();
@@ -194,8 +191,6 @@ public class BusinessReadView extends VerticalLayout {
         card.add(grid);
         return card;
     }
-
-    // ─── Verknüpfte Auftragspositionen ─────────────────────────
 
     private Component buildLinkedOrderPositionsCard() {
         var card = new Div();
@@ -241,27 +236,17 @@ public class BusinessReadView extends VerticalLayout {
         var spacer = new Div();
         spacer.getStyle().set("flex", "1");
 
-        var goBtn = new Button(VaadinIcon.ARROW_RIGHT.create());
-        goBtn.addThemeVariants(
-                ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY, ButtonVariant.LUMO_ICON);
         String route =
                 op.getOrder() != null
                         ? "orders/" + op.getOrder().getId() + "/positions/" + op.getId()
                         : null;
-        goBtn.setEnabled(route != null);
-        goBtn.getElement().setAttribute("aria-label", tr.apply("business.openPosition"));
-        if (route != null) goBtn.addClickListener(e -> UI.getCurrent().navigate(route));
+        var goBtn = createOpenPositionButton(route);
 
         row.add(tag, name, orderNum, spacer, goBtn);
         row.setFlexGrow(1, spacer);
-        if (route != null) {
-            row.getElement().getStyle().set("cursor", "pointer");
-            row.getElement().addEventListener("click", e -> UI.getCurrent().navigate(route));
-        }
+        makeRowNavigable(row, route);
         return row;
     }
-
-    // ─── Verknüpfte Bestellpositionen ──────────────────────────
 
     private Component buildLinkedPurchasePositionsCard() {
         var card = new Div();
@@ -313,28 +298,38 @@ public class BusinessReadView extends VerticalLayout {
         var spacer = new Div();
         spacer.getStyle().set("flex", "1");
 
-        var goBtn = new Button(VaadinIcon.ARROW_RIGHT.create());
-        goBtn.addThemeVariants(
-                ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY, ButtonVariant.LUMO_ICON);
         // BP does not have its own detail route — jump to the parent order position.
         String route =
                 op != null && op.getOrder() != null
                         ? "orders/" + op.getOrder().getId() + "/positions/" + op.getId()
                         : null;
-        goBtn.setEnabled(route != null);
-        goBtn.getElement().setAttribute("aria-label", tr.apply("business.openPosition"));
-        if (route != null) goBtn.addClickListener(e -> UI.getCurrent().navigate(route));
+        var goBtn = createOpenPositionButton(route);
 
         row.add(tag, num, name, orderNum, spacer, goBtn);
         row.setFlexGrow(1, spacer);
-        if (route != null) {
-            row.getElement().getStyle().set("cursor", "pointer");
-            row.getElement().addEventListener("click", e -> UI.getCurrent().navigate(route));
-        }
+        makeRowNavigable(row, route);
         return row;
     }
 
-    // ─── Dokumente ─────────────────────────────────────────────
+    private Button createOpenPositionButton(String route) {
+        var button = new Button(VaadinIcon.ARROW_RIGHT.create());
+        button.addThemeVariants(
+                ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY, ButtonVariant.LUMO_ICON);
+        button.setEnabled(route != null);
+        button.getElement().setAttribute("aria-label", tr.apply("business.openPosition"));
+        if (route != null) {
+            button.addClickListener(e -> UI.getCurrent().navigate(route));
+        }
+        return button;
+    }
+
+    private void makeRowNavigable(HorizontalLayout row, String route) {
+        if (route == null) {
+            return;
+        }
+        row.getElement().getStyle().set("cursor", "pointer");
+        row.getElement().addEventListener("click", e -> UI.getCurrent().navigate(route));
+    }
 
     private Component buildDocumentsCard() {
         var card = new Div();
@@ -420,8 +415,6 @@ public class BusinessReadView extends VerticalLayout {
                 .open();
     }
 
-    // ─── Helpers ───────────────────────────────────────────────
-
     private void confirmDelete() {
         var dialog = new ConfirmDialog();
         dialog.setHeader(tr.apply("business.deleteTitle"));
@@ -488,7 +481,7 @@ public class BusinessReadView extends VerticalLayout {
     }
 
     private static String safe(String s) {
-        return s == null ? "" : s;
+        return StringUtils.nvl(s);
     }
 
     /** Strip CR/LF/quotes from a value before it lands in an HTTP header (RFC 7230). */

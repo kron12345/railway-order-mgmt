@@ -11,13 +11,7 @@ import com.vaadin.flow.component.checkbox.CheckboxGroup;
 
 import com.ordermgmt.railway.domain.infrastructure.model.PredefinedTag;
 
-/**
- * Reusable tag selection logic for CheckboxGroup-based tag pickers. Extracted from duplicated
- * implementations in TimetableBuilderView, OrderFormPanel and ServicePositionDialog.
- *
- * <p>Usage: construct once per form, then call {@link #readTags(String)} to populate and {@link
- * #joinSelectedTags()} to serialize.
- */
+/** Reusable tag selection logic for CheckboxGroup-based tag pickers. */
 public class TagSelectionHelper {
 
     private final CheckboxGroup<PredefinedTag> tagSelector;
@@ -36,17 +30,14 @@ public class TagSelectionHelper {
         this.translator = translator;
     }
 
-    /**
-     * Parses a stored comma-separated tag string, selects matching predefined tags in the checkbox
-     * group, and collects unmatched legacy tags.
-     */
     public void readTags(String stored) {
-        Map<String, PredefinedTag> byName = new LinkedHashMap<>();
-        availableTags.forEach(t -> byName.put(normalizeTagName(t.getName()), t));
+        Map<String, PredefinedTag> tagsByName = new LinkedHashMap<>();
+        availableTags.forEach(tag -> tagsByName.put(normalizeTagName(tag.getName()), tag));
         unmatchedTags.clear();
+
         LinkedHashSet<PredefinedTag> selected = new LinkedHashSet<>();
         for (String token : StringUtils.splitTags(stored)) {
-            PredefinedTag match = byName.get(normalizeTagName(token));
+            PredefinedTag match = tagsByName.get(normalizeTagName(token));
             if (match != null) {
                 selected.add(match);
             } else {
@@ -56,34 +47,21 @@ public class TagSelectionHelper {
         tagSelector.setValue(selected);
     }
 
-    /**
-     * Returns a comma-separated string of all selected tag names (preserving catalog order) plus
-     * any unmatched legacy tags. Returns {@code null} if empty.
-     */
     public String joinSelectedTags() {
-        LinkedHashSet<String> vals = new LinkedHashSet<>();
+        LinkedHashSet<String> selectedTagNames = new LinkedHashSet<>();
         for (PredefinedTag tag : availableTags) {
             if (tagSelector.getValue().contains(tag)) {
-                vals.add(tag.getName());
+                selectedTagNames.add(tag.getName());
             }
         }
-        vals.addAll(unmatchedTags);
-        return vals.isEmpty() ? null : String.join(", ", vals);
+        selectedTagNames.addAll(unmatchedTags);
+        return selectedTagNames.isEmpty() ? null : String.join(", ", selectedTagNames);
     }
 
-    /**
-     * Builds a helper text string indicating legacy (unmatched) tags when present.
-     *
-     * @param baseHelperKey i18n key for the base helper text
-     * @param legacyKey i18n key for the legacy suffix (receives the joined legacy tag names)
-     */
     public void updateHelperText(String baseHelperKey, String legacyKey) {
-        String helper = translator.apply(baseHelperKey, new Object[0]);
+        String helper = translate(baseHelperKey);
         if (!unmatchedTags.isEmpty()) {
-            helper +=
-                    " "
-                            + translator.apply(
-                                    legacyKey, new Object[] {String.join(", ", unmatchedTags)});
+            helper += " " + translator.apply(legacyKey, new Object[] {String.join(", ", unmatchedTags)});
         }
         tagSelector.setHelperText(helper);
     }
@@ -94,15 +72,20 @@ public class TagSelectionHelper {
     }
 
     private String tagCategoryLabel(String category) {
-        String n = category == null ? "general" : category.trim().toLowerCase(Locale.ROOT);
-        return switch (n) {
-            case "order" -> translator.apply("settings.tags.cat.order", new Object[0]);
-            case "position" -> translator.apply("settings.tags.cat.position", new Object[0]);
-            default -> translator.apply("settings.tags.cat.general", new Object[0]);
+        String normalizedCategory =
+                category == null ? "general" : category.trim().toLowerCase(Locale.ROOT);
+        return switch (normalizedCategory) {
+            case "order" -> translate("settings.tags.cat.order");
+            case "position" -> translate("settings.tags.cat.position");
+            default -> translate("settings.tags.cat.general");
         };
     }
 
-    private String normalizeTagName(String v) {
-        return v == null ? "" : v.trim().toLowerCase(Locale.ROOT);
+    private String normalizeTagName(String value) {
+        return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private String translate(String key) {
+        return translator.apply(key, new Object[0]);
     }
 }

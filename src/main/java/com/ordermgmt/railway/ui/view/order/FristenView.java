@@ -36,6 +36,8 @@ import com.ordermgmt.railway.ui.layout.MainLayout;
 @PermitAll
 public class FristenView extends VerticalLayout {
 
+    private static final int PAGE_SIZE = 25;
+
     private final FristService fristService;
     private final FristAutoOrderService autoOrderService;
     private Integer lastFired;
@@ -54,6 +56,28 @@ public class FristenView extends VerticalLayout {
     private void build() {
         removeAll();
 
+        add(createHeader());
+        if (lastFired != null) {
+            add(createEvaluationResult());
+        }
+
+        FristService.Overview overview = fristService.overview();
+        add(buildAutoBusinessSection(overview.businesses()));
+
+        List<FristEntry> entries = overview.entries();
+        if (entries.isEmpty()) {
+            add(emptyHint(getTranslation("fristen.empty")));
+            return;
+        }
+        for (Status status : Status.values()) {
+            List<FristEntry> group = entries.stream().filter(e -> e.status() == status).toList();
+            if (!group.isEmpty()) {
+                renderGroup(status, group);
+            }
+        }
+    }
+
+    private HorizontalLayout createHeader() {
         H2 title = new H2(getTranslation("fristen.title"));
         title.getStyle().set("margin", "0");
 
@@ -74,42 +98,22 @@ public class FristenView extends VerticalLayout {
         header.setAlignItems(FlexComponent.Alignment.CENTER);
         header.setJustifyContentMode(FlexComponent.JustifyContentMode.BETWEEN);
         header.getStyle().set("margin-bottom", "var(--lumo-space-m)");
-        add(header);
-
-        if (lastFired != null) {
-            Span result = new Span(getTranslation("fristen.evaluate.result", lastFired));
-            result.getStyle()
-                    .set("display", "inline-block")
-                    .set(
-                            "background",
-                            "color-mix(in srgb, var(--rom-status-active) 12%, transparent)")
-                    .set("color", "var(--rom-status-active)")
-                    .set("border", "1px solid var(--rom-status-active)")
-                    .set("border-radius", "4px")
-                    .set("padding", "4px 10px")
-                    .set("font-size", "13px")
-                    .set("margin-bottom", "var(--lumo-space-s)");
-            add(result);
-        }
-
-        FristService.Overview overview = fristService.overview();
-        add(buildAutoBusinessSection(overview.businesses()));
-
-        List<FristEntry> entries = overview.entries();
-        if (entries.isEmpty()) {
-            add(emptyHint(getTranslation("fristen.empty")));
-            return;
-        }
-        for (Status status : Status.values()) {
-            List<FristEntry> group = entries.stream().filter(e -> e.status() == status).toList();
-            if (group.isEmpty()) {
-                continue;
-            }
-            renderGroup(status, group);
-        }
+        return header;
     }
 
-    private static final int PAGE_SIZE = 25;
+    private Span createEvaluationResult() {
+        Span result = new Span(getTranslation("fristen.evaluate.result", lastFired));
+        result.getStyle()
+                .set("display", "inline-block")
+                .set("background", "color-mix(in srgb, var(--rom-status-active) 12%, transparent)")
+                .set("color", "var(--rom-status-active)")
+                .set("border", "1px solid var(--rom-status-active)")
+                .set("border-radius", "4px")
+                .set("padding", "4px 10px")
+                .set("font-size", "13px")
+                .set("margin-bottom", "var(--lumo-space-s)");
+        return result;
+    }
 
     /**
      * Renders one urgency group: a counted header, its first {@value #PAGE_SIZE} rows, and a

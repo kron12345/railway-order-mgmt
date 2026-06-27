@@ -4,6 +4,9 @@ import java.time.format.DateTimeFormatter;
 import java.util.UUID;
 import java.util.function.Function;
 
+import com.vaadin.flow.component.Key;
+import com.vaadin.flow.component.KeyModifier;
+import com.vaadin.flow.component.Shortcuts;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
@@ -19,8 +22,10 @@ import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 
 import com.ordermgmt.railway.domain.business.service.BusinessService;
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
+import com.ordermgmt.railway.domain.order.model.PositionType;
 import com.ordermgmt.railway.domain.order.repository.OrderPositionRepository;
 import com.ordermgmt.railway.ui.component.business.LinkedBusinessesPanel;
+import com.ordermgmt.railway.ui.util.StringUtils;
 
 /**
  * Read-only detail panel for a single {@link OrderPosition}, embedded by {@link OrderOverviewView}
@@ -77,17 +82,17 @@ public class OrderPositionDetailView extends VerticalLayout {
         back.getElement().setAttribute("aria-keyshortcuts", "Alt+U");
         back.addClickListener(e -> UI.getCurrent().navigate("orders/" + orderId));
         // Alt+U → back to order
-        com.vaadin.flow.component.Shortcuts.addShortcutListener(
+        Shortcuts.addShortcutListener(
                         this,
                         () -> UI.getCurrent().navigate("orders/" + orderId),
-                        com.vaadin.flow.component.Key.KEY_U,
-                        com.vaadin.flow.component.KeyModifier.ALT)
+                        Key.KEY_U,
+                        KeyModifier.ALT)
                 .listenOn(this);
 
         bar.add(back);
 
         // FAHRPLAN positions: one click deeper to the timetable (keeps a single canonical detail).
-        if (pos.getType() == com.ordermgmt.railway.domain.order.model.PositionType.FAHRPLAN) {
+        if (pos.getType() == PositionType.FAHRPLAN) {
             var timetable =
                     new Button(tr.apply("position.openTimetable"), VaadinIcon.CALENDAR.create());
             timetable.addThemeVariants(ButtonVariant.LUMO_SMALL);
@@ -149,6 +154,6 @@ public class OrderPositionDetailView extends VerticalLayout {
     }
 
     private static String safe(String s) {
-        return s == null ? "" : s;
+        return StringUtils.nvl(s);
     }
 }

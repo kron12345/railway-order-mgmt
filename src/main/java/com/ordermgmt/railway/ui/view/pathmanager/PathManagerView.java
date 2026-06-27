@@ -10,13 +10,17 @@ import jakarta.annotation.security.RolesAllowed;
 import org.springframework.data.domain.Pageable;
 
 import com.vaadin.flow.component.AttachEvent;
+import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
+import com.vaadin.flow.component.confirmdialog.ConfirmDialog;
 import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.icon.VaadinIcon;
+import com.vaadin.flow.component.notification.Notification;
+import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
@@ -163,31 +167,29 @@ public class PathManagerView extends VerticalLayout implements BeforeEnterObserv
      * directly. The button is admin-only client-side <em>and</em> server-side (via
      * {@code @PreAuthorize}).
      */
-    private com.vaadin.flow.component.Component buildToolbar() {
-        var bar = new com.vaadin.flow.component.orderedlayout.HorizontalLayout();
+    private Component buildToolbar() {
+        var bar = new HorizontalLayout();
         bar.setWidthFull();
         bar.setPadding(false);
         bar.setSpacing(true);
-        bar.setAlignItems(com.vaadin.flow.component.orderedlayout.FlexComponent.Alignment.CENTER);
+        bar.setAlignItems(FlexComponent.Alignment.CENTER);
         bar.getStyle()
                 .set("padding", "8px 12px")
                 .set("border-bottom", "1px solid var(--rom-border-subtle)");
 
-        var label = new com.vaadin.flow.component.html.Span(getTranslation("pm.view.badge"));
+        var label = new Span(getTranslation("pm.view.badge"));
         label.addClassName("biz-section-title");
         label.getStyle().set("margin", "0");
 
-        var spacer = new com.vaadin.flow.component.html.Div();
+        var spacer = new Div();
         spacer.getStyle().set("flex", "1");
 
         var resetBtn =
-                new com.vaadin.flow.component.button.Button(
+                new Button(
                         getTranslation("pm.reset"),
-                        com.vaadin.flow.component.icon.VaadinIcon.TRASH.create(),
+                        VaadinIcon.TRASH.create(),
                         e -> confirmReset());
-        resetBtn.addThemeVariants(
-                com.vaadin.flow.component.button.ButtonVariant.LUMO_SMALL,
-                com.vaadin.flow.component.button.ButtonVariant.LUMO_TERTIARY);
+        resetBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
         resetBtn.getStyle().setColor("var(--rom-status-danger)");
 
         bar.add(label, spacer, resetBtn);
@@ -196,38 +198,33 @@ public class PathManagerView extends VerticalLayout implements BeforeEnterObserv
     }
 
     private void confirmReset() {
-        var dialog = new com.vaadin.flow.component.confirmdialog.ConfirmDialog();
+        var dialog = new ConfirmDialog();
         dialog.setHeader(getTranslation("pm.reset.title"));
         dialog.setText(getTranslation("pm.reset.text"));
         dialog.setCancelable(true);
         dialog.setCancelText(getTranslation("common.cancel"));
         dialog.setConfirmText(getTranslation("common.delete"));
         dialog.setConfirmButtonTheme("error primary");
-        dialog.addConfirmListener(
-                e -> {
-                    try {
-                        pathManagerService.clearAllMockData();
-                        com.vaadin.flow.component.notification.Notification.show(
-                                        getTranslation("pm.reset.done"),
-                                        1500,
-                                        com.vaadin.flow.component.notification.Notification.Position
-                                                .BOTTOM_END)
-                                .addThemeVariants(
-                                        com.vaadin.flow.component.notification.NotificationVariant
-                                                .LUMO_SUCCESS);
-                        com.vaadin.flow.component.UI.getCurrent().getPage().reload();
-                    } catch (RuntimeException ex) {
-                        com.vaadin.flow.component.notification.Notification.show(
-                                        getTranslation("common.errorGeneric"),
-                                        3000,
-                                        com.vaadin.flow.component.notification.Notification.Position
-                                                .BOTTOM_END)
-                                .addThemeVariants(
-                                        com.vaadin.flow.component.notification.NotificationVariant
-                                                .LUMO_ERROR);
-                    }
-                });
+        dialog.addConfirmListener(e -> resetMockData());
         dialog.open();
+    }
+
+    private void resetMockData() {
+        try {
+            pathManagerService.clearAllMockData();
+            Notification.show(
+                            getTranslation("pm.reset.done"),
+                            1500,
+                            Notification.Position.BOTTOM_END)
+                    .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+            UI.getCurrent().getPage().reload();
+        } catch (RuntimeException ex) {
+            Notification.show(
+                            getTranslation("common.errorGeneric"),
+                            3000,
+                            Notification.Position.BOTTOM_END)
+                    .addThemeVariants(NotificationVariant.LUMO_ERROR);
+        }
     }
 
     private VerticalLayout createTreePanel() {

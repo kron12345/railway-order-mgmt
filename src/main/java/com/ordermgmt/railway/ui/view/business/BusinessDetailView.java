@@ -41,6 +41,7 @@ import com.ordermgmt.railway.domain.order.model.PurchasePosition;
 import com.ordermgmt.railway.domain.userprefs.service.UserViewPreferenceService;
 import com.ordermgmt.railway.ui.component.business.BusinessDocsCard;
 import com.ordermgmt.railway.ui.component.business.BusinessLinksTree;
+import com.ordermgmt.railway.ui.util.StringUtils;
 
 /**
  * Embeddable detail panel for a single {@link Business}. Owns its lifecycle: pass an id (or {@code
@@ -139,16 +140,7 @@ public class BusinessDetailView extends VerticalLayout {
         bar.setAlignItems(FlexComponent.Alignment.CENTER);
 
         // From edit mode: go back to read view; from new mode: back to overview.
-        var backBtn =
-                new Button(
-                        VaadinIcon.ARROW_LEFT.create(),
-                        e -> {
-                            if (!isNew && business.getId() != null) {
-                                UI.getCurrent().navigate("businesses/" + business.getId());
-                            } else {
-                                UI.getCurrent().navigate("businesses");
-                            }
-                        });
+        var backBtn = new Button(VaadinIcon.ARROW_LEFT.create(), e -> navigateBack());
         backBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
 
         var label =
@@ -177,11 +169,7 @@ public class BusinessDetailView extends VerticalLayout {
 
         var saveBtn = new Button(getTranslation("common.save"), VaadinIcon.CHECK.create());
         saveBtn.addThemeVariants(ButtonVariant.LUMO_PRIMARY, ButtonVariant.LUMO_SMALL);
-        saveBtn.addClickListener(
-                e -> {
-                    if (isNew) saveNew();
-                    else saveEdit();
-                });
+        saveBtn.addClickListener(e -> saveCurrentBusiness());
         rightGroup.add(saveBtn);
 
         if (!isNew) {
@@ -194,6 +182,22 @@ public class BusinessDetailView extends VerticalLayout {
         bar.add(leftGroup, spacer, rightGroup);
         bar.setFlexGrow(1, spacer);
         return bar;
+    }
+
+    private void navigateBack() {
+        if (!isNew && business.getId() != null) {
+            UI.getCurrent().navigate("businesses/" + business.getId());
+            return;
+        }
+        UI.getCurrent().navigate("businesses");
+    }
+
+    private void saveCurrentBusiness() {
+        if (isNew) {
+            saveNew();
+        } else {
+            saveEdit();
+        }
     }
 
     private Component buildStatusControl() {
@@ -212,21 +216,26 @@ public class BusinessDetailView extends VerticalLayout {
         box.setWidth("180px");
         box.addValueChangeListener(
                 e -> {
-                    if (e.getValue() == null) return;
-                    try {
-                        businessService.setStatus(business.getId(), e.getValue());
-                        Notification.show(
-                                        getTranslation("business.statusChanged"),
-                                        1500,
-                                        Notification.Position.BOTTOM_END)
-                                .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
-                        UI.getCurrent().navigate("businesses/" + business.getId());
-                    } catch (IllegalArgumentException ex) {
-                        Notification.show(ex.getMessage(), 3000, Notification.Position.BOTTOM_END)
-                                .addThemeVariants(NotificationVariant.LUMO_ERROR);
+                    if (e.getValue() != null) {
+                        changeStatus(e.getValue());
                     }
                 });
         return box;
+    }
+
+    private void changeStatus(BusinessStatus newStatus) {
+        try {
+            businessService.setStatus(business.getId(), newStatus);
+            Notification.show(
+                            getTranslation("business.statusChanged"),
+                            1500,
+                            Notification.Position.BOTTOM_END)
+                    .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+            UI.getCurrent().navigate("businesses/" + business.getId());
+        } catch (IllegalArgumentException ex) {
+            Notification.show(ex.getMessage(), 3000, Notification.Position.BOTTOM_END)
+                    .addThemeVariants(NotificationVariant.LUMO_ERROR);
+        }
     }
 
     // ─── Left column: form (+ documents in edit mode) ─────────
@@ -522,6 +531,6 @@ public class BusinessDetailView extends VerticalLayout {
     }
 
     private static String safe(String s) {
-        return s == null ? "" : s;
+        return StringUtils.nvl(s);
     }
 }

@@ -20,9 +20,13 @@ import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
+import com.vaadin.flow.component.tabs.Tab;
+import com.vaadin.flow.component.tabs.Tabs;
 import com.vaadin.flow.spring.annotation.SpringComponent;
 
+import com.ordermgmt.railway.domain.business.service.BusinessService;
 import com.ordermgmt.railway.domain.customer.repository.CustomerRepository;
+import com.ordermgmt.railway.domain.infrastructure.repository.OperationalPointRepository;
 import com.ordermgmt.railway.domain.infrastructure.repository.PredefinedTagRepository;
 import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.domain.order.model.OrderType;
@@ -33,9 +37,11 @@ import com.ordermgmt.railway.domain.order.service.OrderService;
 import com.ordermgmt.railway.domain.order.service.PurchaseOrderService;
 import com.ordermgmt.railway.domain.order.service.ResourceNeedService;
 import com.ordermgmt.railway.domain.pathmanager.service.PathManagerService;
+import com.ordermgmt.railway.domain.timetable.service.TimetableArchiveService;
 import com.ordermgmt.railway.infrastructure.keycloak.CurrentUserHelper;
 import com.ordermgmt.railway.ui.component.AuditHistoryDialog;
 import com.ordermgmt.railway.ui.component.StatusBadge;
+import com.ordermgmt.railway.ui.component.business.LinkedBusinessesPanel;
 import com.ordermgmt.railway.ui.component.order.OrderFormPanel;
 import com.ordermgmt.railway.ui.component.order.OrderInternalStatusBar;
 import com.ordermgmt.railway.ui.component.order.OrderPositionPanel;
@@ -56,16 +62,14 @@ public class OrderDetailView extends VerticalLayout {
     private final OrderService orderService;
     private final CustomerRepository customerRepository;
     private final PredefinedTagRepository predefinedTagRepository;
-    private final com.ordermgmt.railway.domain.infrastructure.repository.OperationalPointRepository
-            opRepo;
+    private final OperationalPointRepository opRepo;
     private final PathManagerService pathManagerService;
     private final ResourceNeedService resourceNeedService;
     private final PurchaseOrderService purchaseOrderService;
     private final ResourceCatalogItemRepository catalogItemRepository;
     private final AuditService auditService;
-    private final com.ordermgmt.railway.domain.business.service.BusinessService businessService;
-    private final com.ordermgmt.railway.domain.timetable.service.TimetableArchiveService
-            timetableArchiveService;
+    private final BusinessService businessService;
+    private final TimetableArchiveService timetableArchiveService;
     private Order order;
     private boolean isNew;
 
@@ -75,16 +79,14 @@ public class OrderDetailView extends VerticalLayout {
             OrderService orderService,
             CustomerRepository customerRepository,
             PredefinedTagRepository predefinedTagRepository,
-            com.ordermgmt.railway.domain.infrastructure.repository.OperationalPointRepository
-                    opRepo,
+            OperationalPointRepository opRepo,
             PathManagerService pathManagerService,
             ResourceNeedService resourceNeedService,
             PurchaseOrderService purchaseOrderService,
             ResourceCatalogItemRepository catalogItemRepository,
             AuditService auditService,
-            com.ordermgmt.railway.domain.business.service.BusinessService businessService,
-            com.ordermgmt.railway.domain.timetable.service.TimetableArchiveService
-                    timetableArchiveService) {
+            BusinessService businessService,
+            TimetableArchiveService timetableArchiveService) {
         this.orderService = orderService;
         this.timetableArchiveService = timetableArchiveService;
         this.customerRepository = customerRepository;
@@ -150,16 +152,19 @@ public class OrderDetailView extends VerticalLayout {
                 .set("font-weight", "600")
                 .set("align-self", "flex-end")
                 .set("margin-top", "var(--lumo-space-s)");
-        save.addClickListener(
-                e -> {
-                    if (!form.validate()) return;
-                    form.writeTo(order);
-                    order = orderService.save(order);
-                    Notification.show("✓", 2000, Notification.Position.BOTTOM_END)
-                            .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
-                    UI.getCurrent().navigate("orders/" + order.getId());
-                });
+        save.addClickListener(e -> saveNewOrder(form));
         add(save);
+    }
+
+    private void saveNewOrder(OrderFormPanel form) {
+        if (!form.validate()) {
+            return;
+        }
+        form.writeTo(order);
+        order = orderService.save(order);
+        Notification.show("✓", 2000, Notification.Position.BOTTOM_END)
+                .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+        UI.getCurrent().navigate("orders/" + order.getId());
     }
 
     /** Existing order: compact header + positions. */
@@ -195,16 +200,12 @@ public class OrderDetailView extends VerticalLayout {
                         businessService,
                         this::getTranslation);
 
-        // Tab sheet: Positionen | Verknüpfte Geschäfte
-        var tabPositions =
-                new com.vaadin.flow.component.tabs.Tab(getTranslation("order.tab.positions"));
-        var tabBusinesses =
-                new com.vaadin.flow.component.tabs.Tab(
-                        getTranslation("order.tab.linkedBusinesses"));
-        var tabs = new com.vaadin.flow.component.tabs.Tabs(tabPositions, tabBusinesses);
+        var tabPositions = new Tab(getTranslation("order.tab.positions"));
+        var tabBusinesses = new Tab(getTranslation("order.tab.linkedBusinesses"));
+        var tabs = new Tabs(tabPositions, tabBusinesses);
         tabs.setWidthFull();
 
-        var tabContent = new com.vaadin.flow.component.html.Div();
+        var tabContent = new Div();
         tabContent.setSizeFull();
         tabContent.add(positionPanel);
 
@@ -215,8 +216,7 @@ public class OrderDetailView extends VerticalLayout {
                         tabContent.add(positionPanel);
                     } else if (businessService != null) {
                         tabContent.add(
-                                new com.ordermgmt.railway.ui.component.business
-                                        .LinkedBusinessesPanel(
+                                new LinkedBusinessesPanel(
                                         businessService.findByLinkedOrder(order.getId()),
                                         this::getTranslation));
                     }
@@ -282,7 +282,6 @@ public class OrderDetailView extends VerticalLayout {
         return row;
     }
 
-    /** Compact summary header: order info in one line + action buttons. */
     /**
      * Compact Bloomberg-style header consistent with {@code BusinessReadView}: large title (number
      * + name), themed status pill with icon, customer + dates as a thin meta row, action buttons on
@@ -349,7 +348,7 @@ public class OrderDetailView extends VerticalLayout {
 
     /** Status pill with icon, matching the master-card and BusinessReadView style. */
     private Component buildProcessStatusPill(ProcessStatus status) {
-        var pill = new com.vaadin.flow.component.orderedlayout.HorizontalLayout();
+        var pill = new HorizontalLayout();
         pill.addClassName("order-status-pill");
         if (status != null) pill.addClassName("order-status-pill--" + status.name().toLowerCase());
         pill.setPadding(false);
@@ -442,19 +441,22 @@ public class OrderDetailView extends VerticalLayout {
         save.getStyle()
                 .set("background", "var(--rom-accent)")
                 .set("color", "var(--rom-bg-primary)");
-        save.addClickListener(
-                e -> {
-                    if (!form.validate()) return;
-                    form.writeTo(order);
-                    order = orderService.save(order);
-                    Notification.show("✓", 2000, Notification.Position.BOTTOM_END)
-                            .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
-                    dialog.close();
-                    buildDetailView();
-                });
+        save.addClickListener(e -> saveEditedOrder(form, dialog));
 
         dialog.getFooter().add(cancel, save);
         dialog.open();
+    }
+
+    private void saveEditedOrder(OrderFormPanel form, Dialog dialog) {
+        if (!form.validate()) {
+            return;
+        }
+        form.writeTo(order);
+        order = orderService.save(order);
+        Notification.show("✓", 2000, Notification.Position.BOTTOM_END)
+                .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+        dialog.close();
+        buildDetailView();
     }
 
     private void confirmDelete() {

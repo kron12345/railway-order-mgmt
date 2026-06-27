@@ -32,6 +32,9 @@ import com.ordermgmt.railway.ui.theme.UiThemeUtil;
 @PermitAll
 public class ProfileView extends VerticalLayout {
 
+    private static final String OFFLINE_ACCESS_ROLE = "offline_access";
+    private static final String UMA_AUTHORIZATION_ROLE = "uma_authorization";
+
     private final KeycloakUserService keycloakService;
     private final String userId;
     private Map<String, String> attrs;
@@ -96,7 +99,6 @@ public class ProfileView extends VerticalLayout {
 
         card.add(info);
 
-        // Roles
         Div rolesSection = new Div();
         rolesSection.getStyle().set("margin-top", "var(--lumo-space-m)");
         Span rolesLabel = new Span(getTranslation("profile.roles"));
@@ -110,31 +112,37 @@ public class ProfileView extends VerticalLayout {
                 .set("display", "block")
                 .set("margin-bottom", "var(--lumo-space-xs)");
         rolesSection.add(rolesLabel);
-
-        HorizontalLayout roleBadges = new HorizontalLayout();
-        roleBadges.getStyle().set("gap", "6px").set("flex-wrap", "wrap");
-        for (String role : roles) {
-            if (role.startsWith("default-roles-")
-                    || role.equals("offline_access")
-                    || role.equals("uma_authorization")) {
-                continue;
-            }
-            Span badge = new Span(role.toUpperCase());
-            badge.getStyle()
-                    .set("font-family", "'JetBrains Mono', monospace")
-                    .set("font-size", "10px")
-                    .set("font-weight", "600")
-                    .set("padding", "2px 8px")
-                    .set("border-radius", "4px")
-                    .set("color", "var(--rom-accent)")
-                    .set("background", "var(--rom-accent-muted)")
-                    .set("border", "1px solid var(--rom-accent)");
-            roleBadges.add(badge);
-        }
-        rolesSection.add(roleBadges);
+        rolesSection.add(createRoleBadges(roles));
         card.add(rolesSection);
 
         return card;
+    }
+
+    private HorizontalLayout createRoleBadges(List<String> roles) {
+        HorizontalLayout roleBadges = new HorizontalLayout();
+        roleBadges.getStyle().set("gap", "6px").set("flex-wrap", "wrap");
+        roles.stream().filter(this::isDisplayRole).map(this::roleBadge).forEach(roleBadges::add);
+        return roleBadges;
+    }
+
+    private boolean isDisplayRole(String role) {
+        return !role.startsWith("default-roles-")
+                && !role.equals(OFFLINE_ACCESS_ROLE)
+                && !role.equals(UMA_AUTHORIZATION_ROLE);
+    }
+
+    private Span roleBadge(String role) {
+        Span badge = new Span(role.toUpperCase());
+        badge.getStyle()
+                .set("font-family", "'JetBrains Mono', monospace")
+                .set("font-size", "10px")
+                .set("font-weight", "600")
+                .set("padding", "2px 8px")
+                .set("border-radius", "4px")
+                .set("color", "var(--rom-accent)")
+                .set("background", "var(--rom-accent-muted)")
+                .set("border", "1px solid var(--rom-accent)");
+        return badge;
     }
 
     private Div createPreferencesCard() {

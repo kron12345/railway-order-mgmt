@@ -248,28 +248,46 @@ public class CatalogTab extends Div {
                 .set("background", "var(--rom-accent)")
                 .set("color", "var(--rom-bg-primary)");
         save.addClickListener(
-                e -> {
-                    if (code.getValue().isBlank()
-                            || name.getValue().isBlank()
-                            || category.getValue() == null) {
-                        if (code.getValue().isBlank()) code.setInvalid(true);
-                        if (name.getValue().isBlank()) name.setInvalid(true);
-                        return;
-                    }
-                    item.setCode(code.getValue().trim());
-                    item.setName(name.getValue().trim());
-                    item.setCategory(category.getValue());
-                    item.setSortOrder(sortOrder.getValue() != null ? sortOrder.getValue() : 0);
-                    item.setActive(active.getValue());
-                    catalogRepo.save(item);
-                    Notification.show("OK", 2000, Notification.Position.BOTTOM_END)
-                            .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
-                    dialog.close();
-                    refresh();
-                });
+                e -> saveCatalogItem(item, code, name, category, sortOrder, active, dialog));
 
         dialog.getFooter().add(cancel, save);
         dialog.open();
+    }
+
+    private void saveCatalogItem(
+            ResourceCatalogItem item,
+            TextField code,
+            TextField name,
+            ComboBox<String> category,
+            IntegerField sortOrder,
+            Checkbox active,
+            Dialog dialog) {
+        if (!validateCatalogForm(code, name, category)) {
+            return;
+        }
+        item.setCode(code.getValue().trim());
+        item.setName(name.getValue().trim());
+        item.setCategory(category.getValue());
+        item.setSortOrder(sortOrder.getValue() != null ? sortOrder.getValue() : 0);
+        item.setActive(active.getValue());
+        catalogRepo.save(item);
+        Notification.show("OK", 2000, Notification.Position.BOTTOM_END)
+                .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+        dialog.close();
+        refresh();
+    }
+
+    private boolean validateCatalogForm(
+            TextField code, TextField name, ComboBox<String> category) {
+        boolean codeMissing = code.getValue().isBlank();
+        boolean nameMissing = name.getValue().isBlank();
+        if (codeMissing) {
+            code.setInvalid(true);
+        }
+        if (nameMissing) {
+            name.setInvalid(true);
+        }
+        return !codeMissing && !nameMissing && category.getValue() != null;
     }
 
     private void openImportDialog() {

@@ -1,5 +1,7 @@
 package com.ordermgmt.railway.ui.layout;
 
+import java.util.regex.Pattern;
+
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.applayout.AppLayout;
 import com.vaadin.flow.component.applayout.DrawerToggle;
@@ -36,6 +38,8 @@ import com.ordermgmt.railway.ui.theme.UiThemeUtil;
 public class MainLayout extends AppLayout
         implements RouterLayout, LocaleChangeObserver, AfterNavigationObserver {
 
+    private static final Pattern UUID_SEGMENT = Pattern.compile("[0-9a-f\\-]{36}");
+
     private final KeycloakUserService keycloakUserService;
     private final OrderService orderService;
     private final BusinessService businessService;
@@ -57,11 +61,6 @@ public class MainLayout extends AppLayout
         registerGlobalShortcuts();
     }
 
-    /**
-     * Vim-style two-step shortcuts (g o → /orders, g b → /businesses) plus single-key helpers.
-     * Implemented as a global keydown listener on the body so any focus state works, except when
-     * typing into a text input.
-     */
     private void registerGlobalShortcuts() {
         // Wires global vim-style keys, Ctrl+K (command palette), and Shift+? (help)
         // through the hotkeys-js helper in frontend/rom-shortcuts.ts. The helper
@@ -229,18 +228,22 @@ public class MainLayout extends AppLayout
             String[] parts = path.split("/");
             StringBuilder href = new StringBuilder();
             for (String part : parts) {
-                if (part.isBlank()) continue;
+                if (part.isBlank()) {
+                    continue;
+                }
                 href.append(part);
-
-                Span sep = new Span("›");
-                sep.addClassName("sep");
-                breadcrumb.add(sep);
-
-                Anchor link = new Anchor(href.toString(), formatBreadcrumbLabel(part));
-                breadcrumb.add(link);
+                addBreadcrumbSegment(href.toString(), part);
                 href.append("/");
             }
         }
+    }
+
+    private void addBreadcrumbSegment(String href, String segment) {
+        Span separator = new Span("›");
+        separator.addClassName("sep");
+
+        Anchor link = new Anchor(href, formatBreadcrumbLabel(segment));
+        breadcrumb.add(separator, link);
     }
 
     private String formatBreadcrumbLabel(String segment) {
@@ -252,7 +255,7 @@ public class MainLayout extends AppLayout
             case "timetable-builder" -> getTranslation("timetable.builder.title");
             case "pathmanager" -> getTranslation("nav.pathmanager");
             default -> {
-                if (segment.matches("[0-9a-f\\-]{36}")) {
+                if (UUID_SEGMENT.matcher(segment).matches()) {
                     yield segment.substring(0, 8) + "…";
                 }
                 yield segment;

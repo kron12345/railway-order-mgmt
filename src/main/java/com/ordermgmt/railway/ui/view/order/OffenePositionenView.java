@@ -114,22 +114,28 @@ public class OffenePositionenView extends VerticalLayout {
             section.add(emptyHint(getTranslation("offen.unassigned.empty")));
             return section;
         }
-        for (PmReferenceTrain t : trains) {
-            String otn =
-                    t.getOperationalTrainNumber() != null
-                            ? "OTN " + t.getOperationalTrainNumber()
-                            : t.getTridCore();
-            String validity =
-                    (t.getCalendarStart() != null && t.getCalendarEnd() != null)
-                            ? "  ·  " + t.getCalendarStart() + " – " + t.getCalendarEnd()
-                            : "";
-            Span label = new Span(otn + validity);
-            label.getStyle().set("font-size", "13px");
-            Span hint = new Span(getTranslation("offen.unassignedHint"));
-            hint.getStyle().set("color", "var(--rom-text-muted)").set("font-size", "12px");
-            section.add(row(label, hint));
-        }
+        trains.forEach(train -> section.add(unassignedTrainRow(train)));
         return section;
+    }
+
+    private Component unassignedTrainRow(PmReferenceTrain train) {
+        Span label = new Span(unassignedTrainLabel(train));
+        label.getStyle().set("font-size", "13px");
+
+        Span hint = new Span(getTranslation("offen.unassignedHint"));
+        hint.getStyle().set("color", "var(--rom-text-muted)").set("font-size", "12px");
+        return row(label, hint);
+    }
+
+    private String unassignedTrainLabel(PmReferenceTrain train) {
+        String trainNumber =
+                train.getOperationalTrainNumber() != null
+                        ? "OTN " + train.getOperationalTrainNumber()
+                        : train.getTridCore();
+        if (train.getCalendarStart() == null || train.getCalendarEnd() == null) {
+            return trainNumber;
+        }
+        return trainNumber + "  ·  " + train.getCalendarStart() + " – " + train.getCalendarEnd();
     }
 
     private H4 sectionHeader(String text) {

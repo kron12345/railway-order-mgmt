@@ -31,6 +31,11 @@ import com.ordermgmt.railway.domain.infrastructure.service.PredefinedTagImportSe
 /** Manage predefined tags for orders and positions. */
 public class TagsTab extends Div {
 
+    private static final String CATEGORY_ORDER = "ORDER";
+    private static final String CATEGORY_POSITION = "POSITION";
+    private static final String CATEGORY_GENERAL = "GENERAL";
+    private static final String DEFAULT_TAG_COLOR = "#FFB800";
+
     private final PredefinedTagRepository tagRepo;
     private final PredefinedTagImportService importService;
     private final Grid<PredefinedTag> grid = new Grid<>(PredefinedTag.class, false);
@@ -45,6 +50,11 @@ public class TagsTab extends Div {
         this.t = translator;
         setWidthFull();
 
+        add(createHeader(), createImportSection(), createGridWrapper());
+        refresh();
+    }
+
+    private HorizontalLayout createHeader() {
         HorizontalLayout header = new HorizontalLayout();
         header.setWidthFull();
         header.setJustifyContentMode(FlexComponent.JustifyContentMode.BETWEEN);
@@ -65,8 +75,10 @@ public class TagsTab extends Div {
         addBtn.addClickListener(e -> openTagDialog(null));
 
         header.add(title, addBtn);
-        add(header, createImportSection());
+        return header;
+    }
 
+    private Div createGridWrapper() {
         grid.addColumn(PredefinedTag::getName)
                 .setHeader(tr("settings.tags.name"))
                 .setSortable(true)
@@ -77,8 +89,8 @@ public class TagsTab extends Div {
                             Span badge = new Span(categoryLabel(tag.getCategory()));
                             String color =
                                     switch (tag.getCategory()) {
-                                        case "ORDER" -> "var(--rom-accent)";
-                                        case "POSITION" -> "var(--rom-status-info)";
+                                        case CATEGORY_ORDER -> "var(--rom-accent)";
+                                        case CATEGORY_POSITION -> "var(--rom-status-info)";
                                         default -> "var(--rom-text-muted)";
                                     };
                             badge.getStyle()
@@ -160,9 +172,7 @@ public class TagsTab extends Div {
                 .set("border", "1px solid var(--rom-border)")
                 .set("border-radius", "6px")
                 .set("overflow", "hidden");
-        add(wrap);
-
-        refresh();
+        return wrap;
     }
 
     private void openTagDialog(PredefinedTag existing) {
@@ -178,14 +188,14 @@ public class TagsTab extends Div {
         name.setValue(tag.getName() != null ? tag.getName() : "");
 
         ComboBox<String> category = new ComboBox<>(tr("settings.tags.category"));
-        category.setItems("ORDER", "POSITION", "GENERAL");
+        category.setItems(CATEGORY_ORDER, CATEGORY_POSITION, CATEGORY_GENERAL);
         category.setItemLabelGenerator(this::categoryLabel);
         category.setValue(tag.getCategory());
         category.setWidthFull();
 
         TextField color = new TextField(tr("settings.tags.color"));
         color.setWidthFull();
-        color.setValue(tag.getColor() != null ? tag.getColor() : "#FFB800");
+        color.setValue(tag.getColor() != null ? tag.getColor() : DEFAULT_TAG_COLOR);
         color.setHelperText("Hex-Farbe, z.B. #FFB800");
 
         IntegerField sortOrder = new IntegerField("#");
@@ -211,25 +221,34 @@ public class TagsTab extends Div {
                 .set("background", "var(--rom-accent)")
                 .set("color", "var(--rom-bg-primary)");
         save.addClickListener(
-                e -> {
-                    if (name.getValue().isBlank()) {
-                        name.setInvalid(true);
-                        return;
-                    }
-                    tag.setName(name.getValue().trim());
-                    tag.setCategory(category.getValue());
-                    tag.setColor(color.getValue().isBlank() ? null : color.getValue().trim());
-                    tag.setSortOrder(sortOrder.getValue() != null ? sortOrder.getValue() : 0);
-                    tag.setActive(active.getValue());
-                    tagRepo.save(tag);
-                    Notification.show("✓", 2000, Notification.Position.BOTTOM_END)
-                            .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
-                    dialog.close();
-                    refresh();
-                });
+                e -> saveTag(tag, name, category, color, sortOrder, active, dialog));
 
         dialog.getFooter().add(cancel, save);
         dialog.open();
+    }
+
+    private void saveTag(
+            PredefinedTag tag,
+            TextField name,
+            ComboBox<String> category,
+            TextField color,
+            IntegerField sortOrder,
+            Checkbox active,
+            Dialog dialog) {
+        if (name.getValue().isBlank()) {
+            name.setInvalid(true);
+            return;
+        }
+        tag.setName(name.getValue().trim());
+        tag.setCategory(category.getValue());
+        tag.setColor(color.getValue().isBlank() ? null : color.getValue().trim());
+        tag.setSortOrder(sortOrder.getValue() != null ? sortOrder.getValue() : 0);
+        tag.setActive(active.getValue());
+        tagRepo.save(tag);
+        Notification.show("✓", 2000, Notification.Position.BOTTOM_END)
+                .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+        dialog.close();
+        refresh();
     }
 
     private void refresh() {
@@ -298,9 +317,9 @@ public class TagsTab extends Div {
 
     private String categoryLabel(String cat) {
         return switch (cat) {
-            case "ORDER" -> tr("settings.tags.cat.order");
-            case "POSITION" -> tr("settings.tags.cat.position");
-            case "GENERAL" -> tr("settings.tags.cat.general");
+            case CATEGORY_ORDER -> tr("settings.tags.cat.order");
+            case CATEGORY_POSITION -> tr("settings.tags.cat.position");
+            case CATEGORY_GENERAL -> tr("settings.tags.cat.general");
             default -> cat;
         };
     }

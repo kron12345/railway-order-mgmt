@@ -4,6 +4,7 @@ import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.
 import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.timeOrDash;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -40,6 +41,7 @@ import com.vaadin.flow.router.BeforeLeaveObserver;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 
+import com.ordermgmt.railway.domain.business.service.BusinessService;
 import com.ordermgmt.railway.domain.infrastructure.model.PredefinedTag;
 import com.ordermgmt.railway.domain.infrastructure.repository.OperationalPointRepository;
 import com.ordermgmt.railway.domain.infrastructure.repository.PredefinedTagRepository;
@@ -56,6 +58,7 @@ import com.ordermgmt.railway.domain.timetable.service.TimetableArchiveService;
 import com.ordermgmt.railway.domain.timetable.service.TimetableEditingService;
 import com.ordermgmt.railway.domain.timetable.service.TimetableRoutingService;
 import com.ordermgmt.railway.ui.component.ValidityCalendar;
+import com.ordermgmt.railway.ui.component.business.BusinessLinkField;
 import com.ordermgmt.railway.ui.component.timetable.IntervalTimetablePanel;
 import com.ordermgmt.railway.ui.component.timetable.TimetableDataLoader;
 import com.ordermgmt.railway.ui.component.timetable.TimetableRouteStep;
@@ -70,6 +73,9 @@ import com.ordermgmt.railway.ui.layout.MainLayout;
 public class TimetableBuilderView extends VerticalLayout
         implements BeforeEnterObserver, BeforeLeaveObserver {
 
+    private static final DateTimeFormatter VALIDITY_DATE_FORMAT =
+            DateTimeFormatter.ofPattern("dd.MM.yyyy");
+
     private final OrderService orderService;
     private final OperationalPointRepository operationalPointRepository;
     private final PredefinedTagRepository predefinedTagRepository;
@@ -81,8 +87,8 @@ public class TimetableBuilderView extends VerticalLayout
     private final TextField otnField = new TextField();
     private final CheckboxGroup<PredefinedTag> tagSelector = new CheckboxGroup<>();
     private final TextArea commentField = new TextArea();
-    private final com.ordermgmt.railway.domain.business.service.BusinessService businessService;
-    private com.ordermgmt.railway.ui.component.business.BusinessLinkField businessLinkField;
+    private final BusinessService businessService;
+    private BusinessLinkField businessLinkField;
     private final Div contentSlot = new Div();
     private final Span stepOneBadge = new Span();
     private final Span stepTwoBadge = new Span();
@@ -116,7 +122,7 @@ public class TimetableBuilderView extends VerticalLayout
             TimetableArchiveService timetableArchiveService,
             TimetableEditingService timetableEditingService,
             IntervalTimetableService intervalTimetableService,
-            com.ordermgmt.railway.domain.business.service.BusinessService businessService) {
+            BusinessService businessService) {
         this.orderService = orderService;
         this.operationalPointRepository = operationalPointRepository;
         this.predefinedTagRepository = predefinedTagRepository;
@@ -240,35 +246,37 @@ public class TimetableBuilderView extends VerticalLayout
 
     /** Wires the callback for when a route calculation completes or becomes dirty. */
     private void wireRouteCallbacks() {
-        routeStep.setOnRouteCalculated(
-                result -> {
-                    currentRoute = result.route();
-                    timetableRows.clear();
-                    timetableRows.addAll(result.rows());
-                    tableStep.setRows(new ArrayList<>(result.rows()));
-                    // Auto-fill position name from route endpoints
-                    if (positionName.getValue().isBlank() && !result.rows().isEmpty()) {
-                        positionName.setValue(
-                                result.rows().getFirst().getName()
-                                        + " \u2192 "
-                                        + result.rows().getLast().getName());
-                    }
-                    routeDirty = false;
-                    notify(
-                            t(
-                                    "timetable.route.calculated.summary",
-                                    result.rows().size(),
-                                    distanceLabel(result.route().totalLengthMeters())),
-                            NotificationVariant.LUMO_SUCCESS);
-                    updateStepControls();
-                    refreshStatusBar();
-                });
+        routeStep.setOnRouteCalculated(this::applyCalculatedRoute);
         routeStep.setOnRouteDirty(
                 () -> {
                     routeDirty = true;
                     refreshStatusBar();
                     updateStepControls();
                 });
+    }
+
+    private void applyCalculatedRoute(TimetableRouteStep.RouteCalculationResult result) {
+        currentRoute = result.route();
+        timetableRows.clear();
+        timetableRows.addAll(result.rows());
+        tableStep.setRows(new ArrayList<>(result.rows()));
+        fillPositionNameFromRoute(result.rows());
+        routeDirty = false;
+        notify(
+                t(
+                        "timetable.route.calculated.summary",
+                        result.rows().size(),
+                        distanceLabel(result.route().totalLengthMeters())),
+                NotificationVariant.LUMO_SUCCESS);
+        updateStepControls();
+        refreshStatusBar();
+    }
+
+    private void fillPositionNameFromRoute(List<TimetableRowData> rows) {
+        if (!positionName.getValue().isBlank() || rows.isEmpty()) {
+            return;
+        }
+        positionName.setValue(rows.getFirst().getName() + " \u2192 " + rows.getLast().getName());
     }
 
     /** Wires the interval panel's generate callback for bulk timetable creation. */
@@ -369,9 +377,7 @@ public class TimetableBuilderView extends VerticalLayout
                 new FormLayout.ResponsiveStep("0", 1),
                 new FormLayout.ResponsiveStep("500px", 2),
                 new FormLayout.ResponsiveStep("900px", 4));
-        businessLinkField =
-                new com.ordermgmt.railway.ui.component.business.BusinessLinkField(
-                        businessService, this::t);
+        businessLinkField = new BusinessLinkField(businessService, this::t);
         form.add(positionName, otnField, tagSelector, commentField);
         form.setColspan(businessLinkField, 4);
         form.add(businessLinkField);
@@ -738,9 +744,7 @@ public class TimetableBuilderView extends VerticalLayout
     }
 
     private String formatValidityDate(LocalDate date) {
-        return date != null
-                ? date.format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy"))
-                : "\u2014";
+        return date != null ? date.format(VALIDITY_DATE_FORMAT) : "\u2014";
     }
 
     private String t(String key, Object... params) {

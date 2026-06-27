@@ -61,6 +61,7 @@ public class SettingsView extends VerticalLayout {
     private static final String IMPORT_TYPE_OPERATIONAL_POINTS = "OP";
 
     private static final String IMPORT_TYPE_SECTIONS_OF_LINE = "SOL";
+    private static final int MAX_IMPORT_FILE_SIZE_BYTES = 50 * 1024 * 1024;
 
     public SettingsView(
             RinfImportService importService,
@@ -92,6 +93,24 @@ public class SettingsView extends VerticalLayout {
                 .set("margin", "0 0 var(--lumo-space-s) 0");
         add(title);
 
+        add(createTabs());
+
+        tabContent.setWidthFull();
+        tabContent
+                .getStyle()
+                .set("background", "var(--rom-bg-card)")
+                .set("border", "1px solid var(--rom-border)")
+                .set("border-radius", "0 0 6px 6px")
+                .set("padding", "var(--lumo-space-m) var(--lumo-space-l)")
+                .set("box-sizing", "border-box")
+                .set("flex", "1")
+                .set("overflow", "auto");
+        add(tabContent);
+
+        showInfraTab();
+    }
+
+    private Tabs createTabs() {
         Tab infraTab =
                 new Tab(
                         VaadinIcon.DATABASE.create(),
@@ -107,27 +126,21 @@ public class SettingsView extends VerticalLayout {
         Tabs tabs = new Tabs(infraTab, topoTab, tagsTab, catalogTab);
         tabs.setWidthFull();
         tabs.addSelectedChangeListener(
-                e -> {
-                    if (e.getSelectedTab() == infraTab) showInfraTab();
-                    else if (e.getSelectedTab() == topoTab) showTopoTab();
-                    else if (e.getSelectedTab() == tagsTab) showTagsTab();
-                    else if (e.getSelectedTab() == catalogTab) showCatalogTab();
-                });
-        add(tabs);
+                e -> showSelectedTab(e.getSelectedTab(), infraTab, topoTab, tagsTab, catalogTab));
+        return tabs;
+    }
 
-        tabContent.setWidthFull();
-        tabContent
-                .getStyle()
-                .set("background", "var(--rom-bg-card)")
-                .set("border", "1px solid var(--rom-border)")
-                .set("border-radius", "0 0 6px 6px")
-                .set("padding", "var(--lumo-space-m) var(--lumo-space-l)")
-                .set("box-sizing", "border-box")
-                .set("flex", "1")
-                .set("overflow", "auto");
-        add(tabContent);
-
-        showInfraTab();
+    private void showSelectedTab(
+            Tab selected, Tab infraTab, Tab topoTab, Tab tagsTab, Tab catalogTab) {
+        if (selected == infraTab) {
+            showInfraTab();
+        } else if (selected == topoTab) {
+            showTopoTab();
+        } else if (selected == tagsTab) {
+            showTagsTab();
+        } else if (selected == catalogTab) {
+            showCatalogTab();
+        }
     }
 
     private void showInfraTab() {
@@ -185,7 +198,7 @@ public class SettingsView extends VerticalLayout {
         Upload upload = new Upload(buffer);
         upload.setAcceptedFileTypes(".csv");
         upload.setMaxFiles(1);
-        upload.setMaxFileSize(50 * 1024 * 1024);
+        upload.setMaxFileSize(MAX_IMPORT_FILE_SIZE_BYTES);
         upload.setUploadButton(
                 new Button(getTranslation("settings.import.upload"), VaadinIcon.UPLOAD.create()));
         upload.addSucceededListener(

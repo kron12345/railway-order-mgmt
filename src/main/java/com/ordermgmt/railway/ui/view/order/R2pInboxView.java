@@ -96,31 +96,10 @@ public class R2pInboxView extends VerticalLayout {
         Span requester = new Span(entry.getRequester());
         requester.getStyle().set("font-weight", "600");
 
-        StringBuilder meta = new StringBuilder();
-        if (entry.getOperationalTrainNumber() != null) {
-            meta.append("OTN ").append(entry.getOperationalTrainNumber());
-        }
-        if (entry.getFromLocation() != null && entry.getToLocation() != null) {
-            meta.append("  ·  ")
-                    .append(entry.getFromLocation())
-                    .append(" → ")
-                    .append(entry.getToLocation());
-        }
-        Span metaSpan = new Span(meta.toString());
+        Span metaSpan = new Span(entryMetaText(entry));
         metaSpan.getStyle().set("color", "var(--rom-text-secondary)").set("font-size", "12px");
 
-        StringBuilder res = new StringBuilder();
-        for (R2pResourceRequest r : r2pIntakeService.resourcesOf(entry)) {
-            if (res.length() > 0) {
-                res.append("  ·  ");
-            }
-            res.append(r.quantity())
-                    .append("× ")
-                    .append(getTranslation("resource.type." + r.resourceType().name()))
-                    .append(" — ")
-                    .append(r.description());
-        }
-        Span resSpan = new Span(res.toString());
+        Span resSpan = new Span(resourceSummaryText(entry));
         resSpan.getStyle().set("color", "var(--rom-text-muted)").set("font-size", "12px");
 
         Div info = new Div(requester, metaSpan, resSpan);
@@ -137,6 +116,35 @@ public class R2pInboxView extends VerticalLayout {
         row.setAlignItems(FlexComponent.Alignment.CENTER);
         card.add(row);
         return card;
+    }
+
+    private String entryMetaText(R2pInboxEntry entry) {
+        StringBuilder meta = new StringBuilder();
+        if (entry.getOperationalTrainNumber() != null) {
+            meta.append("OTN ").append(entry.getOperationalTrainNumber());
+        }
+        if (entry.getFromLocation() != null && entry.getToLocation() != null) {
+            meta.append("  ·  ")
+                    .append(entry.getFromLocation())
+                    .append(" → ")
+                    .append(entry.getToLocation());
+        }
+        return meta.toString();
+    }
+
+    private String resourceSummaryText(R2pInboxEntry entry) {
+        StringBuilder summary = new StringBuilder();
+        for (R2pResourceRequest request : r2pIntakeService.resourcesOf(entry)) {
+            if (!summary.isEmpty()) {
+                summary.append("  ·  ");
+            }
+            summary.append(request.quantity())
+                    .append("× ")
+                    .append(getTranslation("resource.type." + request.resourceType().name()))
+                    .append(" — ")
+                    .append(request.description());
+        }
+        return summary.toString();
     }
 
     private void openAcceptDialog(R2pInboxEntry entry) {
