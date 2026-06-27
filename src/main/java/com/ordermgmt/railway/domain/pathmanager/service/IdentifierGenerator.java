@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 public class IdentifierGenerator {
 
     private static final String SBB_COMPANY_CODE = "0085";
+    private static final String INITIAL_VARIANT = "01";
     private static final int CORE_LENGTH = 8;
 
     public String company() {
@@ -27,6 +28,6 @@ public class IdentifierGenerator {
 
     /** Returns the initial variant code. */
     public String initialVariant() {
-        return "01";
+        return INITIAL_VARIANT;
     }
 }

@@ -26,22 +26,11 @@ import com.ordermgmt.railway.domain.pathmanager.model.TtrPhase;
 @Service
 public class TtrPhaseResolver {
 
-    /** Months before timetable start for Capacity Strategy / Capacity Model boundary. */
     private static final int CAPACITY_MODEL_MONTHS_BEFORE = 36;
-
-    /** Months before timetable start for Capacity Model / Capacity Supply boundary. */
     private static final int CAPACITY_SUPPLY_MONTHS_BEFORE = 18;
-
-    /** Months before timetable start for Capacity Supply / Annual Ordering boundary. */
     private static final int ANNUAL_ORDERING_MONTHS_BEFORE = 11;
-
-    /** Months before timetable start for Annual Ordering / Late Ordering boundary (8.5 months). */
     private static final int LATE_ORDERING_MONTHS_BEFORE = 8;
-
-    /** Additional days for the 8.5-month boundary (half month approximation). */
     private static final int LATE_ORDERING_DAYS_BEFORE = 15;
-
-    /** Months before timetable start for Late Ordering / Ad Hoc boundary. */
     private static final int AD_HOC_ORDERING_MONTHS_BEFORE = 2;
 
     /**
@@ -66,17 +55,19 @@ public class TtrPhaseResolver {
         if (today.isBefore(timetableStartDate.minusMonths(ANNUAL_ORDERING_MONTHS_BEFORE))) {
             return TtrPhase.CAPACITY_SUPPLY;
         }
-        // X-8.5 months = X minus 8 months minus 15 days
-        if (today.isBefore(
-                timetableStartDate
-                        .minusMonths(LATE_ORDERING_MONTHS_BEFORE)
-                        .minusDays(LATE_ORDERING_DAYS_BEFORE))) {
+        if (today.isBefore(lateOrderingStart(timetableStartDate))) {
             return TtrPhase.ANNUAL_ORDERING;
         }
         if (today.isBefore(timetableStartDate.minusMonths(AD_HOC_ORDERING_MONTHS_BEFORE))) {
             return TtrPhase.LATE_ORDERING;
         }
         return TtrPhase.AD_HOC_ORDERING;
+    }
+
+    private LocalDate lateOrderingStart(LocalDate timetableStartDate) {
+        return timetableStartDate
+                .minusMonths(LATE_ORDERING_MONTHS_BEFORE)
+                .minusDays(LATE_ORDERING_DAYS_BEFORE);
     }
 
     /**
@@ -117,10 +108,10 @@ public class TtrPhaseResolver {
     public String phaseDescription(PmTimetableYear year, LocalDate today) {
         TtrPhase phase = resolvePhase(year, today);
         PathProcessType processType = resolveProcessType(year, today);
-        String desc = "FPJ " + year.getYear() + " — " + phase.getLabel();
+        String description = "FPJ " + year.getYear() + " — " + phase.getLabel();
         if (processType != null) {
-            desc += " (ProcessType=" + processType.code() + ")";
+            description += " (ProcessType=" + processType.code() + ")";
         }
-        return desc;
+        return description;
     }
 }

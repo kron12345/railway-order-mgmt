@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -63,8 +64,31 @@ public class PathManagerService {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
-    /** Default label for the first version of a train created from an order position. */
+    private static final String TIMETABLE_TYPE_FAHRPLAN = "FAHRPLAN";
     private static final String INITIAL_VERSION_LABEL = "Initial v1";
+    private static final String ROUTE_SUMMARY_SEPARATOR = " → ";
+    private static final int FIRST_VERSION_NUMBER = 1;
+    private static final int CAPACITY_NEED_QUANTITY = 1;
+    private static final int TIMETABLE_YEAR_START_MONTH = 12;
+    private static final int TIMETABLE_YEAR_START_DAY = 14;
+    private static final int TIMETABLE_YEAR_END_MONTH = 12;
+    private static final int TIMETABLE_YEAR_END_DAY = 12;
+
+    // Keep child tables before parents; the mock reset intentionally bypasses cascades.
+    private static final List<String> MOCK_TABLES_TO_CLEAR =
+            List.of(
+                    "vp_vehicle_operations",
+                    "vp_rotation_entries",
+                    "vp_vehicles",
+                    "vp_rotation_sets",
+                    "pm_journey_locations",
+                    "pm_train_versions",
+                    "pm_process_steps",
+                    "pm_paths",
+                    "pm_path_requests",
+                    "pm_routes",
+                    "pm_reference_trains",
+                    "timetable_archives");
 
     private final PmReferenceTrainRepository referenceTrainRepository;
     private final PmTrainVersionRepository trainVersionRepository;
@@ -91,19 +115,9 @@ public class PathManagerService {
      */
     @PreAuthorize("hasRole('ADMIN')")
     public void clearAllMockData() {
-        // Order matters: child rows before parents.
-        entityManager.createNativeQuery("DELETE FROM vp_vehicle_operations").executeUpdate();
-        entityManager.createNativeQuery("DELETE FROM vp_rotation_entries").executeUpdate();
-        entityManager.createNativeQuery("DELETE FROM vp_vehicles").executeUpdate();
-        entityManager.createNativeQuery("DELETE FROM vp_rotation_sets").executeUpdate();
-        entityManager.createNativeQuery("DELETE FROM pm_journey_locations").executeUpdate();
-        entityManager.createNativeQuery("DELETE FROM pm_train_versions").executeUpdate();
-        entityManager.createNativeQuery("DELETE FROM pm_process_steps").executeUpdate();
-        entityManager.createNativeQuery("DELETE FROM pm_paths").executeUpdate();
-        entityManager.createNativeQuery("DELETE FROM pm_path_requests").executeUpdate();
-        entityManager.createNativeQuery("DELETE FROM pm_routes").executeUpdate();
-        entityManager.createNativeQuery("DELETE FROM pm_reference_trains").executeUpdate();
-        entityManager.createNativeQuery("DELETE FROM timetable_archives").executeUpdate();
+        MOCK_TABLES_TO_CLEAR.forEach(
+                tableName ->
+                        entityManager.createNativeQuery("DELETE FROM " + tableName).executeUpdate());
     }
 
     /** Reference trains in RailOpt not yet captured as an order position (Fahrplanmanager). */
@@ -127,40 +141,52 @@ public class PathManagerService {
         Order order = orderRepository.findById(orderId).orElseThrow();
 
         List<PmJourneyLocation> locations = latestJourneyLocations(train);
+        OrderPosition position = createCapturedPosition(order, train, locations);
 
+        OrderPosition saved = orderPositionRepository.save(position);
+        enrichWithTimetableArchive(saved, locations);
+        train.setSourcePositionId(saved.getId());
+        referenceTrainRepository.save(train);
+        return saved;
+    }
+
+    private OrderPosition createCapturedPosition(
+            Order order, PmReferenceTrain train, List<PmJourneyLocation> locations) {
         OrderPosition position = new OrderPosition();
         position.setOrder(order);
         position.setType(PositionType.FAHRPLAN);
         position.setName(positionName(train));
         position.setOperationalTrainNumber(train.getOperationalTrainNumber());
         position.setPmReferenceTrainId(train.getId());
-        if (!locations.isEmpty()) {
-            position.setFromLocation(locations.get(0).getPrimaryLocationName());
-            position.setToLocation(locations.get(locations.size() - 1).getPrimaryLocationName());
+        applyCapturedRoute(position, locations);
+        applyCapturedCalendar(position, train);
+        return position;
+    }
+
+    private void applyCapturedRoute(OrderPosition position, List<PmJourneyLocation> locations) {
+        if (locations.isEmpty()) {
+            return;
         }
+        position.setFromLocation(locations.getFirst().getPrimaryLocationName());
+        position.setToLocation(locations.getLast().getPrimaryLocationName());
+    }
+
+    private void applyCapturedCalendar(OrderPosition position, PmReferenceTrain train) {
         if (train.getCalendarStart() != null) {
             position.setStart(train.getCalendarStart().atStartOfDay());
         }
         if (train.getCalendarEnd() != null) {
             position.setEnd(train.getCalendarEnd().atStartOfDay());
         }
-        if (train.getCalendarStart() != null && train.getCalendarEnd() != null) {
-            // Mock: treat the whole calendar window as operating days so validity-based features
-            // (purchase calendar) are populated.
-            position.setValidity(
-                    ValidityJsonCodec.toJson(
-                            train.getCalendarStart()
-                                    .datesUntil(train.getCalendarEnd().plusDays(1))
-                                    .toList()));
+        if (train.getCalendarStart() == null || train.getCalendarEnd() == null) {
+            return;
         }
-
-        OrderPosition saved = orderPositionRepository.save(position);
-        // Enrich with a timetable archive + CAPACITY need so the captured position has a viewable
-        // timetable and is TTT-orderable (not just a thin OTN/route stub).
-        enrichWithTimetableArchive(saved, locations);
-        train.setSourcePositionId(saved.getId());
-        referenceTrainRepository.save(train);
-        return saved;
+        // Mock capture treats the full calendar window as operating days for purchase calendars.
+        position.setValidity(
+                ValidityJsonCodec.toJson(
+                        train.getCalendarStart()
+                                .datesUntil(train.getCalendarEnd().plusDays(1))
+                                .toList()));
     }
 
     private String positionName(PmReferenceTrain train) {
@@ -188,36 +214,52 @@ public class PathManagerService {
         if (locations.isEmpty()) {
             return;
         }
+        List<TimetableRowData> rows = toTimetableRows(locations);
+        TimetableArchive archive = createTimetableArchive(position, rows);
+        createCapacityNeed(position, archive);
+    }
+
+    private List<TimetableRowData> toTimetableRows(List<PmJourneyLocation> locations) {
         List<TimetableRowData> rows = new ArrayList<>();
         for (int i = 0; i < locations.size(); i++) {
-            PmJourneyLocation loc = locations.get(i);
-            TimetableRowData row = new TimetableRowData();
-            row.setSequence(loc.getSequence() != null ? loc.getSequence() : i + 1);
-            row.setUopid(loc.getUopid());
-            row.setName(loc.getPrimaryLocationName());
-            row.setCountry(loc.getCountryCodeIso());
-            if (loc.getJourneyLocationType() != null) {
-                row.setJourneyLocationType(loc.getJourneyLocationType());
-            }
-            row.setEstimatedArrival(loc.getArrivalTime());
-            row.setEstimatedDeparture(loc.getDepartureTime());
-            row.setCommercialArrival(loc.getArrivalTime());
-            row.setCommercialDeparture(loc.getDepartureTime());
-            rows.add(row);
+            rows.add(toTimetableRow(locations.get(i), i));
         }
+        return rows;
+    }
 
+    private TimetableRowData toTimetableRow(PmJourneyLocation location, int index) {
+        TimetableRowData row = new TimetableRowData();
+        row.setSequence(location.getSequence() != null ? location.getSequence() : index + 1);
+        row.setUopid(location.getUopid());
+        row.setName(location.getPrimaryLocationName());
+        row.setCountry(location.getCountryCodeIso());
+        if (location.getJourneyLocationType() != null) {
+            row.setJourneyLocationType(location.getJourneyLocationType());
+        }
+        row.setEstimatedArrival(location.getArrivalTime());
+        row.setEstimatedDeparture(location.getDepartureTime());
+        row.setCommercialArrival(location.getArrivalTime());
+        row.setCommercialDeparture(location.getDepartureTime());
+        return row;
+    }
+
+    private TimetableArchive createTimetableArchive(
+            OrderPosition position, List<TimetableRowData> rows) {
         TimetableArchive archive = new TimetableArchive();
-        archive.setTimetableType("FAHRPLAN");
+        archive.setTimetableType(TIMETABLE_TYPE_FAHRPLAN);
         archive.setOperationalTrainNumber(position.getOperationalTrainNumber());
-        archive.setRouteSummary(rows.getFirst().getName() + " → " + rows.getLast().getName());
+        archive.setRouteSummary(
+                rows.getFirst().getName() + ROUTE_SUMMARY_SEPARATOR + rows.getLast().getName());
         archive.setTableData(writeRows(rows));
-        archive = timetableArchiveRepository.save(archive);
+        return timetableArchiveRepository.save(archive);
+    }
 
+    private void createCapacityNeed(OrderPosition position, TimetableArchive archive) {
         ResourceNeed need = new ResourceNeed();
         need.setOrderPosition(position);
         need.setResourceType(ResourceType.CAPACITY);
         need.setCoverageType(CoverageType.EXTERNAL);
-        need.setQuantity(1);
+        need.setQuantity(CAPACITY_NEED_QUANTITY);
         need.setOrigin(ResourceOrigin.AUTO);
         need.setPriority(ResourcePriority.MEDIUM);
         need.setValidFrom(position.getStart() != null ? position.getStart().toLocalDate() : null);
@@ -299,36 +341,44 @@ public class PathManagerService {
             train.setOperationalTrainNumber(archive.getOperationalTrainNumber());
         }
 
-        // Update route points
+        updateRoutePoints(train, rows);
+        replaceLatestJourneyLocations(train, rows);
+
+        return referenceTrainRepository.save(train);
+    }
+
+    private void updateRoutePoints(PmReferenceTrain train, List<TimetableRowData> rows) {
         List<PmRoute> routes = routeRepository.findByReferenceTrainId(train.getId());
         if (!routes.isEmpty()) {
             PmRoute route = routes.getFirst();
             route.setRoutePoints(routePointsToJson(rows));
             routeRepository.save(route);
         }
+    }
 
-        // Replace journey locations on the latest version
+    private void replaceLatestJourneyLocations(
+            PmReferenceTrain train, List<TimetableRowData> rows) {
         List<PmTrainVersion> versions =
                 trainVersionRepository.findByReferenceTrainIdOrderByVersionNumberDesc(
                         train.getId());
-        if (!versions.isEmpty()) {
-            // Versions are ordered newest-first (…OrderByVersionNumberDesc), so the latest is the
-            // FIRST element — getLast() would overwrite the oldest version on every re-sync.
-            PmTrainVersion version = versions.getFirst();
-            journeyLocationRepository.deleteAll(version.getJourneyLocations());
-            version.getJourneyLocations().clear();
-            Map<Integer, TttJourneyLocationDraft> draftBySequence =
-                    tttDraftBuilder.indexBySequence(tttDraftBuilder.fromRows(rows));
-            for (TimetableRowData row : rows) {
-                PmJourneyLocation location =
-                        mapRowToJourneyLocation(
-                                row, version, draftBySequence.get(row.getSequence()));
-                version.getJourneyLocations().add(location);
-            }
-            trainVersionRepository.save(version);
+        if (versions.isEmpty()) {
+            return;
         }
 
-        return referenceTrainRepository.save(train);
+        // Repository method is newest-first by name: ...OrderByVersionNumberDesc.
+        PmTrainVersion latestVersion = versions.getFirst();
+        journeyLocationRepository.deleteAll(latestVersion.getJourneyLocations());
+        latestVersion.getJourneyLocations().clear();
+
+        Map<Integer, TttJourneyLocationDraft> draftBySequence =
+                tttDraftBuilder.indexBySequence(tttDraftBuilder.fromRows(rows));
+        for (TimetableRowData row : rows) {
+            PmJourneyLocation location =
+                    mapRowToJourneyLocation(
+                            row, latestVersion, draftBySequence.get(row.getSequence()));
+            latestVersion.getJourneyLocations().add(location);
+        }
+        trainVersionRepository.save(latestVersion);
     }
 
     @Transactional(readOnly = true)
@@ -450,8 +500,8 @@ public class PathManagerService {
     private int resolveYear(OrderPosition position) {
         if (position.getStart() != null) {
             LocalDate startDate = position.getStart().toLocalDate();
-            // Timetable year starts mid-December of previous year
-            if (startDate.getMonthValue() == 12 && startDate.getDayOfMonth() >= 14) {
+            if (startDate.getMonthValue() == TIMETABLE_YEAR_START_MONTH
+                    && startDate.getDayOfMonth() >= TIMETABLE_YEAR_START_DAY) {
                 return startDate.getYear() + 1;
             }
             return startDate.getYear();
@@ -460,12 +510,15 @@ public class PathManagerService {
     }
 
     private PmTimetableYear createTimetableYear(int year) {
-        PmTimetableYear ttYear = new PmTimetableYear();
-        ttYear.setYear(year);
-        ttYear.setLabel("Fahrplanjahr " + year);
-        ttYear.setStartDate(LocalDate.of(year - 1, 12, 14));
-        ttYear.setEndDate(LocalDate.of(year, 12, 12));
-        return timetableYearRepository.save(ttYear);
+        PmTimetableYear timetableYear = new PmTimetableYear();
+        timetableYear.setYear(year);
+        timetableYear.setLabel("Fahrplanjahr " + year);
+        timetableYear.setStartDate(
+                LocalDate.of(
+                        year - 1, TIMETABLE_YEAR_START_MONTH, TIMETABLE_YEAR_START_DAY));
+        timetableYear.setEndDate(
+                LocalDate.of(year, TIMETABLE_YEAR_END_MONTH, TIMETABLE_YEAR_END_DAY));
+        return timetableYearRepository.save(timetableYear);
     }
 
     private PmRoute createRouteFromRows(PmReferenceTrain train, List<TimetableRowData> rows) {
@@ -481,25 +534,33 @@ public class PathManagerService {
 
     private String routePointsToJson(List<TimetableRowData> rows) {
         try {
-            List<Map<String, Object>> points = new ArrayList<>();
-            for (TimetableRowData row : rows) {
-                Map<String, Object> point = new LinkedHashMap<>();
-                point.put("sequence", row.getSequence());
-                point.put("uopid", row.getUopid() != null ? row.getUopid() : "");
-                point.put("name", row.getName() != null ? row.getName() : "");
-                points.add(point);
-            }
-            return OBJECT_MAPPER.writeValueAsString(points);
+            return OBJECT_MAPPER.writeValueAsString(toRoutePoints(rows));
         } catch (Exception e) {
             return "[]";
         }
+    }
+
+    private List<Map<String, Object>> toRoutePoints(List<TimetableRowData> rows) {
+        List<Map<String, Object>> routePoints = new ArrayList<>();
+        for (TimetableRowData row : rows) {
+            routePoints.add(toRoutePoint(row));
+        }
+        return routePoints;
+    }
+
+    private Map<String, Object> toRoutePoint(TimetableRowData row) {
+        Map<String, Object> routePoint = new LinkedHashMap<>();
+        routePoint.put("sequence", row.getSequence());
+        routePoint.put("uopid", row.getUopid() != null ? row.getUopid() : "");
+        routePoint.put("name", row.getName() != null ? row.getName() : "");
+        return routePoint;
     }
 
     private PmTrainVersion createInitialVersion(
             PmReferenceTrain train, List<TimetableRowData> rows) {
         PmTrainVersion version = new PmTrainVersion();
         version.setReferenceTrain(train);
-        version.setVersionNumber(1);
+        version.setVersionNumber(FIRST_VERSION_NUMBER);
         version.setVersionType(VersionType.INITIAL);
         version.setLabel(INITIAL_VERSION_LABEL);
         version.setOperationalTrainNumber(train.getOperationalTrainNumber());
@@ -535,35 +596,38 @@ public class PathManagerService {
         location.setJourneyLocationType(
                 JourneyLocationType.fromString(row.getJourneyLocationType()).code());
 
-        // Times: prefer constraint times, fall back to estimated
         location.setArrivalTime(resolveTime(row, true));
         location.setDepartureTime(resolveTime(row, false));
         location.setArrivalOffset(row.getArrivalOffset() == null ? 0 : row.getArrivalOffset());
         location.setDepartureOffset(
                 row.getDepartureOffset() == null ? 0 : row.getDepartureOffset());
         location.setDwellTime(row.getDwellMinutes());
-
-        // Timing qualifiers from constraint mode
         location.setArrivalQualifier(toTttQualifier(row.getArrivalMode(), true));
         location.setDepartureQualifier(toTttQualifier(row.getDepartureMode(), false));
-
-        // Activity codes → activities JSON (preserve all selected codes, not just the first)
-        List<String> activityCodes =
-                row.getActivityCodes() != null && !row.getActivityCodes().isEmpty()
-                        ? row.getActivityCodes()
-                        : (row.getActivityCode() != null && !row.getActivityCode().isBlank()
-                                ? List.of(row.getActivityCode())
-                                : List.of());
-        if (!activityCodes.isEmpty()) {
-            location.setActivities(
-                    activityCodes.stream()
-                            .map(c -> "\"" + c + "\"")
-                            .collect(java.util.stream.Collectors.joining(",", "[", "]")));
-        }
-
+        location.setActivities(toActivitiesJson(row));
         location.setAssociatedTrainOtn(row.getAssociatedTrainOtn());
         location.setTttPayload(writeTttPayload(draft));
         return location;
+    }
+
+    private String toActivitiesJson(TimetableRowData row) {
+        List<String> activityCodes = activityCodes(row);
+        if (activityCodes.isEmpty()) {
+            return null;
+        }
+        return activityCodes.stream()
+                .map(code -> "\"" + code + "\"")
+                .collect(Collectors.joining(",", "[", "]"));
+    }
+
+    private List<String> activityCodes(TimetableRowData row) {
+        if (row.getActivityCodes() != null && !row.getActivityCodes().isEmpty()) {
+            return row.getActivityCodes();
+        }
+        if (row.getActivityCode() != null && !row.getActivityCode().isBlank()) {
+            return List.of(row.getActivityCode());
+        }
+        return List.of();
     }
 
     private String writeTttPayload(TttJourneyLocationDraft draft) {
@@ -579,48 +643,58 @@ public class PathManagerService {
 
     private String resolveTime(TimetableRowData row, boolean arrival) {
         if (arrival) {
-            TimeConstraintMode mode =
-                    row.getArrivalMode() == null ? TimeConstraintMode.NONE : row.getArrivalMode();
-            if (mode == TimeConstraintMode.EXACT) {
-                return row.getArrivalExact();
-            }
-            if (mode == TimeConstraintMode.WINDOW || mode == TimeConstraintMode.AFTER) {
-                return row.getArrivalEarliest();
-            }
-            if (mode == TimeConstraintMode.BEFORE) {
-                return row.getArrivalLatest();
-            }
-            if (mode == TimeConstraintMode.COMMERCIAL) {
-                return row.getCommercialArrival();
-            }
-            return row.getEstimatedArrival();
+            return resolveArrivalTime(row);
         }
-        TimeConstraintMode mode =
-                row.getDepartureMode() == null ? TimeConstraintMode.NONE : row.getDepartureMode();
-        if (mode == TimeConstraintMode.EXACT) {
-            return row.getDepartureExact();
-        }
-        if (mode == TimeConstraintMode.WINDOW || mode == TimeConstraintMode.AFTER) {
-            return row.getDepartureEarliest();
-        }
-        if (mode == TimeConstraintMode.BEFORE) {
-            return row.getDepartureLatest();
-        }
-        if (mode == TimeConstraintMode.COMMERCIAL) {
-            return row.getCommercialDeparture();
-        }
-        return row.getEstimatedDeparture();
+        return resolveDepartureTime(row);
     }
 
-    /** Maps a TimeConstraintMode to a TTT TimingQualifierCode. */
+    private String resolveArrivalTime(TimetableRowData row) {
+        TimeConstraintMode mode =
+                row.getArrivalMode() == null ? TimeConstraintMode.NONE : row.getArrivalMode();
+        return resolveTime(
+                mode,
+                row.getArrivalExact(),
+                row.getArrivalEarliest(),
+                row.getArrivalLatest(),
+                row.getCommercialArrival(),
+                row.getEstimatedArrival());
+    }
+
+    private String resolveDepartureTime(TimetableRowData row) {
+        TimeConstraintMode mode =
+                row.getDepartureMode() == null ? TimeConstraintMode.NONE : row.getDepartureMode();
+        return resolveTime(
+                mode,
+                row.getDepartureExact(),
+                row.getDepartureEarliest(),
+                row.getDepartureLatest(),
+                row.getCommercialDeparture(),
+                row.getEstimatedDeparture());
+    }
+
+    private String resolveTime(
+            TimeConstraintMode mode,
+            String exact,
+            String earliest,
+            String latest,
+            String commercial,
+            String estimated) {
+        return switch (mode) {
+            case EXACT -> exact;
+            case WINDOW, AFTER -> earliest;
+            case BEFORE -> latest;
+            case COMMERCIAL -> commercial;
+            case NONE -> estimated;
+        };
+    }
+
     private String toTttQualifier(TimeConstraintMode mode, boolean arrival) {
         if (mode == null || mode == TimeConstraintMode.NONE) {
             return null;
         }
         return switch (mode) {
             case EXACT -> arrival ? "ALA" : "ALD";
-            case WINDOW -> arrival ? "ELA" : "ELD";
-            case AFTER -> arrival ? "ELA" : "ELD";
+            case WINDOW, AFTER -> arrival ? "ELA" : "ELD";
             case BEFORE -> arrival ? "LLA" : "LLD";
             case COMMERCIAL -> arrival ? "PLA" : "PLD";
             case NONE -> null;

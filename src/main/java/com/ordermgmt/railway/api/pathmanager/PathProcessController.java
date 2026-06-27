@@ -42,6 +42,10 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class PathProcessController {
 
+    private static final String ERROR_KEY = "error";
+    private static final String RESOURCE_NOT_FOUND_ERROR = "Resource not found";
+    private static final String INVALID_REQUEST_ERROR = "Invalid request";
+
     private final PathProcessEngine pathProcessEngine;
     private final PathManagerService pathManagerService;
     private final PmProcessStepRepository processStepRepository;
@@ -55,15 +59,10 @@ public class PathProcessController {
     public ProcessStepDto executeTransition(
             @PathVariable UUID referenceTrainId,
             @Valid @RequestBody ProcessTransitionRequest request) {
-        PathAction action;
-        try {
-            action = PathAction.valueOf(request.action());
-        } catch (IllegalArgumentException e) {
-            throw new IllegalStateException("Unknown action: " + request.action());
-        }
-        ProcessStepResult result =
+        PathAction action = parseAction(request.action());
+        ProcessStepResult transitionResult =
                 pathProcessEngine.executeTransition(referenceTrainId, action, request.comment());
-        return PathManagerDtoMapper.toStepDto(result.processStep());
+        return PathManagerDtoMapper.toStepDto(transitionResult.processStep());
     }
 
     @GetMapping("/{referenceTrainId}/available-actions")
@@ -81,20 +80,32 @@ public class PathProcessController {
     @Operation(summary = "Get process step history for a reference train")
     @ApiResponse(responseCode = "200", description = "Process history returned")
     public List<ProcessStepDto> getHistory(@PathVariable UUID referenceTrainId) {
-        pathManagerService.findById(referenceTrainId); // validate existence
-        List<PmProcessStep> steps =
+        pathManagerService.findById(referenceTrainId);
+        List<PmProcessStep> processSteps =
                 processStepRepository.findByReferenceTrainIdOrderByCreatedAtDesc(referenceTrainId);
-        return steps.stream().map(PathManagerDtoMapper::toStepDto).toList();
+        return processSteps.stream().map(PathManagerDtoMapper::toStepDto).toList();
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, String>> handleNotFound(IllegalArgumentException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(Map.of("error", "Resource not found"));
+                .body(errorBody(RESOURCE_NOT_FOUND_ERROR));
     }
 
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<Map<String, String>> handleBadState(IllegalStateException ex) {
-        return ResponseEntity.badRequest().body(Map.of("error", "Invalid request"));
+        return ResponseEntity.badRequest().body(errorBody(INVALID_REQUEST_ERROR));
+    }
+
+    private PathAction parseAction(String actionName) {
+        try {
+            return PathAction.valueOf(actionName);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException("Unknown action: " + actionName);
+        }
+    }
+
+    private Map<String, String> errorBody(String message) {
+        return Map.of(ERROR_KEY, message);
     }
 }

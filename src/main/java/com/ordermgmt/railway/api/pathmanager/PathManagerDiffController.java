@@ -38,6 +38,10 @@ import lombok.RequiredArgsConstructor;
 @Transactional(readOnly = true)
 public class PathManagerDiffController {
 
+    private static final String ERROR_KEY = "error";
+    private static final String RESOURCE_NOT_FOUND_ERROR = "Resource not found";
+    private static final String INVALID_REQUEST_ERROR = "Invalid request";
+
     private final DiffService diffService;
     private final PmTrainVersionRepository trainVersionRepository;
 
@@ -59,38 +63,40 @@ public class PathManagerDiffController {
                                                 "No versions found for reference train: "
                                                         + referenceTrainId));
 
-        List<TimetableRowData> orderSide =
+        List<TimetableRowData> orderSideRows =
                 orderLocations.stream().map(PathManagerDiffController::toTimetableRowData).toList();
 
-        List<PmJourneyLocation> pmSide = latestVersion.getJourneyLocations();
+        List<PmJourneyLocation> pathManagerLocations = latestVersion.getJourneyLocations();
 
-        DiffResult result = diffService.diff(orderSide, pmSide);
-        return PathManagerDtoMapper.toDiffResultDto(result);
+        DiffResult diffResult = diffService.diff(orderSideRows, pathManagerLocations);
+        return PathManagerDtoMapper.toDiffResultDto(diffResult);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, String>> handleNotFound(IllegalArgumentException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(Map.of("error", "Resource not found"));
+                .body(errorBody(RESOURCE_NOT_FOUND_ERROR));
     }
 
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<Map<String, String>> handleBadRequest(IllegalStateException ex) {
-        return ResponseEntity.badRequest().body(Map.of("error", "Invalid request"));
+        return ResponseEntity.badRequest().body(errorBody(INVALID_REQUEST_ERROR));
     }
 
-    // ── Private helpers ────────────────────────────────────────────────
-
-    private static TimetableRowData toTimetableRowData(JourneyLocationDto dto) {
+    private static TimetableRowData toTimetableRowData(JourneyLocationDto location) {
         TimetableRowData row = new TimetableRowData();
-        row.setSequence(dto.sequence());
-        row.setUopid(dto.uopid());
-        row.setName(dto.primaryLocationName());
-        row.setCountry(dto.countryCodeIso());
-        row.setJourneyLocationType(dto.journeyLocationType());
-        row.setEstimatedArrival(dto.arrivalTime());
-        row.setEstimatedDeparture(dto.departureTime());
-        row.setDwellMinutes(dto.dwellTime());
+        row.setSequence(location.sequence());
+        row.setUopid(location.uopid());
+        row.setName(location.primaryLocationName());
+        row.setCountry(location.countryCodeIso());
+        row.setJourneyLocationType(location.journeyLocationType());
+        row.setEstimatedArrival(location.arrivalTime());
+        row.setEstimatedDeparture(location.departureTime());
+        row.setDwellMinutes(location.dwellTime());
         return row;
+    }
+
+    private Map<String, String> errorBody(String message) {
+        return Map.of(ERROR_KEY, message);
     }
 }

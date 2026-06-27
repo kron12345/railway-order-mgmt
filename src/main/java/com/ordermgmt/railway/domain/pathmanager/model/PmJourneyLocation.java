@@ -41,6 +41,8 @@ import lombok.Setter;
 @NoArgsConstructor
 public class PmJourneyLocation {
 
+    private static final int DEFAULT_DAY_OFFSET = 0;
+
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
@@ -70,12 +72,12 @@ public class PmJourneyLocation {
     @Column(length = 8)
     private String arrivalTime;
 
-    private Integer arrivalOffset = 0;
+    private Integer arrivalOffset = DEFAULT_DAY_OFFSET;
 
     @Column(length = 8)
     private String departureTime;
 
-    private Integer departureOffset = 0;
+    private Integer departureOffset = DEFAULT_DAY_OFFSET;
 
     private Integer dwellTime;
 

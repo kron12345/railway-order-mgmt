@@ -18,9 +18,7 @@ public interface PmReferenceTrainRepository
 
     List<PmReferenceTrain> findByTimetableYearYearOrderByOperationalTrainNumberAsc(int year);
 
-    /**
-     * One page of a year's trains (P6: the TreeGrid fetches a page from the DB, not the full list).
-     */
+    /** One page of a year's trains for paged TreeGrid loading. */
     List<PmReferenceTrain> findByTimetableYearYearOrderByOperationalTrainNumberAsc(
             int year, Pageable pageable);
 

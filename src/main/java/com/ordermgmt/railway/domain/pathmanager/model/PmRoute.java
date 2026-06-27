@@ -38,6 +38,8 @@ import lombok.Setter;
 @NoArgsConstructor
 public class PmRoute {
 
+    private static final String INITIAL_IDENTIFIER_VARIANT = "01";
+
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
@@ -53,7 +55,7 @@ public class PmRoute {
     private String roidCore;
 
     @Column(nullable = false, length = 2)
-    private String roidVariant = "01";
+    private String roidVariant = INITIAL_IDENTIFIER_VARIANT;
 
     @Column(nullable = false)
     private Integer roidTimetableYear;

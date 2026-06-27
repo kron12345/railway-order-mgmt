@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import jakarta.validation.Valid;
 
@@ -68,6 +69,17 @@ import lombok.RequiredArgsConstructor;
 @Transactional(readOnly = true)
 public class PathManagerController {
 
+    private static final String ERROR_KEY = "error";
+    private static final String RESOURCE_NOT_FOUND_ERROR = "Resource not found";
+    private static final String INVALID_REQUEST_ERROR = "Invalid request";
+    private static final String TIMETABLE_YEAR_LABEL_PREFIX = "Fahrplanjahr ";
+    private static final int INITIAL_VERSION_NUMBER = 1;
+    private static final String INITIAL_VERSION_LABEL = "Initial v1";
+    private static final int TIMETABLE_YEAR_START_MONTH = 12;
+    private static final int TIMETABLE_YEAR_START_DAY = 14;
+    private static final int TIMETABLE_YEAR_END_MONTH = 12;
+    private static final int TIMETABLE_YEAR_END_DAY = 12;
+
     private final PathManagerService pathManagerService;
     private final IdentifierGenerator identifierGenerator;
     private final PmReferenceTrainRepository referenceTrainRepository;
@@ -96,12 +108,10 @@ public class PathManagerController {
     @Operation(summary = "List all reference trains, optionally filtered by timetable year")
     @ApiResponse(responseCode = "200", description = "List of train summaries")
     public List<TrainSummaryDto> listTrains(@RequestParam(required = false) Integer year) {
-        List<PmReferenceTrain> trains;
-        if (year != null) {
-            trains = pathManagerService.findByYear(year);
-        } else {
-            trains = referenceTrainRepository.findAll();
-        }
+        List<PmReferenceTrain> trains =
+                year != null
+                        ? pathManagerService.findByYear(year)
+                        : referenceTrainRepository.findAll();
         return trains.stream().map(PathManagerDtoMapper::toSummary).toList();
     }
 
@@ -117,7 +127,7 @@ public class PathManagerController {
     @Operation(summary = "List all versions of a reference train")
     @ApiResponse(responseCode = "200", description = "List of train versions")
     public List<TrainVersionDto> listVersions(@PathVariable UUID trainId) {
-        pathManagerService.findById(trainId); // validate existence
+        validateTrainExists(trainId);
         return trainVersionRepository.findWithLocationsByReferenceTrainId(trainId).stream()
                 .map(PathManagerDtoMapper::toVersion)
                 .toList();
@@ -179,7 +189,7 @@ public class PathManagerController {
                 request.dwellTime(),
                 request.arrivalQualifier(),
                 request.departureQualifier(),
-                request.activityCodes() != null ? String.join(",", request.activityCodes()) : null,
+                joinActivityCodes(request.activityCodes()),
                 request.journeyLocationType(),
                 request.subsidiaryCode(),
                 request.associatedTrainOtn());
@@ -193,49 +203,24 @@ public class PathManagerController {
         return ResponseEntity.ok(PathManagerDtoMapper.toLocationDto(updated));
     }
 
-    // ── Exception handling ─────────────────────────────────────────────
-
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, String>> handleNotFound(IllegalArgumentException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(Map.of("error", "Resource not found"));
+                .body(errorBody(RESOURCE_NOT_FOUND_ERROR));
     }
 
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<Map<String, String>> handleBadRequest(IllegalStateException ex) {
-        return ResponseEntity.badRequest().body(Map.of("error", "Invalid request"));
+        return ResponseEntity.badRequest().body(errorBody(INVALID_REQUEST_ERROR));
     }
-
-    // ── Private helpers ────────────────────────────────────────────────
 
     private PmReferenceTrain createTrainFromRequest(TrainSubmitRequest request) {
         PmReferenceTrain train = new PmReferenceTrain();
-        train.setOperationalTrainNumber(request.operationalTrainNumber());
-        train.setTrainType(request.trainType());
-        train.setTrafficTypeCode(request.trafficTypeCode());
-        train.setSourcePositionId(request.sourcePositionId());
+        applySubmittedHeader(train, request);
+        applySubmittedCalendar(train, request);
         train.setProcessState(PathProcessState.NEW);
-
-        if (request.calendarStart() != null) {
-            train.setCalendarStart(LocalDate.parse(request.calendarStart()));
-        }
-        if (request.calendarEnd() != null) {
-            train.setCalendarEnd(LocalDate.parse(request.calendarEnd()));
-        }
-        train.setCalendarBitmap(request.calendarBitmap());
-
-        // Resolve timetable year from calendar start
-        int year =
-                train.getCalendarStart() != null
-                        ? train.getCalendarStart().getYear()
-                        : LocalDate.now().getYear();
-        PmTimetableYear ttYear =
-                timetableYearRepository.findByYear(year).orElseGet(() -> createTimetableYear(year));
-        train.setTimetableYear(ttYear);
-        train.setTridTimetableYear(year);
-        train.setTridCompany(identifierGenerator.company());
-        train.setTridCore(identifierGenerator.generateCore());
-        train.setTridVariant(identifierGenerator.initialVariant());
+        assignTimetableYear(train);
+        assignTrainIdentifier(train);
 
         train = referenceTrainRepository.save(train);
 
@@ -246,23 +231,60 @@ public class PathManagerController {
         return train;
     }
 
-    private PmTimetableYear createTimetableYear(int year) {
-        PmTimetableYear ttYear = new PmTimetableYear();
-        ttYear.setYear(year);
-        ttYear.setLabel("Fahrplanjahr " + year);
-        ttYear.setStartDate(LocalDate.of(year - 1, 12, 14));
-        ttYear.setEndDate(LocalDate.of(year, 12, 12));
-        return timetableYearRepository.save(ttYear);
+    private void applySubmittedHeader(PmReferenceTrain train, TrainSubmitRequest request) {
+        train.setOperationalTrainNumber(request.operationalTrainNumber());
+        train.setTrainType(request.trainType());
+        train.setTrafficTypeCode(request.trafficTypeCode());
+        train.setSourcePositionId(request.sourcePositionId());
     }
 
-    /** Default label for the first version of a newly submitted train. */
-    private static final String INITIAL_VERSION_LABEL = "Initial v1";
+    private void applySubmittedCalendar(PmReferenceTrain train, TrainSubmitRequest request) {
+        if (request.calendarStart() != null) {
+            train.setCalendarStart(LocalDate.parse(request.calendarStart()));
+        }
+        if (request.calendarEnd() != null) {
+            train.setCalendarEnd(LocalDate.parse(request.calendarEnd()));
+        }
+        train.setCalendarBitmap(request.calendarBitmap());
+    }
+
+    private void assignTimetableYear(PmReferenceTrain train) {
+        int year = timetableYearFrom(train);
+        PmTimetableYear timetableYear =
+                timetableYearRepository.findByYear(year).orElseGet(() -> createTimetableYear(year));
+
+        train.setTimetableYear(timetableYear);
+        train.setTridTimetableYear(year);
+    }
+
+    private int timetableYearFrom(PmReferenceTrain train) {
+        return train.getCalendarStart() != null
+                ? train.getCalendarStart().getYear()
+                : LocalDate.now().getYear();
+    }
+
+    private void assignTrainIdentifier(PmReferenceTrain train) {
+        train.setTridCompany(identifierGenerator.company());
+        train.setTridCore(identifierGenerator.generateCore());
+        train.setTridVariant(identifierGenerator.initialVariant());
+    }
+
+    private PmTimetableYear createTimetableYear(int year) {
+        PmTimetableYear timetableYear = new PmTimetableYear();
+        timetableYear.setYear(year);
+        timetableYear.setLabel(TIMETABLE_YEAR_LABEL_PREFIX + year);
+        timetableYear.setStartDate(
+                LocalDate.of(year - 1, TIMETABLE_YEAR_START_MONTH, TIMETABLE_YEAR_START_DAY));
+        timetableYear.setEndDate(
+                LocalDate.of(year, TIMETABLE_YEAR_END_MONTH, TIMETABLE_YEAR_END_DAY));
+        return timetableYearRepository.save(timetableYear);
+    }
 
     private void createInitialVersionFromDto(
             PmReferenceTrain train, List<JourneyLocationDto> locations) {
         PmTrainVersion version = new PmTrainVersion();
         version.setReferenceTrain(train);
-        version.setVersionNumber(1);
+        version.setVersionNumber(INITIAL_VERSION_NUMBER);
         version.setVersionType(VersionType.INITIAL);
         version.setLabel(INITIAL_VERSION_LABEL);
         version.setOperationalTrainNumber(train.getOperationalTrainNumber());
@@ -272,46 +294,56 @@ public class PathManagerController {
         version.setCalendarEnd(train.getCalendarEnd());
         version.setCalendarBitmap(train.getCalendarBitmap());
 
-        for (JourneyLocationDto dto : locations) {
-            PmJourneyLocation loc = new PmJourneyLocation();
-            loc.setTrainVersion(version);
-            loc.setSequence(dto.sequence());
-            loc.setCountryCodeIso(dto.countryCodeIso());
-            loc.setLocationPrimaryCode(dto.locationPrimaryCode());
-            loc.setPrimaryLocationName(dto.primaryLocationName());
-            loc.setUopid(dto.uopid());
-            loc.setJourneyLocationType(dto.journeyLocationType());
-            loc.setArrivalTime(dto.arrivalTime());
-            loc.setDepartureTime(dto.departureTime());
-            loc.setDwellTime(dto.dwellTime());
-            loc.setArrivalQualifier(dto.arrivalQualifier());
-            loc.setDepartureQualifier(dto.departureQualifier());
-            loc.setSubsidiaryCode(dto.subsidiaryCode());
-            loc.setAssociatedTrainOtn(dto.associatedTrainOtn());
-            // Persist activity codes as a JSON array (["0001","0002"]) so they round-trip through
-            // PathManagerDtoMapper.parseActivityCodes; otherwise codes submitted via the API are
-            // lost.
-            if (dto.activityCodes() != null && !dto.activityCodes().isEmpty()) {
-                loc.setActivities(
-                        dto.activityCodes().stream()
-                                .map(code -> "\"" + code + "\"")
-                                .collect(java.util.stream.Collectors.joining(",", "[", "]")));
-            }
-            version.getJourneyLocations().add(loc);
+        for (JourneyLocationDto locationDto : locations) {
+            version.getJourneyLocations().add(toJourneyLocation(version, locationDto));
         }
 
         trainVersionRepository.save(version);
     }
 
+    private PmJourneyLocation toJourneyLocation(
+            PmTrainVersion version, JourneyLocationDto locationDto) {
+        PmJourneyLocation location = new PmJourneyLocation();
+        location.setTrainVersion(version);
+        location.setSequence(locationDto.sequence());
+        location.setCountryCodeIso(locationDto.countryCodeIso());
+        location.setLocationPrimaryCode(locationDto.locationPrimaryCode());
+        location.setPrimaryLocationName(locationDto.primaryLocationName());
+        location.setUopid(locationDto.uopid());
+        location.setJourneyLocationType(locationDto.journeyLocationType());
+        location.setArrivalTime(locationDto.arrivalTime());
+        location.setDepartureTime(locationDto.departureTime());
+        location.setDwellTime(locationDto.dwellTime());
+        location.setArrivalQualifier(locationDto.arrivalQualifier());
+        location.setDepartureQualifier(locationDto.departureQualifier());
+        location.setSubsidiaryCode(locationDto.subsidiaryCode());
+        location.setAssociatedTrainOtn(locationDto.associatedTrainOtn());
+        location.setActivities(toActivityCodesJson(locationDto.activityCodes()));
+        return location;
+    }
+
+    private String toActivityCodesJson(List<String> activityCodes) {
+        if (activityCodes == null || activityCodes.isEmpty()) {
+            return null;
+        }
+        return activityCodes.stream()
+                .map(code -> "\"" + code + "\"")
+                .collect(Collectors.joining(",", "[", "]"));
+    }
+
     private TrainDetailDto loadTrainDetail(UUID trainId) {
         PmReferenceTrain train = pathManagerService.findById(trainId);
-        var versions = trainVersionRepository.findWithLocationsByReferenceTrainId(trainId);
-        var steps = processStepRepository.findByReferenceTrainIdOrderByCreatedAtDesc(trainId);
-        return PathManagerDtoMapper.toDetail(train, versions, steps);
+        var trainVersions = trainVersionRepository.findWithLocationsByReferenceTrainId(trainId);
+        var processSteps = processStepRepository.findByReferenceTrainIdOrderByCreatedAtDesc(trainId);
+        return PathManagerDtoMapper.toDetail(train, trainVersions, processSteps);
+    }
+
+    private void validateTrainExists(UUID trainId) {
+        pathManagerService.findById(trainId);
     }
 
     private PmTrainVersion validateVersionBelongsToTrain(UUID trainId, UUID versionId) {
-        pathManagerService.findById(trainId);
+        validateTrainExists(trainId);
         PmTrainVersion version =
                 trainVersionRepository
                         .findById(versionId)
@@ -336,5 +368,13 @@ public class PathManagerController {
         if (!location.getTrainVersion().getId().equals(versionId)) {
             throw new IllegalArgumentException("Location does not belong to version");
         }
+    }
+
+    private String joinActivityCodes(List<String> activityCodes) {
+        return activityCodes != null ? String.join(",", activityCodes) : null;
+    }
+
+    private Map<String, String> errorBody(String message) {
+        return Map.of(ERROR_KEY, message);
     }
 }

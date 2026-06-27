@@ -15,7 +15,7 @@ public interface PmJourneyLocationRepository extends JpaRepository<PmJourneyLoca
 
     List<PmJourneyLocation> findByTrainVersionIdOrderBySequenceAsc(UUID trainVersionId);
 
-    /** One page of a version's journey locations (P6: paged DB fetch for the TreeGrid). */
+    /** One page of a version's journey locations for paged TreeGrid loading. */
     List<PmJourneyLocation> findByTrainVersionIdOrderBySequenceAsc(
             UUID trainVersionId, Pageable pageable);
 

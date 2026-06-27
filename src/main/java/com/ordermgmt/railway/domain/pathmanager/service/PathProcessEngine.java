@@ -40,39 +40,37 @@ import lombok.RequiredArgsConstructor;
 @Transactional
 public class PathProcessEngine {
 
-    private final PmReferenceTrainRepository referenceTrainRepository;
-    private final PmTrainVersionRepository trainVersionRepository;
-    private final PmProcessStepRepository processStepRepository;
-    private final TtrPhaseResolver ttrPhaseResolver;
+    private static final String ANONYMOUS_USER = "anonymous";
 
-    /** Static transition table: state -> allowed actions. */
-    private static final Map<PathProcessState, Set<PathAction>> ALLOWED_TRANSITIONS;
+    private static final Map<PathProcessState, Set<PathAction>> ALLOWED_TRANSITIONS =
+            createAllowedTransitions();
 
-    /** Actions that produce a new train version by copying the latest version. */
     private static final Set<PathAction> VERSION_CREATING_ACTIONS =
             EnumSet.of(
                     PathAction.IM_DRAFT_OFFER,
                     PathAction.IM_ALTERATION_OFFER,
                     PathAction.IM_FINAL_OFFER);
 
-    static {
-        ALLOWED_TRANSITIONS = new EnumMap<>(PathProcessState.class);
+    private final PmReferenceTrainRepository referenceTrainRepository;
+    private final PmTrainVersionRepository trainVersionRepository;
+    private final PmProcessStepRepository processStepRepository;
+    private final TtrPhaseResolver ttrPhaseResolver;
 
-        ALLOWED_TRANSITIONS.put(PathProcessState.NEW, EnumSet.of(PathAction.SEND_REQUEST));
-
-        ALLOWED_TRANSITIONS.put(
+    private static Map<PathProcessState, Set<PathAction>> createAllowedTransitions() {
+        Map<PathProcessState, Set<PathAction>> transitions =
+                new EnumMap<>(PathProcessState.class);
+        transitions.put(PathProcessState.NEW, EnumSet.of(PathAction.SEND_REQUEST));
+        transitions.put(
                 PathProcessState.CREATED,
                 EnumSet.of(PathAction.MODIFY_REQUEST, PathAction.WITHDRAW, PathAction.IM_RECEIPT));
-
-        ALLOWED_TRANSITIONS.put(
+        transitions.put(
                 PathProcessState.MODIFIED,
                 EnumSet.of(
                         PathAction.WITHDRAW,
                         PathAction.IM_RECEIPT,
                         PathAction.IM_DRAFT_OFFER,
                         PathAction.IM_NO_ALTERNATIVE));
-
-        ALLOWED_TRANSITIONS.put(
+        transitions.put(
                 PathProcessState.RECEIPT_CONFIRMED,
                 EnumSet.of(
                         PathAction.MODIFY_REQUEST,
@@ -80,43 +78,37 @@ public class PathProcessEngine {
                         PathAction.IM_DRAFT_OFFER,
                         PathAction.IM_NO_ALTERNATIVE,
                         PathAction.IM_ERROR));
-
-        ALLOWED_TRANSITIONS.put(
+        transitions.put(
                 PathProcessState.DRAFT_OFFERED,
                 EnumSet.of(
                         PathAction.REJECT_WITH_REVISION,
                         PathAction.REJECT_WITHOUT_REVISION,
                         PathAction.IM_FINAL_OFFER));
-
-        ALLOWED_TRANSITIONS.put(
+        transitions.put(
                 PathProcessState.REVISION_REQUESTED,
                 EnumSet.of(PathAction.IM_DRAFT_OFFER, PathAction.IM_NO_ALTERNATIVE));
-
-        ALLOWED_TRANSITIONS.put(
+        transitions.put(
                 PathProcessState.FINAL_OFFERED,
                 EnumSet.of(PathAction.ACCEPT_OFFER, PathAction.REJECT_WITHOUT_REVISION));
-
-        ALLOWED_TRANSITIONS.put(
+        transitions.put(
                 PathProcessState.BOOKED,
                 EnumSet.of(
                         PathAction.REQUEST_MODIFICATION,
                         PathAction.CANCEL_PATH,
                         PathAction.IM_ANNOUNCE_ALTERATION));
-
-        ALLOWED_TRANSITIONS.put(
+        transitions.put(
                 PathProcessState.MODIFICATION_REQUESTED,
                 EnumSet.of(
                         PathAction.IM_RECEIPT,
                         PathAction.IM_FINAL_OFFER,
                         PathAction.IM_NO_ALTERNATIVE));
-
-        ALLOWED_TRANSITIONS.put(
+        transitions.put(
                 PathProcessState.ALTERATION_ANNOUNCED,
                 EnumSet.of(PathAction.IM_ALTERATION_OFFER, PathAction.IM_NO_ALTERNATIVE));
-
-        ALLOWED_TRANSITIONS.put(
+        transitions.put(
                 PathProcessState.ALTERATION_OFFERED,
                 EnumSet.of(PathAction.ACCEPT_ALTERATION, PathAction.REJECT_ALTERATION));
+        return transitions;
     }
 
     /** Returns the actions available for the current state of the given reference train. */
@@ -129,11 +121,8 @@ public class PathProcessEngine {
         }
         EnumSet<PathAction> filtered = EnumSet.copyOf(actions);
 
-        // In Bestellphase 3 (Late/Ad Hoc): remove IM_DRAFT_OFFER from RECEIPT_CONFIRMED
-        if (train.getProcessState() == PathProcessState.RECEIPT_CONFIRMED
-                && !isDraftOfferAllowed(train)) {
+        if (shouldUseDirectFinalOffer(train)) {
             filtered.remove(PathAction.IM_DRAFT_OFFER);
-            // Ensure IM_FINAL_OFFER is available as direct path
             filtered.add(PathAction.IM_FINAL_OFFER);
         }
 
@@ -154,16 +143,8 @@ public class PathProcessEngine {
         PmReferenceTrain train = loadTrain(referenceTrainId);
         PathProcessState currentState = train.getProcessState();
         validateTransition(currentState, action, train);
-
-        PathProcessState newState = resolveTargetState(currentState, action);
-
-        PmProcessStep step = new PmProcessStep();
-        step.setReferenceTrain(train);
-        step.setStepType(action.name());
-        step.setFromState(currentState.name());
-        step.setToState(newState.name());
-        step.setComment(comment);
-        step.setSimulatedBy(getCurrentUsername());
+        PathProcessState newState = resolveTargetState(action);
+        PmProcessStep step = createProcessStep(train, action, currentState, newState, comment);
 
         train.setProcessState(newState);
         referenceTrainRepository.save(train);
@@ -178,10 +159,31 @@ public class PathProcessEngine {
         return new ProcessStepResult(step, newState, newVersion);
     }
 
+    private PmProcessStep createProcessStep(
+            PmReferenceTrain train,
+            PathAction action,
+            PathProcessState fromState,
+            PathProcessState toState,
+            String comment) {
+        PmProcessStep step = new PmProcessStep();
+        step.setReferenceTrain(train);
+        step.setStepType(action.name());
+        step.setFromState(fromState.name());
+        step.setToState(toState.name());
+        step.setComment(comment);
+        step.setSimulatedBy(getCurrentUsername());
+        return step;
+    }
+
+    private boolean shouldUseDirectFinalOffer(PmReferenceTrain train) {
+        return train.getProcessState() == PathProcessState.RECEIPT_CONFIRMED
+                && !isDraftOfferAllowed(train);
+    }
+
     private boolean isDraftOfferAllowed(PmReferenceTrain train) {
         PmTimetableYear year = train.getTimetableYear();
         if (year == null || year.getStartDate() == null) {
-            return true; // default: allow if no year data
+            return true;
         }
         return ttrPhaseResolver.isDraftOfferAllowed(year, LocalDate.now());
     }
@@ -191,7 +193,7 @@ public class PathProcessEngine {
         if (auth != null && auth.isAuthenticated()) {
             return auth.getName();
         }
-        return "anonymous";
+        return ANONYMOUS_USER;
     }
 
     private PmReferenceTrain loadTrain(UUID referenceTrainId) {
@@ -208,11 +210,7 @@ public class PathProcessEngine {
         Set<PathAction> allowed = ALLOWED_TRANSITIONS.get(currentState);
         boolean isAllowed = allowed != null && allowed.contains(action);
 
-        // Dynamic rule: IM_FINAL_OFFER is allowed from RECEIPT_CONFIRMED in Bestellphase 3
-        if (!isAllowed
-                && currentState == PathProcessState.RECEIPT_CONFIRMED
-                && action == PathAction.IM_FINAL_OFFER
-                && !isDraftOfferAllowed(train)) {
+        if (!isAllowed && isDirectFinalOfferAllowed(currentState, action, train)) {
             isAllowed = true;
         }
 
@@ -227,8 +225,14 @@ public class PathProcessEngine {
         }
     }
 
-    /** Determines the target state based on current state and action. */
-    private PathProcessState resolveTargetState(PathProcessState currentState, PathAction action) {
+    private boolean isDirectFinalOfferAllowed(
+            PathProcessState currentState, PathAction action, PmReferenceTrain train) {
+        return currentState == PathProcessState.RECEIPT_CONFIRMED
+                && action == PathAction.IM_FINAL_OFFER
+                && !isDraftOfferAllowed(train);
+    }
+
+    private PathProcessState resolveTargetState(PathAction action) {
         return switch (action) {
             case SEND_REQUEST -> PathProcessState.CREATED;
             case MODIFY_REQUEST -> PathProcessState.MODIFIED;
@@ -259,10 +263,6 @@ public class PathProcessEngine {
         };
     }
 
-    /**
-     * Creates a new train version by copying journey locations from the latest version. This is
-     * used when the IM provides an offer with potentially modified train data.
-     */
     private PmTrainVersion createVersionFromLatest(
             PmReferenceTrain train, VersionType versionType) {
         PmTrainVersion latest =
@@ -318,28 +318,33 @@ public class PathProcessEngine {
     private void copyJourneyLocations(PmTrainVersion source, PmTrainVersion target) {
         List<PmJourneyLocation> copies = new ArrayList<>();
         for (PmJourneyLocation original : source.getJourneyLocations()) {
-            PmJourneyLocation copy = new PmJourneyLocation();
-            copy.setTrainVersion(target);
-            copy.setSequence(original.getSequence());
-            copy.setCountryCodeIso(original.getCountryCodeIso());
-            copy.setLocationPrimaryCode(original.getLocationPrimaryCode());
-            copy.setPrimaryLocationName(original.getPrimaryLocationName());
-            copy.setUopid(original.getUopid());
-            copy.setJourneyLocationType(original.getJourneyLocationType());
-            copy.setArrivalTime(original.getArrivalTime());
-            copy.setArrivalOffset(original.getArrivalOffset());
-            copy.setDepartureTime(original.getDepartureTime());
-            copy.setDepartureOffset(original.getDepartureOffset());
-            copy.setDwellTime(original.getDwellTime());
-            copy.setArrivalQualifier(original.getArrivalQualifier());
-            copy.setDepartureQualifier(original.getDepartureQualifier());
-            copy.setSubsidiaryCode(original.getSubsidiaryCode());
-            copy.setActivities(original.getActivities());
-            copy.setAssociatedTrainOtn(original.getAssociatedTrainOtn());
-            copy.setNetworkSpecificParams(original.getNetworkSpecificParams());
-            copy.setTttPayload(original.getTttPayload());
-            copies.add(copy);
+            copies.add(copyJourneyLocation(original, target));
         }
         target.getJourneyLocations().addAll(copies);
+    }
+
+    private PmJourneyLocation copyJourneyLocation(
+            PmJourneyLocation source, PmTrainVersion targetVersion) {
+        PmJourneyLocation copy = new PmJourneyLocation();
+        copy.setTrainVersion(targetVersion);
+        copy.setSequence(source.getSequence());
+        copy.setCountryCodeIso(source.getCountryCodeIso());
+        copy.setLocationPrimaryCode(source.getLocationPrimaryCode());
+        copy.setPrimaryLocationName(source.getPrimaryLocationName());
+        copy.setUopid(source.getUopid());
+        copy.setJourneyLocationType(source.getJourneyLocationType());
+        copy.setArrivalTime(source.getArrivalTime());
+        copy.setArrivalOffset(source.getArrivalOffset());
+        copy.setDepartureTime(source.getDepartureTime());
+        copy.setDepartureOffset(source.getDepartureOffset());
+        copy.setDwellTime(source.getDwellTime());
+        copy.setArrivalQualifier(source.getArrivalQualifier());
+        copy.setDepartureQualifier(source.getDepartureQualifier());
+        copy.setSubsidiaryCode(source.getSubsidiaryCode());
+        copy.setActivities(source.getActivities());
+        copy.setAssociatedTrainOtn(source.getAssociatedTrainOtn());
+        copy.setNetworkSpecificParams(source.getNetworkSpecificParams());
+        copy.setTttPayload(source.getTttPayload());
+        return copy;
     }
 }

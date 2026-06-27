@@ -16,12 +16,14 @@ import com.ordermgmt.railway.domain.timetable.model.TimetableRowData;
 @Service
 public class DiffService {
 
+    private static final String MISSING_UOPID_KEY = "noid";
+    private static final int MISSING_SEQUENCE_KEY = 0;
+
     /**
      * Computes the diff between order-side rows and PM-side journey locations.
      *
-     * <p>Matching is done by UOPID (operational point identifier). Rows/locations present on only
-     * one side are reported as added/removed. Rows present on both sides are compared field by
-     * field.
+     * <p>Matching is done by UOPID and sequence. Rows/locations present on only one side are
+     * reported as added/removed. Rows present on both sides are compared field by field.
      *
      * @param orderSide the timetable rows from the order/archive
      * @param pmSide the journey locations from the PM train version
@@ -42,11 +44,12 @@ public class DiffService {
 
             if (pmLocation == null) {
                 added.add(orderRow);
-            } else {
-                List<String> differences = compareFields(orderRow, pmLocation);
-                if (!differences.isEmpty()) {
-                    changed.add(new DiffResult.ChangedLocation(orderRow, pmLocation, differences));
-                }
+                continue;
+            }
+
+            List<String> differences = compareFields(orderRow, pmLocation);
+            if (!differences.isEmpty()) {
+                changed.add(new DiffResult.ChangedLocation(orderRow, pmLocation, differences));
             }
         }
 
@@ -66,16 +69,17 @@ public class DiffService {
 
     private Map<String, PmJourneyLocation> indexPmLocations(List<PmJourneyLocation> locations) {
         Map<String, PmJourneyLocation> map = new LinkedHashMap<>();
-        for (PmJourneyLocation loc : locations) {
-            String key = compositeKey(loc.getUopid(), loc.getSequence());
-            map.put(key, loc);
+        for (PmJourneyLocation location : locations) {
+            String key = compositeKey(location.getUopid(), location.getSequence());
+            map.put(key, location);
         }
         return map;
     }
 
     private String compositeKey(String uopid, Integer sequence) {
-        String base = uopid != null ? uopid : "noid";
-        return base + ":" + (sequence != null ? sequence : 0);
+        String base = uopid != null ? uopid : MISSING_UOPID_KEY;
+        int sequenceNumber = sequence != null ? sequence : MISSING_SEQUENCE_KEY;
+        return base + ":" + sequenceNumber;
     }
 
     private List<String> compareFields(TimetableRowData order, PmJourneyLocation pm) {

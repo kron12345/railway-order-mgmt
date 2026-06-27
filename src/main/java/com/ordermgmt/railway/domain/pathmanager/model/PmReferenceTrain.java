@@ -43,6 +43,8 @@ import lombok.Setter;
 @NoArgsConstructor
 public class PmReferenceTrain {
 
+    private static final String INITIAL_IDENTIFIER_VARIANT = "01";
+
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
@@ -58,7 +60,7 @@ public class PmReferenceTrain {
     private String tridCore;
 
     @Column(nullable = false, length = 2)
-    private String tridVariant = "01";
+    private String tridVariant = INITIAL_IDENTIFIER_VARIANT;
 
     @Column(nullable = false)
     private Integer tridTimetableYear;

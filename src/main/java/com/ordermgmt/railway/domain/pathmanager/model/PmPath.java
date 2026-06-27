@@ -38,6 +38,8 @@ import lombok.Setter;
 @NoArgsConstructor
 public class PmPath {
 
+    private static final String INITIAL_IDENTIFIER_VARIANT = "01";
+
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
@@ -57,7 +59,7 @@ public class PmPath {
     private String paidCore;
 
     @Column(nullable = false, length = 2)
-    private String paidVariant = "01";
+    private String paidVariant = INITIAL_IDENTIFIER_VARIANT;
 
     @Column(nullable = false)
     private Integer paidTimetableYear;

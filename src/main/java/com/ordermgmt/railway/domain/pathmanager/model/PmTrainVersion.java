@@ -48,6 +48,8 @@ import lombok.Setter;
 @NoArgsConstructor
 public class PmTrainVersion {
 
+    private static final int DEFAULT_OFFSET_TO_REFERENCE = 0;
+
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
@@ -92,7 +94,7 @@ public class PmTrainVersion {
     @Column(columnDefinition = "text")
     private String calendarBitmap;
 
-    private Integer offsetToReference = 0;
+    private Integer offsetToReference = DEFAULT_OFFSET_TO_REFERENCE;
 
     @OneToMany(mappedBy = "trainVersion", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("sequence ASC")

@@ -24,9 +24,20 @@ import com.ordermgmt.railway.dto.pathmanager.TrainVersionDto;
 /** Manual mapping between Path Manager entities and DTOs. */
 public final class PathManagerDtoMapper {
 
-    private PathManagerDtoMapper() {}
+    private static final String EMPTY_VALUE = "";
+    private static final String UNKNOWN_ROUTE_LOCATION = "?";
+    private static final String ROUTE_SEPARATOR = " \u2192 ";
+    private static final String CHANGE_TYPE_ADDED = "ADDED";
+    private static final String CHANGE_TYPE_REMOVED = "REMOVED";
+    private static final String CHANGE_TYPE_CHANGED = "CHANGED";
+    private static final String FIELD_NAME = "name";
+    private static final String FIELD_ARRIVAL_TIME = "arrivalTime";
+    private static final String FIELD_DEPARTURE_TIME = "departureTime";
+    private static final String FIELD_DWELL_TIME = "dwellTime";
+    private static final String ACTIVITY_JSON_DELIMITERS = "[\\[\\]\"\\s]";
+    private static final String ACTIVITY_SEPARATOR = ",";
 
-    // ── Reference Train → Summary ──────────────────────────────────────
+    private PathManagerDtoMapper() {}
 
     public static TrainSummaryDto toSummary(PmReferenceTrain train) {
         int versionCount = train.getTrainVersions() != null ? train.getTrainVersions().size() : 0;
@@ -41,17 +52,17 @@ public final class PathManagerDtoMapper {
                 routeSummary);
     }
 
-    // ── Reference Train → Detail ───────────────────────────────────────
-
     public static TrainDetailDto toDetail(
-            PmReferenceTrain train, List<PmTrainVersion> versions, List<PmProcessStep> steps) {
+            PmReferenceTrain train,
+            List<PmTrainVersion> trainVersions,
+            List<PmProcessStep> processSteps) {
         return new TrainDetailDto(
                 train.getId(),
                 train.getOperationalTrainNumber(),
                 train.getTrainType(),
                 train.getTrafficTypeCode(),
-                train.getCalendarStart() != null ? train.getCalendarStart().toString() : null,
-                train.getCalendarEnd() != null ? train.getCalendarEnd().toString() : null,
+                toNullableString(train.getCalendarStart()),
+                toNullableString(train.getCalendarEnd()),
                 train.getCalendarBitmap(),
                 train.getTrainWeight(),
                 train.getTrainLength(),
@@ -59,11 +70,9 @@ public final class PathManagerDtoMapper {
                 train.getBrakeType(),
                 train.getSourcePositionId(),
                 train.getProcessState().name(),
-                versions.stream().map(PathManagerDtoMapper::toVersion).toList(),
-                steps.stream().map(PathManagerDtoMapper::toStepDto).toList());
+                trainVersions.stream().map(PathManagerDtoMapper::toVersion).toList(),
+                processSteps.stream().map(PathManagerDtoMapper::toStepDto).toList());
     }
-
-    // ── Train Version → DTO ────────────────────────────────────────────
 
     public static TrainVersionDto toVersion(PmTrainVersion version) {
         List<JourneyLocationDto> locations =
@@ -81,28 +90,24 @@ public final class PathManagerDtoMapper {
                 locations);
     }
 
-    // ── Journey Location → DTO ─────────────────────────────────────────
-
-    public static JourneyLocationDto toLocationDto(PmJourneyLocation loc) {
-        List<String> activityCodes = parseActivityCodes(loc.getActivities());
+    public static JourneyLocationDto toLocationDto(PmJourneyLocation location) {
+        List<String> activityCodes = parseActivityCodes(location.getActivities());
         return new JourneyLocationDto(
-                loc.getSequence(),
-                loc.getCountryCodeIso(),
-                loc.getLocationPrimaryCode(),
-                loc.getPrimaryLocationName(),
-                loc.getUopid(),
-                loc.getJourneyLocationType(),
-                loc.getArrivalTime(),
-                loc.getDepartureTime(),
-                loc.getDwellTime(),
-                loc.getArrivalQualifier(),
-                loc.getDepartureQualifier(),
-                loc.getSubsidiaryCode(),
+                location.getSequence(),
+                location.getCountryCodeIso(),
+                location.getLocationPrimaryCode(),
+                location.getPrimaryLocationName(),
+                location.getUopid(),
+                location.getJourneyLocationType(),
+                location.getArrivalTime(),
+                location.getDepartureTime(),
+                location.getDwellTime(),
+                location.getArrivalQualifier(),
+                location.getDepartureQualifier(),
+                location.getSubsidiaryCode(),
                 activityCodes,
-                loc.getAssociatedTrainOtn());
+                location.getAssociatedTrainOtn());
     }
-
-    // ── Process Step → DTO ─────────────────────────────────────────────
 
     public static ProcessStepDto toStepDto(PmProcessStep step) {
         return new ProcessStepDto(
@@ -113,109 +118,111 @@ public final class PathManagerDtoMapper {
                 step.getTypeOfInformation(),
                 step.getComment(),
                 step.getSimulatedBy(),
-                step.getCreatedAt() != null ? step.getCreatedAt().toString() : null);
+                toNullableString(step.getCreatedAt()));
     }
 
-    // ── DiffResult → DTO ───────────────────────────────────────────────
-
-    public static DiffResultDto toDiffResultDto(DiffResult result) {
+    public static DiffResultDto toDiffResultDto(DiffResult diffResult) {
         List<DiffResultDto.DiffEntryDto> entries = new ArrayList<>();
 
-        for (TimetableRowData added : result.added()) {
+        for (TimetableRowData added : diffResult.added()) {
             entries.add(
                     new DiffResultDto.DiffEntryDto(
-                            added.getUopid(), added.getName(), "ADDED", Map.of()));
+                            added.getUopid(), added.getName(), CHANGE_TYPE_ADDED, Map.of()));
         }
 
-        for (PmJourneyLocation removed : result.removed()) {
+        for (PmJourneyLocation removed : diffResult.removed()) {
             entries.add(
                     new DiffResultDto.DiffEntryDto(
                             removed.getUopid(),
                             removed.getPrimaryLocationName(),
-                            "REMOVED",
+                            CHANGE_TYPE_REMOVED,
                             Map.of()));
         }
 
-        for (DiffResult.ChangedLocation changed : result.changed()) {
+        for (DiffResult.ChangedLocation changed : diffResult.changed()) {
             Map<String, String[]> fieldDiffs =
                     buildFieldDiffs(changed.orderSide(), changed.pmSide(), changed.differences());
             entries.add(
                     new DiffResultDto.DiffEntryDto(
                             changed.pmSide().getUopid(),
                             changed.pmSide().getPrimaryLocationName(),
-                            "CHANGED",
+                            CHANGE_TYPE_CHANGED,
                             fieldDiffs));
         }
 
         return new DiffResultDto(entries);
     }
 
-    // ── Helpers ────────────────────────────────────────────────────────
-
     private static String buildRouteSummary(PmReferenceTrain train) {
         List<PmTrainVersion> versions = train.getTrainVersions();
         if (versions == null || versions.isEmpty()) {
-            return "";
+            return EMPTY_VALUE;
         }
-        PmTrainVersion latest = versions.get(versions.size() - 1);
-        List<PmJourneyLocation> locations = latest.getJourneyLocations();
+        PmTrainVersion latestVersion = versions.get(versions.size() - 1);
+        List<PmJourneyLocation> locations = latestVersion.getJourneyLocations();
         if (locations == null || locations.isEmpty()) {
-            return "";
+            return EMPTY_VALUE;
         }
         String first = locations.get(0).getPrimaryLocationName();
         String last = locations.get(locations.size() - 1).getPrimaryLocationName();
         if (Objects.equals(first, last)) {
-            return first != null ? first : "";
+            return first != null ? first : EMPTY_VALUE;
         }
-        return (first != null ? first : "?") + " \u2192 " + (last != null ? last : "?");
+        return routeLocationName(first) + ROUTE_SEPARATOR + routeLocationName(last);
     }
 
     private static List<String> parseActivityCodes(String activitiesJson) {
         if (activitiesJson == null || activitiesJson.isBlank()) {
             return Collections.emptyList();
         }
-        // Simple JSON array parse: ["0001","0002"] -> List
-        String stripped = activitiesJson.replaceAll("[\\[\\]\"\\s]", "");
+        String stripped = activitiesJson.replaceAll(ACTIVITY_JSON_DELIMITERS, EMPTY_VALUE);
         if (stripped.isEmpty()) {
             return Collections.emptyList();
         }
-        return Arrays.asList(stripped.split(","));
+        return Arrays.asList(stripped.split(ACTIVITY_SEPARATOR));
     }
 
     private static Map<String, String[]> buildFieldDiffs(
-            TimetableRowData order, PmJourneyLocation pm, List<String> differences) {
-        Map<String, String[]> diffs = new LinkedHashMap<>();
+            TimetableRowData orderSide, PmJourneyLocation pathManagerSide, List<String> differences) {
+        Map<String, String[]> fieldDiffs = new LinkedHashMap<>();
         for (String field : differences) {
-            String[] values = diffValuesForField(field, order, pm);
-            diffs.put(field, values);
+            fieldDiffs.put(field, diffValuesForField(field, orderSide, pathManagerSide));
         }
-        return diffs;
+        return fieldDiffs;
     }
 
     private static String[] diffValuesForField(
-            String field, TimetableRowData order, PmJourneyLocation pm) {
+            String field, TimetableRowData orderSide, PmJourneyLocation pathManagerSide) {
         return switch (field) {
-            case "name" ->
-                    new String[] {
-                        order.getName() != null ? order.getName() : "",
-                        pm.getPrimaryLocationName() != null ? pm.getPrimaryLocationName() : ""
-                    };
-            case "arrivalTime" ->
-                    new String[] {
-                        order.getEstimatedArrival() != null ? order.getEstimatedArrival() : "",
-                        pm.getArrivalTime() != null ? pm.getArrivalTime() : ""
-                    };
-            case "departureTime" ->
-                    new String[] {
-                        order.getEstimatedDeparture() != null ? order.getEstimatedDeparture() : "",
-                        pm.getDepartureTime() != null ? pm.getDepartureTime() : ""
-                    };
-            case "dwellTime" ->
-                    new String[] {
-                        order.getDwellMinutes() != null ? order.getDwellMinutes().toString() : "",
-                        pm.getDwellTime() != null ? pm.getDwellTime().toString() : ""
-                    };
-            default -> new String[] {"", ""};
+            case FIELD_NAME ->
+                    diffValues(orderSide.getName(), pathManagerSide.getPrimaryLocationName());
+            case FIELD_ARRIVAL_TIME ->
+                    diffValues(orderSide.getEstimatedArrival(), pathManagerSide.getArrivalTime());
+            case FIELD_DEPARTURE_TIME ->
+                    diffValues(
+                            orderSide.getEstimatedDeparture(),
+                            pathManagerSide.getDepartureTime());
+            case FIELD_DWELL_TIME ->
+                    diffValues(orderSide.getDwellMinutes(), pathManagerSide.getDwellTime());
+            default -> diffValues(EMPTY_VALUE, EMPTY_VALUE);
         };
+    }
+
+    private static String[] diffValues(Object orderSideValue, Object pathManagerSideValue) {
+        return new String[] {
+            toDisplayString(orderSideValue), toDisplayString(pathManagerSideValue)
+        };
+    }
+
+    private static String toDisplayString(Object value) {
+        return value != null ? value.toString() : EMPTY_VALUE;
+    }
+
+    private static String toNullableString(Object value) {
+        return value != null ? value.toString() : null;
+    }
+
+    private static String routeLocationName(String locationName) {
+        return locationName != null ? locationName : UNKNOWN_ROUTE_LOCATION;
     }
 }

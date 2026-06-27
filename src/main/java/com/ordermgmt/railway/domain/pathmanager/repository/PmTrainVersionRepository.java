@@ -19,7 +19,7 @@ public interface PmTrainVersionRepository extends JpaRepository<PmTrainVersion, 
 
     List<PmTrainVersion> findByReferenceTrainIdOrderByVersionNumberDesc(UUID referenceTrainId);
 
-    /** One page of a train's versions (P6: paged DB fetch for the TreeGrid). */
+    /** One page of a train's versions for paged TreeGrid loading. */
     List<PmTrainVersion> findByReferenceTrainIdOrderByVersionNumberDesc(
             UUID referenceTrainId, Pageable pageable);
 
