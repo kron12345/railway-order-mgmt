@@ -591,8 +591,8 @@ test.describe("S-Bahn Olten-Aarau: Full Integration Test", () => {
     orderUuid = orderUrl.match(/\/orders\/([0-9a-f-]+)$/)?.[1] || "";
 
     // Verify order detail loaded with our data
-    await expect(page.getByText(ORDER_NR)).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText(ORDER_NAME)).toBeVisible();
+    await expect(page.getByText(ORDER_NR).first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(ORDER_NAME).first()).toBeVisible();
     await screenshot(page, "01-order-created");
     console.log(`Order created: ${orderUuid}`);
   });
@@ -603,7 +603,7 @@ test.describe("S-Bahn Olten-Aarau: Full Integration Test", () => {
 
   test("02. create timetable position and calculate route", async () => {
     await page.goto(orderUrl);
-    await expect(page.getByText(ORDER_NR)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(ORDER_NR).first()).toBeVisible({ timeout: 10_000 });
     await page.waitForTimeout(500);
 
     // Click "+ Fahrplan" to open timetable builder
@@ -1241,7 +1241,7 @@ test.describe("S-Bahn Olten-Aarau: Full Integration Test", () => {
 
   test("09. create interval timetable generating 38 positions", async () => {
     await page.goto(orderUrl);
-    await expect(page.getByText(ORDER_NR)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(ORDER_NR).first()).toBeVisible({ timeout: 10_000 });
     await page.waitForTimeout(500);
 
     // Click "+ Fahrplan" for a new position
@@ -1411,7 +1411,7 @@ test.describe("S-Bahn Olten-Aarau: Full Integration Test", () => {
 
   test("10. send first position to Path Manager", async () => {
     await page.goto(orderUrl);
-    await expect(page.getByText(ORDER_NR)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(ORDER_NR).first()).toBeVisible({ timeout: 10_000 });
     await page.waitForTimeout(1_000);
 
     // Find the train icon (send to PM) button on a FAHRPLAN position row
@@ -1507,7 +1507,7 @@ test.describe("S-Bahn Olten-Aarau: Full Integration Test", () => {
 
   test("12. verify archive view with color-coded table", async () => {
     await page.goto(orderUrl);
-    await expect(page.getByText(ORDER_NR)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(ORDER_NR).first()).toBeVisible({ timeout: 10_000 });
     await page.waitForTimeout(1_000);
 
     // Click the eye icon on a FAHRPLAN position to open archive view
@@ -1599,7 +1599,7 @@ test.describe("S-Bahn Olten-Aarau: Full Integration Test", () => {
 
   test("10b. verify resource panel on timetable position", async () => {
     await page.goto(orderUrl);
-    await expect(page.getByText(ORDER_NR)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(ORDER_NR).first()).toBeVisible({ timeout: 10_000 });
     await page.waitForTimeout(1_500);
     await dismissDevBanner(page);
 
@@ -1630,7 +1630,7 @@ test.describe("S-Bahn Olten-Aarau: Full Integration Test", () => {
 
   test("10c. add a resource manually", async () => {
     await page.goto(orderUrl);
-    await expect(page.getByText(ORDER_NR)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(ORDER_NR).first()).toBeVisible({ timeout: 10_000 });
     await page.waitForTimeout(1_500);
     await dismissDevBanner(page);
 
@@ -1749,7 +1749,7 @@ test.describe("S-Bahn Olten-Aarau: Full Integration Test", () => {
 
   test("10d. create purchase position for resource", async () => {
     await page.goto(orderUrl);
-    await expect(page.getByText(ORDER_NR)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(ORDER_NR).first()).toBeVisible({ timeout: 10_000 });
     await page.waitForTimeout(1_500);
     await dismissDevBanner(page);
 
@@ -1828,7 +1828,7 @@ test.describe("S-Bahn Olten-Aarau: Full Integration Test", () => {
 
   test("10e. fill TTT order dialog and submit", async () => {
     await page.goto(orderUrl);
-    await expect(page.getByText(ORDER_NR)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(ORDER_NR).first()).toBeVisible({ timeout: 10_000 });
     await page.waitForTimeout(1_500);
     await dismissDevBanner(page);
 
@@ -1951,7 +1951,7 @@ test.describe("S-Bahn Olten-Aarau: Full Integration Test", () => {
 
   test("10f. verify TTT status on purchase position", async () => {
     await page.goto(orderUrl);
-    await expect(page.getByText(ORDER_NR)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(ORDER_NR).first()).toBeVisible({ timeout: 10_000 });
     await page.waitForTimeout(1_500);
     await dismissDevBanner(page);
 
@@ -2044,7 +2044,7 @@ test.describe("S-Bahn Olten-Aarau: Full Integration Test", () => {
 
   test("14. cleanup — delete test order", async () => {
     await page.goto(orderUrl);
-    await expect(page.getByText(ORDER_NR)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(ORDER_NR).first()).toBeVisible({ timeout: 10_000 });
     await page.waitForTimeout(1_000);
 
     await dismissDevBanner(page);

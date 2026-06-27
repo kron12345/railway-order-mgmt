@@ -134,13 +134,13 @@ test.describe("Service Position (Leistung): Create and Modify", () => {
     }
     await page.waitForURL(/\/orders\/[0-9a-f-]+$/, { timeout: 20_000 });
     orderUrl = page.url();
-    await expect(page.getByText(ORDER_NR)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(ORDER_NR).first()).toBeVisible({ timeout: 10_000 });
   });
 
   test.afterAll(async () => {
     // Cleanup: delete the test order
     await page.goto(orderUrl);
-    await expect(page.getByText(ORDER_NR)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(ORDER_NR).first()).toBeVisible({ timeout: 10_000 });
     await page.waitForTimeout(1_000);
     await dismissDevBanner(page);
 
@@ -165,7 +165,7 @@ test.describe("Service Position (Leistung): Create and Modify", () => {
 
   test("1. create service position (Leistung)", async () => {
     await page.goto(orderUrl);
-    await expect(page.getByText(ORDER_NR)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(ORDER_NR).first()).toBeVisible({ timeout: 10_000 });
 
     // Click "+ Leistung" button
     await page.getByRole("button", { name: ADD_SERVICE_BTN }).click();
