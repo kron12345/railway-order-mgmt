@@ -4,36 +4,20 @@ import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.
 import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.timeOrDash;
 
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.UUID;
 
 import jakarta.annotation.security.RolesAllowed;
 
 import com.vaadin.flow.component.Component;
-import com.vaadin.flow.component.Key;
-import com.vaadin.flow.component.KeyModifier;
 import com.vaadin.flow.component.UI;
-import com.vaadin.flow.component.button.Button;
-import com.vaadin.flow.component.button.ButtonVariant;
-import com.vaadin.flow.component.checkbox.CheckboxGroup;
 import com.vaadin.flow.component.confirmdialog.ConfirmDialog;
-import com.vaadin.flow.component.details.Details;
-import com.vaadin.flow.component.formlayout.FormLayout;
 import com.vaadin.flow.component.html.Div;
-import com.vaadin.flow.component.html.H2;
-import com.vaadin.flow.component.html.Span;
-import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.notification.Notification.Position;
 import com.vaadin.flow.component.notification.NotificationVariant;
-import com.vaadin.flow.component.orderedlayout.FlexComponent;
-import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
-import com.vaadin.flow.component.textfield.TextArea;
-import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.router.BeforeEnterEvent;
 import com.vaadin.flow.router.BeforeEnterObserver;
 import com.vaadin.flow.router.BeforeLeaveEvent;
@@ -58,12 +42,14 @@ import com.ordermgmt.railway.domain.timetable.service.TimetableArchiveService;
 import com.ordermgmt.railway.domain.timetable.service.TimetableEditingService;
 import com.ordermgmt.railway.domain.timetable.service.TimetableRoutingService;
 import com.ordermgmt.railway.ui.component.ValidityCalendar;
-import com.ordermgmt.railway.ui.component.business.BusinessLinkField;
 import com.ordermgmt.railway.ui.component.timetable.IntervalTimetablePanel;
+import com.ordermgmt.railway.ui.component.timetable.TimetableBuilderChrome;
+import com.ordermgmt.railway.ui.component.timetable.TimetableBuilderChrome.StatusKind;
+import com.ordermgmt.railway.ui.component.timetable.TimetableBuilderChrome.Step;
 import com.ordermgmt.railway.ui.component.timetable.TimetableDataLoader;
+import com.ordermgmt.railway.ui.component.timetable.TimetableMetadataCard;
 import com.ordermgmt.railway.ui.component.timetable.TimetableRouteStep;
 import com.ordermgmt.railway.ui.component.timetable.TimetableTableStep;
-import com.ordermgmt.railway.ui.component.timetable.TimetableTagHelper;
 import com.ordermgmt.railway.ui.layout.MainLayout;
 
 /** Full-screen two-step builder for timetable order positions. */
@@ -73,9 +59,6 @@ import com.ordermgmt.railway.ui.layout.MainLayout;
 public class TimetableBuilderView extends VerticalLayout
         implements BeforeEnterObserver, BeforeLeaveObserver {
 
-    private static final DateTimeFormatter VALIDITY_DATE_FORMAT =
-            DateTimeFormatter.ofPattern("dd.MM.yyyy");
-
     private final OrderService orderService;
     private final OperationalPointRepository operationalPointRepository;
     private final PredefinedTagRepository predefinedTagRepository;
@@ -83,26 +66,12 @@ public class TimetableBuilderView extends VerticalLayout
     private final TimetableArchiveService timetableArchiveService;
     private final TimetableEditingService timetableEditingService;
     private final IntervalTimetableService intervalTimetableService;
-    private final TextField positionName = new TextField();
-    private final TextField otnField = new TextField();
-    private final CheckboxGroup<PredefinedTag> tagSelector = new CheckboxGroup<>();
-    private final TextArea commentField = new TextArea();
     private final BusinessService businessService;
-    private BusinessLinkField businessLinkField;
     private final Div contentSlot = new Div();
-    private final Span stepOneBadge = new Span();
-    private final Span stepTwoBadge = new Span();
-    private final Span stepThreeBadge = new Span();
-    private final Button stepBackButton = new Button();
-    private final Button stepNextButton = new Button();
-    private final Button saveButton = new Button();
-    private final Span statusOtn = new Span();
-    private final Span statusRoute = new Span();
-    private final Span statusState = new Span();
-    private final LinkedHashSet<String> unmatchedTags = new LinkedHashSet<>();
+    private final TimetableBuilderChrome chrome = new TimetableBuilderChrome(this::t);
+    private TimetableMetadataCard metadataCard;
     private final List<TimetableRowData> timetableRows = new ArrayList<>();
     private boolean routeDirty = false;
-    private Details metadataDetails;
     private ValidityCalendar validityCalendar;
     private Order order;
     private OrderPosition existingPosition;
@@ -227,7 +196,7 @@ public class TimetableBuilderView extends VerticalLayout
         initializeSteps();
         wireRouteCallbacks();
         wireIntervalGeneration();
-        configureMetaFields();
+        metadataCard = new TimetableMetadataCard(businessService, availableTags, this);
         configureStepActions();
         assembleLayout();
         switchStep(Step.ROUTE);
@@ -273,10 +242,10 @@ public class TimetableBuilderView extends VerticalLayout
     }
 
     private void fillPositionNameFromRoute(List<TimetableRowData> rows) {
-        if (!positionName.getValue().isBlank() || rows.isEmpty()) {
+        if (!metadataCard.isNameBlank() || rows.isEmpty()) {
             return;
         }
-        positionName.setValue(rows.getFirst().getName() + " \u2192 " + rows.getLast().getName());
+        metadataCard.setName(rows.getFirst().getName() + " \u2192 " + rows.getLast().getName());
     }
 
     /** Wires the interval panel's generate callback for bulk timetable creation. */
@@ -304,8 +273,8 @@ public class TimetableBuilderView extends VerticalLayout
                                                 config.crossMidnight(),
                                                 config.intervalMinutes(),
                                                 dates,
-                                                joinSelectedTags(),
-                                                commentField.getValue()));
+                                                metadataCard.joinedTags(),
+                                                metadataCard.comment()));
                         Notification.show(
                                         t("timetable.interval.generated", positions.size()),
                                         3000,
@@ -322,184 +291,53 @@ public class TimetableBuilderView extends VerticalLayout
     private void assembleLayout() {
         contentSlot.setWidthFull();
         contentSlot.getStyle().set("flex", "1").set("min-height", "0");
-        add(createHeader(), createStatusBar(), createMetadataCard(), contentSlot);
+        add(
+                chrome.buildHeader(order, this::navigateToOrder),
+                chrome.buildStatusBar(),
+                metadataCard.card(
+                        existingPosition == null,
+                        existingPosition == null ? null : existingPosition.getId()),
+                contentSlot);
         expand(contentSlot);
     }
 
-    private Component createHeader() {
-        Button back = new Button(VaadinIcon.ARROW_LEFT.create());
-        back.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
-        back.getStyle().set("color", "var(--rom-text-secondary)");
-        back.addClickListener(e -> navigateToOrder());
-        H2 title = new H2(t("timetable.builder.title"));
-        title.getStyle()
-                .set("margin", "0")
-                .set("font-size", "var(--lumo-font-size-xl)")
-                .set("color", "var(--rom-text-primary)");
-        Span sub =
-                new Span(
-                        order.getOrderNumber()
-                                + " \u00b7 "
-                                + order.getName()
-                                + " \u00b7 "
-                                + formatValidityDate(order.getValidFrom())
-                                + " \u2192 "
-                                + formatValidityDate(order.getValidTo()));
-        sub.getStyle()
-                .set("display", "block")
-                .set("font-size", "12px")
-                .set("font-family", "'JetBrains Mono', monospace")
-                .set("color", "var(--rom-text-muted)");
-        HorizontalLayout badges = new HorizontalLayout(stepOneBadge, stepTwoBadge, stepThreeBadge);
-        badges.setSpacing(true);
-        badges.setAlignItems(FlexComponent.Alignment.CENTER);
-        HorizontalLayout acts = new HorizontalLayout(stepBackButton, stepNextButton, saveButton);
-        acts.setSpacing(true);
-        acts.setAlignItems(FlexComponent.Alignment.CENTER);
-        HorizontalLayout row = new HorizontalLayout(back, new Div(title, sub), badges, acts);
-        row.setWidthFull();
-        row.expand(row.getComponentAt(1));
-        row.setAlignItems(FlexComponent.Alignment.CENTER);
-        row.getStyle()
-                .set("background", "var(--rom-bg-card)")
-                .set("border", "1px solid var(--rom-border)")
-                .set("border-radius", "6px")
-                .set("padding", "12px 16px")
-                .set("box-sizing", "border-box")
-                .set("margin-bottom", "var(--lumo-space-s)");
-        return row;
-    }
-
-    private Component createMetadataCard() {
-        FormLayout form = new FormLayout();
-        form.setWidthFull();
-        form.setResponsiveSteps(
-                new FormLayout.ResponsiveStep("0", 1),
-                new FormLayout.ResponsiveStep("500px", 2),
-                new FormLayout.ResponsiveStep("900px", 4));
-        businessLinkField = new BusinessLinkField(businessService, this::t);
-        form.add(positionName, otnField, tagSelector, commentField);
-        form.setColspan(businessLinkField, 4);
-        form.add(businessLinkField);
-        if (existingPosition != null) {
-            businessLinkField.preset(
-                    businessService.findByLinkedOrderPosition(existingPosition.getId()));
-        }
-        metadataDetails = new Details(t("timetable.meta.title"), form);
-        metadataDetails.setOpened(existingPosition == null);
-        metadataDetails.setWidthFull();
-        metadataDetails
-                .getStyle()
-                .set("background", "var(--rom-bg-card)")
-                .set("border", "1px solid var(--rom-border)")
-                .set("border-radius", "6px")
-                .set("margin-bottom", "var(--lumo-space-s)");
-        return metadataDetails;
-    }
-
-    private void configureMetaFields() {
-        positionName.setLabel(t("position.name"));
-        positionName.setRequired(true);
-        positionName.setMaxLength(255);
-        positionName.setWidthFull();
-        positionName.setHelperText(t("timetable.meta.name.help"));
-        otnField.setLabel(t("timetable.otn"));
-        otnField.setMaxLength(20);
-        otnField.setWidthFull();
-        otnField.setHelperText(t("timetable.otn.help"));
-        otnField.setPlaceholder("z.B. 95345 oder 95xxx");
-        tagSelector.setLabel(t("order.tags"));
-        tagSelector.setItems(availableTags);
-        tagSelector.setItemLabelGenerator(this::tagLabel);
-        tagSelector.setWidthFull();
-        updateTagHelper();
-        commentField.setLabel(t("order.comment"));
-        commentField.setMaxLength(2000);
-        commentField.setWidthFull();
-        commentField.setHeight("60px");
-        commentField.setHelperText(t("timetable.meta.comment.help"));
-    }
-
     private void configureStepActions() {
-        stepBackButton.setText(t("common.back"));
-        stepBackButton.addThemeVariants(ButtonVariant.LUMO_SMALL);
-        stepBackButton.addClickListener(
-                e -> {
-                    switch (currentStep) {
-                        case ROUTE -> navigateToOrder();
-                        case TABLE -> switchStep(Step.ROUTE);
-                        case INTERVAL -> switchStep(Step.TABLE);
-                    }
-                });
-        stepNextButton.setText(t("common.next"));
-        stepNextButton.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_PRIMARY);
-        stepNextButton
-                .getStyle()
-                .set("background", "var(--rom-accent)")
-                .set("color", "var(--rom-bg-primary)");
-        stepNextButton.addClickListener(
-                e -> {
-                    switch (currentStep) {
-                        case ROUTE -> {
-                            if (!timetableRows.isEmpty()) {
-                                switchStep(Step.TABLE);
-                            } else {
-                                routeStep.calculateRoute();
-                            }
-                        }
-                        case TABLE -> switchStep(Step.INTERVAL);
-                        case INTERVAL -> {} // No further step
-                    }
-                });
-        saveButton.setText(t("common.save"));
-        saveButton.setTooltipText(t("timetable.save.railoptHint"));
-        saveButton.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_PRIMARY);
-        saveButton.getStyle().set("background", "var(--rom-status-info)").set("color", "white");
-        saveButton.addClickListener(e -> savePosition());
-        saveButton.addClickShortcut(Key.KEY_S, KeyModifier.CONTROL);
+        chrome.configureActions(this::onStepBack, this::onStepNext, this::savePosition);
     }
 
-    private Component createStatusBar() {
-        Div bar = new Div(statusOtn, statusRoute, statusState);
-        bar.getStyle()
-                .set("display", "flex")
-                .set("align-items", "center")
-                .set("gap", "12px")
-                .set("background", "var(--rom-bg-secondary)")
-                .set("border-bottom", "1px solid var(--rom-border)")
-                .set("padding", "4px 16px")
-                .set("font-size", "11px")
-                .set("font-family", "'JetBrains Mono', monospace");
-        statusOtn.getStyle().set("color", "var(--rom-accent)").set("font-weight", "600");
-        statusRoute.getStyle().set("color", "var(--rom-text-secondary)");
-        statusState.getStyle().set("margin-left", "auto");
-        return bar;
+    private void onStepBack() {
+        switch (currentStep) {
+            case ROUTE -> navigateToOrder();
+            case TABLE -> switchStep(Step.ROUTE);
+            case INTERVAL -> switchStep(Step.TABLE);
+        }
+    }
+
+    private void onStepNext() {
+        switch (currentStep) {
+            case ROUTE -> {
+                if (!timetableRows.isEmpty()) {
+                    switchStep(Step.TABLE);
+                } else {
+                    routeStep.calculateRoute();
+                }
+            }
+            case TABLE -> switchStep(Step.INTERVAL);
+            case INTERVAL -> {} // No further step
+        }
     }
 
     private void refreshStatusBar() {
-        String otn = otnField.getValue();
-        statusOtn.setText(otn != null && !otn.isBlank() ? "OTN " + otn : "");
-
-        if (!timetableRows.isEmpty()) {
-            statusRoute.setText(
-                    timetableRows.getFirst().getName()
-                            + " \u2192 "
-                            + timetableRows.getLast().getName());
-        } else {
-            statusRoute.setText("");
-        }
-
-        boolean ready = !positionName.getValue().isBlank() && !timetableRows.isEmpty();
-        if (routeDirty) {
-            statusState.setText(t("timetable.status.routeDirty"));
-            statusState.getStyle().set("color", "var(--rom-status-warning)");
-        } else if (ready) {
-            statusState.setText("\u2713 " + t("timetable.status.ready"));
-            statusState.getStyle().set("color", "var(--rom-status-active)");
-        } else {
-            statusState.setText("\u26a0 " + t("timetable.status.incomplete"));
-            statusState.getStyle().set("color", "var(--rom-status-warning)");
-        }
+        String routeText =
+                timetableRows.isEmpty()
+                        ? ""
+                        : timetableRows.getFirst().getName()
+                                + " \u2192 "
+                                + timetableRows.getLast().getName();
+        boolean ready = !metadataCard.isNameBlank() && !timetableRows.isEmpty();
+        StatusKind kind =
+                routeDirty ? StatusKind.DIRTY : ready ? StatusKind.READY : StatusKind.INCOMPLETE;
+        chrome.refreshStatus(metadataCard.otn(), routeText, kind);
     }
 
     private void switchStep(Step step) {
@@ -530,49 +368,10 @@ public class TimetableBuilderView extends VerticalLayout
         if (routeStep.getDepartureAnchor() != null) {
             intervalPanel.setDefaultDeparture(routeStep.getDepartureAnchor());
         }
-
-        Div wrapper = new Div();
-        wrapper.setWidthFull();
-        wrapper.getStyle()
-                .set("display", "flex")
-                .set("flex-direction", "column")
-                .set("align-items", "center")
-                .set("padding", "var(--lumo-space-l) 0")
-                .set("height", "100%")
-                .set("box-sizing", "border-box");
-
-        Div card = new Div();
-        card.getStyle()
-                .set("width", "100%")
-                .set("max-width", "720px")
-                .set("background", "var(--rom-bg-card)")
-                .set("border", "1px solid var(--rom-border)")
-                .set("border-radius", "6px")
-                .set("padding", "24px")
-                .set("box-sizing", "border-box");
-
-        Span header = new Span(t("timetable.interval.step.header"));
-        header.getStyle()
-                .set("display", "block")
-                .set("font-size", "15px")
-                .set("font-weight", "600")
-                .set("color", "var(--rom-text-primary)")
-                .set("margin-bottom", "6px");
-
-        Span help = new Span(t("timetable.interval.step.help"));
-        help.getStyle()
-                .set("display", "block")
-                .set("font-size", "12px")
-                .set("color", "var(--rom-text-muted)")
-                .set("margin-bottom", "16px");
-
-        // Make the interval panel always visible inside step 3
+        // Make the interval panel always visible inside step 3.
         intervalPanel.setVisible(true);
         intervalPanel.getStyle().set("margin-top", "0");
-
-        card.add(header, help, intervalPanel);
-        wrapper.add(card);
-        return wrapper;
+        return chrome.intervalStepCard(intervalPanel);
     }
 
     private void loadExistingData() {
@@ -586,11 +385,11 @@ public class TimetableBuilderView extends VerticalLayout
                 loader.load(
                         order,
                         existingPosition,
-                        positionName,
-                        otnField,
-                        commentField,
+                        metadataCard.nameField(),
+                        metadataCard.otnInput(),
+                        metadataCard.commentInput(),
                         () ->
-                                readTags(
+                                metadataCard.readTags(
                                         existingPosition != null
                                                 ? existingPosition.getTags()
                                                 : null),
@@ -613,10 +412,8 @@ public class TimetableBuilderView extends VerticalLayout
                 && !tableStep.syncCurrentEditor()) {
             return;
         }
-        if (positionName.getValue().isBlank()) {
-            positionName.setInvalid(true);
-            metadataDetails.setOpened(true);
-            positionName.focus();
+        if (metadataCard.isNameBlank()) {
+            metadataCard.markNameInvalidAndFocus();
             notify(t("timetable.meta.name.required"), NotificationVariant.LUMO_ERROR);
             return;
         }
@@ -636,13 +433,13 @@ public class TimetableBuilderView extends VerticalLayout
                     timetableArchiveService.saveTimetablePosition(
                             order,
                             existingPosition,
-                            positionName.getValue(),
-                            joinSelectedTags(),
-                            commentField.getValue(),
+                            metadataCard.name(),
+                            metadataCard.joinedTags(),
+                            metadataCard.comment(),
                             dates,
                             new ArrayList<>(rows),
-                            otnField.getValue());
-            businessLinkField.applyTo(saved.getId());
+                            metadataCard.otn());
+            metadataCard.applyBusinessLinks(saved.getId());
             Notification.show(t("timetable.save.success"), 2500, Position.BOTTOM_END)
                     .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
             navigateToOrder();
@@ -652,73 +449,7 @@ public class TimetableBuilderView extends VerticalLayout
     }
 
     private void updateStepControls() {
-        boolean hasRows = !timetableRows.isEmpty();
-        styleStepBadge(stepOneBadge, t("timetable.step.route"), currentStep == Step.ROUTE, true);
-        styleStepBadge(stepTwoBadge, t("timetable.step.table"), currentStep == Step.TABLE, hasRows);
-        styleStepBadge(
-                stepThreeBadge,
-                t("timetable.step.interval"),
-                currentStep == Step.INTERVAL,
-                hasRows);
-        stepBackButton.setText(
-                currentStep == Step.ROUTE ? t("timetable.backToOrder") : t("common.back"));
-
-        switch (currentStep) {
-            case ROUTE -> stepNextButton.setText(t("common.next"));
-            case TABLE -> stepNextButton.setText(t("timetable.step.interval"));
-            case INTERVAL -> stepNextButton.setText("");
-        }
-
-        saveButton.setVisible(currentStep == Step.TABLE || currentStep == Step.INTERVAL);
-        stepNextButton.setVisible(currentStep != Step.INTERVAL);
-
-        boolean nextEnabled =
-                switch (currentStep) {
-                    case ROUTE -> hasRows && !routeDirty;
-                    case TABLE -> hasRows;
-                    case INTERVAL -> false;
-                };
-        stepNextButton.setEnabled(nextEnabled);
-    }
-
-    private void styleStepBadge(Span badge, String label, boolean active, boolean enabled) {
-        badge.setText(label);
-        badge.getStyle()
-                .set("padding", "4px 10px")
-                .set("border-radius", "999px")
-                .set("font-size", "11px")
-                .set("font-family", "'JetBrains Mono', monospace")
-                .set("font-weight", "600")
-                .set("border", "1px solid " + (active ? "var(--rom-accent)" : "var(--rom-border)"))
-                .set("background", active ? "rgba(45,212,191,0.12)" : "rgba(148,163,184,0.08)")
-                .set(
-                        "color",
-                        active
-                                ? "var(--rom-accent)"
-                                : enabled ? "var(--rom-text-secondary)" : "var(--rom-text-muted)")
-                .set("opacity", enabled ? "1" : "0.55");
-    }
-
-    // ── Tag handling (delegated to TimetableTagHelper) ─────────────────
-
-    private void readTags(String stored) {
-        tagHelper().readTags(stored);
-    }
-
-    private String joinSelectedTags() {
-        return tagHelper().joinSelectedTags();
-    }
-
-    private void updateTagHelper() {
-        tagHelper().updateTagHelper();
-    }
-
-    private String tagLabel(PredefinedTag tag) {
-        return tagHelper().tagLabel(tag);
-    }
-
-    private TimetableTagHelper tagHelper() {
-        return new TimetableTagHelper(tagSelector, availableTags, unmatchedTags, this);
+        chrome.updateControls(currentStep, !timetableRows.isEmpty(), routeDirty);
     }
 
     // ── Helpers ────────────────────────────────────────────────────────
@@ -743,17 +474,7 @@ public class TimetableBuilderView extends VerticalLayout
         UI.getCurrent().navigate("orders/" + order.getId());
     }
 
-    private String formatValidityDate(LocalDate date) {
-        return date != null ? date.format(VALIDITY_DATE_FORMAT) : "\u2014";
-    }
-
     private String t(String key, Object... params) {
         return getTranslation(key, params);
-    }
-
-    private enum Step {
-        ROUTE,
-        TABLE,
-        INTERVAL
     }
 }
