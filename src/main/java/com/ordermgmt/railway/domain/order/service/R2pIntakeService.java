@@ -41,6 +41,9 @@ import lombok.RequiredArgsConstructor;
 @Transactional
 public class R2pIntakeService {
 
+    private static final int MIN_REQUESTED_QUANTITY = 1;
+    private static final String POSITION_NAME_PREFIX = "R2P ";
+    private static final String OTN_LABEL = "OTN ";
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final R2pInboxEntryRepository inboxRepository;
@@ -115,7 +118,7 @@ public class R2pIntakeService {
                 orderPositionRepository
                         .findByOperationalTrainNumber(entry.getOperationalTrainNumber())
                         .stream()
-                        .filter(p -> p.getType() == PositionType.FAHRPLAN)
+                        .filter(position -> position.getType() == PositionType.FAHRPLAN)
                         .toList();
         // Only auto-attach on an unambiguous single match; with 0 or several matches defer to a
         // manual target-order choice instead of silently picking one.
@@ -151,17 +154,17 @@ public class R2pIntakeService {
         OrderPosition target =
                 findMatchingPosition(entry).orElseGet(() -> createPosition(entry, fallbackOrderId));
 
-        for (R2pResourceRequest req : resourcesOf(entry)) {
+        for (R2pResourceRequest request : resourcesOf(entry)) {
             ResourceNeed need =
                     resourceNeedService.addResource(
                             target.getId(),
-                            req.resourceType(),
-                            req.catalogItemId(),
-                            Math.max(1, req.quantity()),
+                            request.resourceType(),
+                            request.catalogItemId(),
+                            Math.max(MIN_REQUESTED_QUANTITY, request.quantity()),
                             CoverageType.EXTERNAL,
-                            req.description(),
+                            request.description(),
                             ResourceOrigin.R2P);
-            purchaseOrderService.createPurchasePosition(need.getId(), req.description(), null);
+            purchaseOrderService.createPurchasePosition(need.getId(), request.description(), null);
         }
 
         entry.setStatus(R2pInboxStatus.UEBERNOMMEN);
@@ -179,17 +182,21 @@ public class R2pIntakeService {
         OrderPosition position = new OrderPosition();
         position.setOrder(order);
         position.setType(PositionType.LEISTUNG);
-        position.setName(
-                "R2P "
-                        + (entry.getOperationalTrainNumber() != null
-                                ? "OTN " + entry.getOperationalTrainNumber()
-                                : entry.getRequester()));
+        position.setName(positionName(entry));
         position.setOperationalTrainNumber(entry.getOperationalTrainNumber());
         position.setFromLocation(entry.getFromLocation());
         position.setToLocation(entry.getToLocation());
         position.setStart(entry.getStart());
         position.setEnd(entry.getEnd());
         return orderPositionRepository.save(position);
+    }
+
+    private String positionName(R2pInboxEntry entry) {
+        String source =
+                entry.getOperationalTrainNumber() != null
+                        ? OTN_LABEL + entry.getOperationalTrainNumber()
+                        : entry.getRequester();
+        return POSITION_NAME_PREFIX + source;
     }
 
     private String writeJson(List<R2pResourceRequest> resources) {

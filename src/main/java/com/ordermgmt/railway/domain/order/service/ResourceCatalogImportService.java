@@ -21,6 +21,13 @@ import lombok.RequiredArgsConstructor;
 public class ResourceCatalogImportService {
 
     private static final Logger log = LoggerFactory.getLogger(ResourceCatalogImportService.class);
+    private static final int HEADER_LINE_COUNT = 1;
+    private static final int CODE_COLUMN = 0;
+    private static final int NAME_COLUMN = 1;
+    private static final int CATEGORY_COLUMN = 2;
+    private static final int ACTIVE_COLUMN = 3;
+    private static final int SORT_ORDER_COLUMN = 4;
+    private static final int REQUIRED_COLUMN_COUNT = 3;
 
     private final ResourceCatalogItemRepository catalogRepo;
 
@@ -39,21 +46,11 @@ public class ResourceCatalogImportService {
             String content = new String(csvBytes, StandardCharsets.UTF_8);
             String[] lines = content.split("\\r?\\n");
             int count = 0;
-            for (int i = 1; i < lines.length; i++) {
-                String line = lines[i].trim();
-                if (line.isEmpty()) continue;
-                String[] parts = line.split(",", -1);
-                if (parts.length < 3) continue;
-
-                ResourceCatalogItem item = new ResourceCatalogItem();
-                item.setCode(parts[0].trim());
-                item.setName(parts[1].trim());
-                item.setCategory(parts[2].trim());
-                item.setActive(parts.length > 3 && "true".equalsIgnoreCase(parts[3].trim()));
-                item.setSortOrder(
-                        parts.length > 4 && !parts[4].trim().isEmpty()
-                                ? Integer.parseInt(parts[4].trim())
-                                : 0);
+            for (int lineIndex = HEADER_LINE_COUNT; lineIndex < lines.length; lineIndex++) {
+                ResourceCatalogItem item = parseCatalogItem(lines[lineIndex]);
+                if (item == null) {
+                    continue;
+                }
                 catalogRepo.save(item);
                 count++;
             }
@@ -62,5 +59,33 @@ public class ResourceCatalogImportService {
             log.error("Catalog CSV import failed — rolling back transaction", e);
             throw new IOException("Import failed: " + e.getMessage(), e);
         }
+    }
+
+    private ResourceCatalogItem parseCatalogItem(String csvLine) {
+        String line = csvLine.trim();
+        if (line.isEmpty()) {
+            return null;
+        }
+        String[] columns = line.split(",", -1);
+        if (columns.length < REQUIRED_COLUMN_COUNT) {
+            return null;
+        }
+
+        ResourceCatalogItem item = new ResourceCatalogItem();
+        item.setCode(columns[CODE_COLUMN].trim());
+        item.setName(columns[NAME_COLUMN].trim());
+        item.setCategory(columns[CATEGORY_COLUMN].trim());
+        item.setActive(
+                columns.length > ACTIVE_COLUMN
+                        && "true".equalsIgnoreCase(columns[ACTIVE_COLUMN].trim()));
+        item.setSortOrder(parseSortOrder(columns));
+        return item;
+    }
+
+    private int parseSortOrder(String[] columns) {
+        if (columns.length <= SORT_ORDER_COLUMN || columns[SORT_ORDER_COLUMN].trim().isEmpty()) {
+            return 0;
+        }
+        return Integer.parseInt(columns[SORT_ORDER_COLUMN].trim());
     }
 }

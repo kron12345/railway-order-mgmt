@@ -24,6 +24,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  */
 public final class ValidityJsonCodec {
 
+    private static final String START_DATE_FIELD = "startDate";
+    private static final String END_DATE_FIELD = "endDate";
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private ValidityJsonCodec() {}
@@ -45,17 +47,17 @@ public final class ValidityJsonCodec {
         List<Map<String, String>> segments = new ArrayList<>();
 
         LocalDate segmentStart = sortedDates.getFirst();
-        LocalDate previous = segmentStart;
+        LocalDate segmentEnd = segmentStart;
 
-        for (int i = 1; i < sortedDates.size(); i++) {
-            LocalDate current = sortedDates.get(i);
-            if (!current.equals(previous.plusDays(1))) {
-                segments.add(segmentMap(segmentStart, previous));
-                segmentStart = current;
+        for (int dateIndex = 1; dateIndex < sortedDates.size(); dateIndex++) {
+            LocalDate date = sortedDates.get(dateIndex);
+            if (!date.equals(segmentEnd.plusDays(1))) {
+                segments.add(segmentMap(segmentStart, segmentEnd));
+                segmentStart = date;
             }
-            previous = current;
+            segmentEnd = date;
         }
-        segments.add(segmentMap(segmentStart, previous));
+        segments.add(segmentMap(segmentStart, segmentEnd));
 
         try {
             return OBJECT_MAPPER.writeValueAsString(segments);
@@ -76,20 +78,20 @@ public final class ValidityJsonCodec {
             return dates;
         }
         try {
-            var array = OBJECT_MAPPER.readTree(json);
-            if (!array.isArray()) {
+            var segments = OBJECT_MAPPER.readTree(json);
+            if (!segments.isArray()) {
                 return dates;
             }
-            for (var segment : array) {
-                var startNode = segment.get("startDate");
-                var endNode = segment.get("endDate");
+            for (var segment : segments) {
+                var startNode = segment.get(START_DATE_FIELD);
+                var endNode = segment.get(END_DATE_FIELD);
                 if (startNode == null || endNode == null) {
                     continue;
                 }
                 LocalDate start = LocalDate.parse(startNode.asText());
                 LocalDate end = LocalDate.parse(endNode.asText());
-                for (LocalDate d = start; !d.isAfter(end); d = d.plusDays(1)) {
-                    dates.add(d);
+                for (LocalDate date = start; !date.isAfter(end); date = date.plusDays(1)) {
+                    dates.add(date);
                 }
             }
         } catch (Exception ignored) {
@@ -100,8 +102,8 @@ public final class ValidityJsonCodec {
 
     private static Map<String, String> segmentMap(LocalDate startDate, LocalDate endDate) {
         Map<String, String> segment = new LinkedHashMap<>();
-        segment.put("startDate", startDate.toString());
-        segment.put("endDate", endDate.toString());
+        segment.put(START_DATE_FIELD, startDate.toString());
+        segment.put(END_DATE_FIELD, endDate.toString());
         return segment;
     }
 }

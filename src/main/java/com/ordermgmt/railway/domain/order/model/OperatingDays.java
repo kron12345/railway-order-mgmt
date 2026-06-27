@@ -28,9 +28,11 @@ public final class OperatingDays {
         }
         List<LocalDate> days = new ArrayList<>();
         LocalDate end = position.getEnd().toLocalDate();
-        for (LocalDate d = position.getStart().toLocalDate(); !d.isAfter(end); d = d.plusDays(1)) {
-            if (weekdays.contains(d.getDayOfWeek())) {
-                days.add(d);
+        for (LocalDate day = position.getStart().toLocalDate();
+                !day.isAfter(end);
+                day = day.plusDays(1)) {
+            if (weekdays.contains(day.getDayOfWeek())) {
+                days.add(day);
             }
         }
         return days;

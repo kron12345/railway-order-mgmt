@@ -46,33 +46,12 @@ public class ResourceNeedService {
 
         LocalDate validFrom = resolveValidFrom(position);
         LocalDate validTo = resolveValidTo(position);
-
-        // CAPACITY — external (infrastructure ordering via TTT)
-        if (noNeedExists(position, ResourceType.CAPACITY)) {
-            ResourceNeed capacity =
-                    buildNeed(position, ResourceType.CAPACITY, CoverageType.EXTERNAL);
-            capacity.setValidFrom(validFrom);
-            capacity.setValidTo(validTo);
-            linkFahrplanId(position, capacity);
-            resourceNeedRepository.save(capacity);
-        }
-
-        // VEHICLE — internal (rolling stock)
-        if (noNeedExists(position, ResourceType.VEHICLE)) {
-            ResourceNeed vehicle = buildNeed(position, ResourceType.VEHICLE, CoverageType.INTERNAL);
-            vehicle.setValidFrom(validFrom);
-            vehicle.setValidTo(validTo);
-            resourceNeedRepository.save(vehicle);
-        }
-
-        // PERSONNEL — internal (crew planning)
-        if (noNeedExists(position, ResourceType.PERSONNEL)) {
-            ResourceNeed personnel =
-                    buildNeed(position, ResourceType.PERSONNEL, CoverageType.INTERNAL);
-            personnel.setValidFrom(validFrom);
-            personnel.setValidTo(validTo);
-            resourceNeedRepository.save(personnel);
-        }
+        createDefaultNeedIfMissing(
+                position, ResourceType.CAPACITY, CoverageType.EXTERNAL, validFrom, validTo);
+        createDefaultNeedIfMissing(
+                position, ResourceType.VEHICLE, CoverageType.INTERNAL, validFrom, validTo);
+        createDefaultNeedIfMissing(
+                position, ResourceType.PERSONNEL, CoverageType.INTERNAL, validFrom, validTo);
     }
 
     /**
@@ -118,13 +97,7 @@ public class ResourceNeedService {
             throw new IllegalArgumentException("Quantity must be at least 1");
         }
 
-        OrderPosition position =
-                orderPositionRepository
-                        .findById(positionId)
-                        .orElseThrow(
-                                () ->
-                                        new IllegalArgumentException(
-                                                "Order position not found: " + positionId));
+        OrderPosition position = getOrderPosition(positionId);
 
         ResourceNeed need = new ResourceNeed();
         need.setOrderPosition(position);
@@ -138,14 +111,7 @@ public class ResourceNeedService {
         need.setValidTo(resolveValidTo(position));
 
         if (catalogItemId != null) {
-            ResourceCatalogItem item =
-                    catalogItemRepository
-                            .findById(catalogItemId)
-                            .orElseThrow(
-                                    () ->
-                                            new IllegalArgumentException(
-                                                    "Catalog item not found: " + catalogItemId));
-            need.setCatalogItem(item);
+            need.setCatalogItem(getCatalogItem(catalogItemId));
         }
 
         ResourceNeed saved = resourceNeedRepository.save(need);
@@ -193,6 +159,24 @@ public class ResourceNeedService {
         return need;
     }
 
+    private void createDefaultNeedIfMissing(
+            OrderPosition position,
+            ResourceType resourceType,
+            CoverageType coverageType,
+            LocalDate validFrom,
+            LocalDate validTo) {
+        if (!noNeedExists(position, resourceType)) {
+            return;
+        }
+        ResourceNeed need = buildNeed(position, resourceType, coverageType);
+        need.setValidFrom(validFrom);
+        need.setValidTo(validTo);
+        if (resourceType == ResourceType.CAPACITY) {
+            linkFahrplanId(position, need);
+        }
+        resourceNeedRepository.save(need);
+    }
+
     private boolean noNeedExists(OrderPosition position, ResourceType type) {
         return position.getResourceNeeds().stream()
                 .noneMatch(need -> need.getResourceType() == type);
@@ -200,10 +184,28 @@ public class ResourceNeedService {
 
     private void linkFahrplanId(OrderPosition position, ResourceNeed capacity) {
         position.getResourceNeeds().stream()
-                .filter(rn -> rn.getResourceType() == ResourceType.CAPACITY)
+                .filter(need -> need.getResourceType() == ResourceType.CAPACITY)
                 .findFirst()
                 .ifPresent(
                         existing -> capacity.setLinkedFahrplanId(existing.getLinkedFahrplanId()));
+    }
+
+    private OrderPosition getOrderPosition(UUID positionId) {
+        return orderPositionRepository
+                .findById(positionId)
+                .orElseThrow(
+                        () ->
+                                new IllegalArgumentException(
+                                        "Order position not found: " + positionId));
+    }
+
+    private ResourceCatalogItem getCatalogItem(UUID catalogItemId) {
+        return catalogItemRepository
+                .findById(catalogItemId)
+                .orElseThrow(
+                        () ->
+                                new IllegalArgumentException(
+                                        "Catalog item not found: " + catalogItemId));
     }
 
     private LocalDate resolveValidFrom(OrderPosition position) {

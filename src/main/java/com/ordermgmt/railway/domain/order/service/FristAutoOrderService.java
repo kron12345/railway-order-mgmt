@@ -45,21 +45,21 @@ public class FristAutoOrderService {
             if (rule.getAction() != FristRegel.Action.AUTO_BESTELLEN) {
                 continue;
             }
-            UUID posId = entry.position().getId();
+            UUID positionId = entry.position().getId();
             // Idempotency: the pre-check skips the common case; the AutoOrderLog unique
             // (position, rule) constraint is the atomic backstop against a concurrent run.
-            if (logRepository.existsByOrderPositionIdAndFristRegelId(posId, rule.getId())) {
+            if (logRepository.existsByOrderPositionIdAndFristRegelId(positionId, rule.getId())) {
                 continue;
             }
-            OrderPosition pos = positionRepository.findById(posId).orElse(null);
-            if (pos == null || !triggerFires(rule, entry.deadline(), pos, today)) {
+            OrderPosition position = positionRepository.findById(positionId).orElse(null);
+            if (position == null || !triggerFires(rule, entry.deadline(), position, today)) {
                 continue;
             }
-            pos.setInternalStatus(PositionStatus.BEANTRAGT);
-            positionRepository.save(pos);
+            position.setInternalStatus(PositionStatus.BEANTRAGT);
+            positionRepository.save(position);
 
             AutoOrderLog logEntry = new AutoOrderLog();
-            logEntry.setOrderPositionId(posId);
+            logEntry.setOrderPositionId(positionId);
             logEntry.setFristRegelId(rule.getId());
             logEntry.setTriggeredAt(Instant.now());
             logRepository.save(logEntry);
@@ -72,17 +72,20 @@ public class FristAutoOrderService {
     }
 
     private boolean triggerFires(
-            FristRegel rule, LocalDate deadline, OrderPosition pos, LocalDate today) {
+            FristRegel rule, LocalDate deadline, OrderPosition position, LocalDate today) {
         if (rule.getTriggerType() == FristRegel.Trigger.DATUM) {
             return deadline != null && !deadline.isAfter(today); // due today or overdue
         }
         // STATUS trigger: a linked purchase carries the configured TTT process state (e.g.
         // FINAL_OFFER).
-        if (rule.getTriggerStatus() == null || pos.getPurchasePositions() == null) {
+        if (rule.getTriggerStatus() == null || position.getPurchasePositions() == null) {
             return false;
         }
-        return pos.getPurchasePositions().stream()
-                .anyMatch(pp -> rule.getTriggerStatus().equalsIgnoreCase(pp.getPmProcessState()));
+        return position.getPurchasePositions().stream()
+                .anyMatch(
+                        purchasePosition ->
+                                rule.getTriggerStatus()
+                                        .equalsIgnoreCase(purchasePosition.getPmProcessState()));
     }
 
     /**

@@ -31,6 +31,9 @@ import lombok.RequiredArgsConstructor;
 @Transactional(readOnly = true)
 public class FristService {
 
+    private static final int DEFAULT_OFFSET_DAYS = 0;
+    private static final int DEFAULT_WARN_THRESHOLD_DAYS = 0;
+
     private final FristRegelRepository regelRepository;
     private final OrderPositionRepository positionRepository;
 
@@ -61,41 +64,47 @@ public class FristService {
 
     private List<AutoBusiness> summarize(List<FristEntry> entries) {
         Map<UUID, List<FristEntry>> byRule = new LinkedHashMap<>();
-        for (FristEntry e : entries) {
-            byRule.computeIfAbsent(e.regel().getId(), k -> new ArrayList<>()).add(e);
+        for (FristEntry entry : entries) {
+            byRule.computeIfAbsent(entry.regel().getId(), ruleId -> new ArrayList<>()).add(entry);
         }
-        List<AutoBusiness> result = new ArrayList<>();
+        List<AutoBusiness> businesses = new ArrayList<>();
         for (FristRegel rule : regelRepository.findByEnabledTrue()) {
-            List<FristEntry> rEntries = byRule.getOrDefault(rule.getId(), List.of());
-            long overdue = rEntries.stream().filter(e -> e.status() == Status.UEBERFAELLIG).count();
-            long dueSoon = rEntries.stream().filter(e -> e.status() == Status.FAELLIG_BALD).count();
-            result.add(new AutoBusiness(rule, rEntries.size(), overdue, dueSoon));
+            List<FristEntry> ruleEntries = byRule.getOrDefault(rule.getId(), List.of());
+            long overdue =
+                    ruleEntries.stream()
+                            .filter(entry -> entry.status() == Status.UEBERFAELLIG)
+                            .count();
+            long dueSoon =
+                    ruleEntries.stream()
+                            .filter(entry -> entry.status() == Status.FAELLIG_BALD)
+                            .count();
+            businesses.add(new AutoBusiness(rule, ruleEntries.size(), overdue, dueSoon));
         }
-        return result;
+        return businesses;
     }
 
     /** All deadline entries for enabled rules, sorted by deadline (most urgent first). */
     public List<FristEntry> evaluate() {
         List<FristRegel> rules = regelRepository.findByEnabledTrue();
-        List<OrderPosition> bookable =
+        List<OrderPosition> bookablePositions =
                 positionRepository.findByType(PositionType.FAHRPLAN).stream()
-                        .filter(p -> p.getVariantType() != PositionVariantType.ZUG)
+                        .filter(position -> position.getVariantType() != PositionVariantType.ZUG)
                         .filter(this::hasOperatingDays)
                         .toList();
         LocalDate today = LocalDate.now();
         List<FristEntry> entries = new ArrayList<>();
         for (FristRegel rule : rules) {
-            for (OrderPosition pos : bookable) {
-                if (!isMember(rule, pos)) {
+            for (OrderPosition position : bookablePositions) {
+                if (!isMember(rule, position)) {
                     continue;
                 }
-                LocalDate deadline = deadline(rule, pos, today);
+                LocalDate deadline = deadline(rule, position, today);
                 if (deadline == null) {
                     continue;
                 }
                 entries.add(
                         new FristEntry(
-                                pos,
+                                position,
                                 rule,
                                 deadline,
                                 status(deadline, today, rule.getWarnThresholdDays())));
@@ -111,43 +120,45 @@ public class FristService {
      * rows). A freshly cloned, not-yet-assigned expression (A-S5) has none of these and must not
      * surface a phantom deadline.
      */
-    private boolean hasOperatingDays(OrderPosition pos) {
-        if (!ValidityJsonCodec.fromJson(pos.getValidity()).isEmpty()
-                || !Weekdays.parse(pos.getWeekdays()).isEmpty()) {
+    private boolean hasOperatingDays(OrderPosition position) {
+        if (!ValidityJsonCodec.fromJson(position.getValidity()).isEmpty()
+                || !Weekdays.parse(position.getWeekdays()).isEmpty()) {
             return true;
         }
         // Legacy flat Fahrplan rows are scheduled only via start/end; an expression's schedule must
         // come from its validity/weekday set, so a bare start does not make a clone a candidate.
-        return pos.getVariantType() == null && pos.getStart() != null;
+        return position.getVariantType() == null && position.getStart() != null;
     }
 
-    private boolean isMember(FristRegel rule, OrderPosition pos) {
+    private boolean isMember(FristRegel rule, OrderPosition position) {
         return switch (rule.getMemberFilter()) {
             case ALLE_FAHRPLAN -> true;
-            case NICHT_BESTELLT -> isNotYetBooked(pos);
+            case NICHT_BESTELLT -> isNotYetBooked(position);
         };
     }
 
-    private boolean isNotYetBooked(OrderPosition pos) {
-        if (pos.getPurchasePositions() == null || pos.getPurchasePositions().isEmpty()) {
+    private boolean isNotYetBooked(OrderPosition position) {
+        if (position.getPurchasePositions() == null || position.getPurchasePositions().isEmpty()) {
             return true;
         }
-        return pos.getPurchasePositions().stream()
-                .anyMatch(pp -> pp.getPurchaseStatus() == PurchaseStatus.OFFEN);
+        return position.getPurchasePositions().stream()
+                .anyMatch(
+                        purchasePosition ->
+                                purchasePosition.getPurchaseStatus() == PurchaseStatus.OFFEN);
     }
 
     /** Effective deadline of a member; {@code null} when the anchor date is unknown. */
-    public LocalDate deadline(FristRegel rule, OrderPosition pos, LocalDate today) {
-        int offset = rule.getOffsetDays() != null ? rule.getOffsetDays() : 0;
+    public LocalDate deadline(FristRegel rule, OrderPosition position, LocalDate today) {
+        int offset = rule.getOffsetDays() != null ? rule.getOffsetDays() : DEFAULT_OFFSET_DAYS;
         return switch (rule.getAnchor()) {
             case ABSOLUT -> rule.getAbsoluteDate();
             case FAHRT -> {
-                LocalDate trip = referenceTripDay(pos, today);
+                LocalDate trip = referenceTripDay(position, today);
                 yield trip != null ? trip.plusDays(offset) : null;
             }
             case FAHRPLANJAHR_START ->
-                    pos.getOrder() != null && pos.getOrder().getValidFrom() != null
-                            ? pos.getOrder().getValidFrom().plusDays(offset)
+                    position.getOrder() != null && position.getOrder().getValidFrom() != null
+                            ? position.getOrder().getValidFrom().plusDays(offset)
                             : null;
         };
     }
@@ -157,32 +168,34 @@ public class FristService {
      * expression's Verkehrstage) on or after today within the validity range, or the last operating
      * day when the range is already past. So "2 days before the trip" tracks the next actual run.
      */
-    private LocalDate referenceTripDay(OrderPosition pos, LocalDate today) {
-        if (pos.getStart() == null) {
+    private LocalDate referenceTripDay(OrderPosition position, LocalDate today) {
+        if (position.getStart() == null) {
             return null;
         }
-        LocalDate from = pos.getStart().toLocalDate();
-        LocalDate to = pos.getEnd() != null ? pos.getEnd().toLocalDate() : from.plusYears(1);
+        LocalDate from = position.getStart().toLocalDate();
+        LocalDate to =
+                position.getEnd() != null ? position.getEnd().toLocalDate() : from.plusYears(1);
         if (to.isBefore(from)) {
             to = from;
         }
-        Set<DayOfWeek> days = Weekdays.parse(pos.getWeekdays());
+        Set<DayOfWeek> weekdays = Weekdays.parse(position.getWeekdays());
         LocalDate start = today.isAfter(from) ? today : from;
-        for (LocalDate d = start; !d.isAfter(to); d = d.plusDays(1)) {
-            if (days.isEmpty() || days.contains(d.getDayOfWeek())) {
-                return d;
+        for (LocalDate day = start; !day.isAfter(to); day = day.plusDays(1)) {
+            if (weekdays.isEmpty() || weekdays.contains(day.getDayOfWeek())) {
+                return day;
             }
         }
-        for (LocalDate d = to; !d.isBefore(from); d = d.minusDays(1)) {
-            if (days.isEmpty() || days.contains(d.getDayOfWeek())) {
-                return d;
+        for (LocalDate day = to; !day.isBefore(from); day = day.minusDays(1)) {
+            if (weekdays.isEmpty() || weekdays.contains(day.getDayOfWeek())) {
+                return day;
             }
         }
         return from;
     }
 
     private Status status(LocalDate deadline, LocalDate today, Integer warnThresholdDays) {
-        int warn = warnThresholdDays != null ? warnThresholdDays : 0;
+        int warn =
+                warnThresholdDays != null ? warnThresholdDays : DEFAULT_WARN_THRESHOLD_DAYS;
         if (deadline.isBefore(today)) {
             return Status.UEBERFAELLIG;
         }

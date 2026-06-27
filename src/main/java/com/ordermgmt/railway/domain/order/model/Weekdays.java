@@ -29,20 +29,20 @@ public final class Weekdays {
     }
 
     public static String format(Set<DayOfWeek> days) {
-        StringBuilder sb = new StringBuilder();
-        for (DayOfWeek d : days) {
-            if (sb.length() > 0) {
-                sb.append(',');
+        StringBuilder formatted = new StringBuilder();
+        for (DayOfWeek day : days) {
+            if (formatted.length() > 0) {
+                formatted.append(',');
             }
-            sb.append(d.getValue());
+            formatted.append(day.getValue());
         }
-        return sb.toString();
+        return formatted.toString();
     }
 
     /** True when the two weekday-sets share at least one day (empty sets never overlap). */
-    public static boolean overlaps(String a, String b) {
-        Set<DayOfWeek> da = parse(a);
-        da.retainAll(parse(b));
-        return !da.isEmpty();
+    public static boolean overlaps(String firstCsv, String secondCsv) {
+        Set<DayOfWeek> firstDays = parse(firstCsv);
+        firstDays.retainAll(parse(secondCsv));
+        return !firstDays.isEmpty();
     }
 }

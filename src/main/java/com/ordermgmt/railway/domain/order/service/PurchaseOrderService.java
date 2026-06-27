@@ -2,7 +2,9 @@ package com.ordermgmt.railway.domain.order.service;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.slf4j.Logger;
@@ -46,6 +48,9 @@ public class PurchaseOrderService {
 
     private static final Logger log = LoggerFactory.getLogger(PurchaseOrderService.class);
     private static final String POSITION_PREFIX = "BP-";
+    private static final String DEBIT_CODE_FIELD = "debitCode";
+    private static final int POSITION_NUMBER_RANDOM_LENGTH = 8;
+    private static final int TTR_YEAR_ROLLOVER_DAY = 14;
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final PurchasePositionRepository purchasePositionRepository;
@@ -78,19 +83,18 @@ public class PurchaseOrderService {
                                                 "Resource need not found: " + resourceNeedId));
 
         OrderPosition orderPosition = need.getOrderPosition();
-        PurchasePosition pp = new PurchasePosition();
-        pp.setPositionNumber(generatePositionNumber());
-        pp.setOrderPosition(orderPosition);
-        pp.setResourceNeed(need);
-        pp.setDescription(description);
-        pp.setValidity(resolvePurchaseValidity(validity, need, orderPosition));
-        pp.setPurchaseStatus(PurchaseStatus.OFFEN);
+        PurchasePosition purchasePosition = new PurchasePosition();
+        purchasePosition.setPositionNumber(generatePositionNumber());
+        purchasePosition.setOrderPosition(orderPosition);
+        purchasePosition.setResourceNeed(need);
+        purchasePosition.setDescription(description);
+        purchasePosition.setValidity(resolvePurchaseValidity(validity, need, orderPosition));
+        purchasePosition.setPurchaseStatus(PurchaseStatus.OFFEN);
 
-        PurchasePosition saved = purchasePositionRepository.save(pp);
+        PurchasePosition saved = purchasePositionRepository.save(purchasePosition);
         // Keep the parent's managed collection in sync. OrderPosition.purchasePositions uses
         // orphanRemoval=true, so a later save of a stale OrderPosition (its in-memory collection
-        // not
-        // containing this row) would otherwise silently delete the freshly created purchase.
+        // not containing this row) would otherwise silently delete the freshly created purchase.
         if (orderPosition != null
                 && orderPosition.getPurchasePositions() != null
                 && !orderPosition.getPurchasePositions().contains(saved)) {
@@ -107,18 +111,11 @@ public class PurchaseOrderService {
      */
     @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
     public void triggerR2pOrder(UUID purchasePositionId) {
-        PurchasePosition pp =
-                purchasePositionRepository
-                        .findById(purchasePositionId)
-                        .orElseThrow(
-                                () ->
-                                        new IllegalArgumentException(
-                                                "Purchase position not found: "
-                                                        + purchasePositionId));
-        pp.setPurchaseStatus(PurchaseStatus.BESTELLT);
-        pp.setOrderedAt(Instant.now());
-        pp.setStatusTimestamp(Instant.now());
-        purchasePositionRepository.save(pp);
+        PurchasePosition purchasePosition = getPurchasePosition(purchasePositionId);
+        purchasePosition.setPurchaseStatus(PurchaseStatus.BESTELLT);
+        purchasePosition.setOrderedAt(Instant.now());
+        purchasePosition.setStatusTimestamp(Instant.now());
+        purchasePositionRepository.save(purchasePosition);
     }
 
     /**
@@ -142,58 +139,22 @@ public class PurchaseOrderService {
      */
     @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
     public void triggerTttOrder(UUID purchasePositionId, String tttAttributes) {
-        PurchasePosition pp =
-                purchasePositionRepository
-                        .findById(purchasePositionId)
-                        .orElseThrow(
-                                () ->
-                                        new IllegalArgumentException(
-                                                "Purchase position not found: "
-                                                        + purchasePositionId));
+        PurchasePosition purchasePosition = getPurchasePosition(purchasePositionId);
 
         if (tttAttributes != null && !tttAttributes.isBlank()) {
-            pp.setTttOrderAttributes(tttAttributes);
-            extractDebitCode(pp, tttAttributes);
+            purchasePosition.setTttOrderAttributes(tttAttributes);
+            extractDebitCode(purchasePosition, tttAttributes);
         }
 
-        OrderPosition position = pp.getOrderPosition();
+        OrderPosition position = purchasePosition.getOrderPosition();
+        PmReferenceTrain train = prepareReferenceTrain(position);
+        linkReferenceTrain(position, train);
 
-        TimetableArchive archive = timetableArchiveService.findArchive(position).orElse(null);
-        List<TimetableRowData> rows =
-                archive != null ? timetableArchiveService.readRows(archive) : List.of();
+        purchasePosition.setPmPathRequestId(resolvePathRequestId(train));
+        purchasePosition.setPurchaseStatus(PurchaseStatus.BESTELLT);
+        purchasePosition.setOrderedAt(Instant.now());
 
-        PmReferenceTrain train =
-                findExistingTrain(position)
-                        .orElseGet(
-                                () ->
-                                        pathManagerService.createTrainFromOrderPosition(
-                                                position, archive, rows));
-
-        // Execute SEND_REQUEST transition to create a proper path request
-        if (train.getProcessState() == PathProcessState.NEW) {
-            pathProcessEngine.executeTransition(
-                    train.getId(), PathAction.SEND_REQUEST, "TTT order triggered");
-            // Reload train to get updated pathRequests
-            train =
-                    referenceTrainRepository
-                            .findById(train.getId())
-                            .orElseThrow(
-                                    () ->
-                                            new IllegalStateException(
-                                                    "Train not found after transition"));
-        }
-
-        // Link order position to the reference train
-        if (position.getPmReferenceTrainId() == null) {
-            position.setPmReferenceTrainId(train.getId());
-            orderPositionRepository.save(position);
-        }
-
-        pp.setPmPathRequestId(resolvePathRequestId(train));
-        pp.setPurchaseStatus(PurchaseStatus.BESTELLT);
-        pp.setOrderedAt(Instant.now());
-
-        purchasePositionRepository.save(pp);
+        purchasePositionRepository.save(purchasePosition);
     }
 
     /**
@@ -209,9 +170,9 @@ public class PurchaseOrderService {
                         orderPositionId, ResourceType.CAPACITY, CoverageType.EXTERNAL);
 
         for (ResourceNeed need : capacityNeeds) {
-            PurchasePosition pp = findOrCreatePurchasePosition(need);
-            if (pp.getPurchaseStatus() == PurchaseStatus.OFFEN) {
-                triggerTttOrder(pp.getId());
+            PurchasePosition purchasePosition = findOrCreatePurchasePosition(need);
+            if (purchasePosition.getPurchaseStatus() == PurchaseStatus.OFFEN) {
+                triggerTttOrder(purchasePosition.getId());
             }
         }
     }
@@ -223,41 +184,29 @@ public class PurchaseOrderService {
      */
     @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
     public void syncTttStatus(UUID purchasePositionId) {
-        PurchasePosition pp =
-                purchasePositionRepository
-                        .findById(purchasePositionId)
-                        .orElseThrow(
-                                () ->
-                                        new IllegalArgumentException(
-                                                "Purchase position not found: "
-                                                        + purchasePositionId));
+        PurchasePosition purchasePosition = getPurchasePosition(purchasePositionId);
 
-        if (pp.getPmPathRequestId() == null) {
+        if (purchasePosition.getPmPathRequestId() == null) {
             return;
         }
 
-        OrderPosition position = pp.getOrderPosition();
+        OrderPosition position = purchasePosition.getOrderPosition();
         PmReferenceTrain train = findExistingTrain(position).orElse(null);
         if (train == null) {
             return;
         }
 
-        // Update process state from reference train
-        pp.setPmProcessState(train.getProcessState().name());
+        purchasePosition.setPmProcessState(train.getProcessState().name());
+        resolveTtrPhase(position).ifPresent(phase -> purchasePosition.setPmTtrPhase(phase.name()));
+        purchasePosition.setPmLastSynced(Instant.now());
 
-        // Resolve TTR phase for context
-        resolveTtrPhase(position).ifPresent(phase -> pp.setPmTtrPhase(phase.name()));
-
-        pp.setPmLastSynced(Instant.now());
-
-        // Map PM process state to purchase status
         PurchaseStatus mappedStatus = mapProcessStateToPurchaseStatus(train.getProcessState());
         if (mappedStatus != null) {
-            pp.setPurchaseStatus(mappedStatus);
-            pp.setStatusTimestamp(Instant.now());
+            purchasePosition.setPurchaseStatus(mappedStatus);
+            purchasePosition.setStatusTimestamp(Instant.now());
         }
 
-        purchasePositionRepository.save(pp);
+        purchasePositionRepository.save(purchasePosition);
     }
 
     /**
@@ -272,8 +221,8 @@ public class PurchaseOrderService {
                 purchasePositionRepository.findByOrderPositionIdAndPmPathRequestIdIsNotNull(
                         orderPositionId);
 
-        for (PurchasePosition pp : positions) {
-            syncTttStatus(pp.getId());
+        for (PurchasePosition purchasePosition : positions) {
+            syncTttStatus(purchasePosition.getId());
         }
     }
 
@@ -302,18 +251,60 @@ public class PurchaseOrderService {
     }
 
     private String generatePositionNumber() {
-        return POSITION_PREFIX + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+        return POSITION_PREFIX
+                + UUID.randomUUID()
+                        .toString()
+                        .substring(0, POSITION_NUMBER_RANDOM_LENGTH)
+                        .toUpperCase();
     }
 
-    /**
-     * Extracts the debitCode from the TTT attributes JSON and stores it on the purchase position.
-     */
-    private void extractDebitCode(PurchasePosition pp, String tttAttributes) {
+    private PurchasePosition getPurchasePosition(UUID purchasePositionId) {
+        return purchasePositionRepository
+                .findById(purchasePositionId)
+                .orElseThrow(
+                        () ->
+                                new IllegalArgumentException(
+                                        "Purchase position not found: " + purchasePositionId));
+    }
+
+    private PmReferenceTrain prepareReferenceTrain(OrderPosition position) {
+        TimetableArchive archive = timetableArchiveService.findArchive(position).orElse(null);
+        List<TimetableRowData> rows =
+                archive != null ? timetableArchiveService.readRows(archive) : List.of();
+        PmReferenceTrain train =
+                findExistingTrain(position)
+                        .orElseGet(
+                                () ->
+                                        pathManagerService.createTrainFromOrderPosition(
+                                                position, archive, rows));
+        return sendPathRequestIfNeeded(train);
+    }
+
+    private PmReferenceTrain sendPathRequestIfNeeded(PmReferenceTrain train) {
+        if (train.getProcessState() != PathProcessState.NEW) {
+            return train;
+        }
+        pathProcessEngine.executeTransition(
+                train.getId(), PathAction.SEND_REQUEST, "TTT order triggered");
+        return referenceTrainRepository
+                .findById(train.getId())
+                .orElseThrow(() -> new IllegalStateException("Train not found after transition"));
+    }
+
+    private void linkReferenceTrain(OrderPosition position, PmReferenceTrain train) {
+        if (position.getPmReferenceTrainId() != null) {
+            return;
+        }
+        position.setPmReferenceTrainId(train.getId());
+        orderPositionRepository.save(position);
+    }
+
+    private void extractDebitCode(PurchasePosition purchasePosition, String tttAttributes) {
         try {
             JsonNode root = OBJECT_MAPPER.readTree(tttAttributes);
-            JsonNode debitNode = root.get("debitCode");
+            JsonNode debitNode = root.get(DEBIT_CODE_FIELD);
             if (debitNode != null && !debitNode.isNull() && !debitNode.asText().isBlank()) {
-                pp.setDebicode(debitNode.asText());
+                purchasePosition.setDebicode(debitNode.asText());
             }
         } catch (Exception e) {
             log.warn("Failed to extract debitCode from TTT attributes: {}", e.getMessage());
@@ -345,12 +336,10 @@ public class PurchaseOrderService {
         return createPurchasePosition(need.getId(), null, need.getOrderPosition().getValidity());
     }
 
-    private java.util.Optional<PmReferenceTrain> findExistingTrain(OrderPosition position) {
+    private Optional<PmReferenceTrain> findExistingTrain(OrderPosition position) {
         List<PmReferenceTrain> trains =
                 referenceTrainRepository.findBySourcePositionId(position.getId());
-        return trains.isEmpty()
-                ? java.util.Optional.empty()
-                : java.util.Optional.of(trains.getFirst());
+        return trains.isEmpty() ? Optional.empty() : Optional.of(trains.getFirst());
     }
 
     private UUID resolvePathRequestId(PmReferenceTrain train) {
@@ -360,7 +349,7 @@ public class PurchaseOrderService {
         return train.getId();
     }
 
-    private java.util.Optional<TtrPhase> resolveTtrPhase(OrderPosition position) {
+    private Optional<TtrPhase> resolveTtrPhase(OrderPosition position) {
         int year = resolveYear(position);
         return timetableYearRepository
                 .findByYear(year)
@@ -370,7 +359,8 @@ public class PurchaseOrderService {
     private int resolveYear(OrderPosition position) {
         if (position.getStart() != null) {
             LocalDate startDate = position.getStart().toLocalDate();
-            if (startDate.getMonthValue() == 12 && startDate.getDayOfMonth() >= 14) {
+            if (startDate.getMonth() == Month.DECEMBER
+                    && startDate.getDayOfMonth() >= TTR_YEAR_ROLLOVER_DAY) {
                 return startDate.getYear() + 1;
             }
             return startDate.getYear();
