@@ -40,8 +40,10 @@ import com.ordermgmt.railway.domain.timetable.model.TimetableRowData;
 public class TimetableEditingService {
 
     private static final DateTimeFormatter HH_MM = DateTimeFormatter.ofPattern("HH:mm");
+
     /** Default cruise speed for fringe rows before the first or after the last anchor: 70 km/h. */
     private static final double DEFAULT_SPEED_MIN_PER_METER = 60.0 / 70_000d;
+
     private static final long MINUTES_PER_DAY = 1440L;
 
     @SuppressWarnings("unused") // reserved for future OP lookups during inserts
@@ -344,11 +346,7 @@ public class TimetableEditingService {
             }
             if (hasIntentDeparture(row)) {
                 addAnchorIfPresent(
-                        anchors,
-                        i,
-                        dist,
-                        effectiveDepartureAnchor(row),
-                        row.getDepartureOffset());
+                        anchors, i, dist, effectiveDepartureAnchor(row), row.getDepartureOffset());
             }
         }
         return anchors;
@@ -1197,9 +1195,7 @@ public class TimetableEditingService {
     }
 
     /** Lightweight getter/setter pair so the shift/stretch loops can iterate over fields. */
-    private record TimeFieldAccessor(
-            Supplier<String> getter,
-            Consumer<String> setter) {}
+    private record TimeFieldAccessor(Supplier<String> getter, Consumer<String> setter) {}
 
     /** All time fields for one side of a row (arrival or departure) in iteration order. */
     private List<TimeFieldAccessor> timeFields(TimetableRowData row, boolean isArrival) {

@@ -160,7 +160,8 @@ public class OrderPositionRow extends Div {
     }
 
     private Button createHistoryButton(BiFunction<String, Object[], String> t) {
-        Button button = new Button(t.apply("audit.button", new Object[0]), VaadinIcon.CLOCK.create());
+        Button button =
+                new Button(t.apply("audit.button", new Object[0]), VaadinIcon.CLOCK.create());
         button.addThemeVariants(ButtonVariant.LUMO_SMALL);
         button.addClassName("op-action");
         button.addClickListener(event -> openPositionHistory());

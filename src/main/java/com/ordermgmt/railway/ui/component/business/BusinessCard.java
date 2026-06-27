@@ -210,10 +210,12 @@ public class BusinessCard extends Div {
     }
 
     private static void stopCardSelectionOnMouse(Component component) {
-        component.getElement()
+        component
+                .getElement()
                 .addEventListener("click", e -> {})
                 .addEventData("event.stopPropagation()");
-        component.getElement()
+        component
+                .getElement()
                 .addEventListener("mousedown", e -> {})
                 .addEventData("event.stopPropagation()");
     }

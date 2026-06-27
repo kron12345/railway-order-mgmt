@@ -117,7 +117,9 @@ public class PathManagerService {
     public void clearAllMockData() {
         MOCK_TABLES_TO_CLEAR.forEach(
                 tableName ->
-                        entityManager.createNativeQuery("DELETE FROM " + tableName).executeUpdate());
+                        entityManager
+                                .createNativeQuery("DELETE FROM " + tableName)
+                                .executeUpdate());
     }
 
     /** Reference trains in RailOpt not yet captured as an order position (Fahrplanmanager). */
@@ -514,8 +516,7 @@ public class PathManagerService {
         timetableYear.setYear(year);
         timetableYear.setLabel("Fahrplanjahr " + year);
         timetableYear.setStartDate(
-                LocalDate.of(
-                        year - 1, TIMETABLE_YEAR_START_MONTH, TIMETABLE_YEAR_START_DAY));
+                LocalDate.of(year - 1, TIMETABLE_YEAR_START_MONTH, TIMETABLE_YEAR_START_DAY));
         timetableYear.setEndDate(
                 LocalDate.of(year, TIMETABLE_YEAR_END_MONTH, TIMETABLE_YEAR_END_DAY));
         return timetableYearRepository.save(timetableYear);

@@ -65,8 +65,7 @@ public class CommandPalette extends Dialog {
         input.setValueChangeTimeout(VALUE_CHANGE_TIMEOUT_MS);
         input.getElement().setAttribute("aria-label", "Command Palette Suche");
         input.getElement().setAttribute("autocomplete", "off");
-        input.addValueChangeListener(
-                e -> applyFilter(normalizeSearch(e.getValue())));
+        input.addValueChangeListener(e -> applyFilter(normalizeSearch(e.getValue())));
 
         results.addClassName("cmd-palette__results");
         results.setSpacing(false);
@@ -137,8 +136,7 @@ public class CommandPalette extends Dialog {
                 .listAll()
                 .forEach(
                         business -> {
-                            String label =
-                                    business.getTitle() == null ? "—" : business.getTitle();
+                            String label = business.getTitle() == null ? "—" : business.getTitle();
                             String description = textOrBlank(business.getDescription());
                             all.add(
                                     new Item(

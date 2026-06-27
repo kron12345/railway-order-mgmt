@@ -44,8 +44,7 @@ public class BusinessLinkField extends Div {
         setWidthFull();
         configureCombo();
 
-        var addButton =
-                new Button(tr.apply("business.create.inline"), VaadinIcon.PLUS.create());
+        var addButton = new Button(tr.apply("business.create.inline"), VaadinIcon.PLUS.create());
         addButton.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
         addButton.addClickListener(e -> openCreateDialog());
 

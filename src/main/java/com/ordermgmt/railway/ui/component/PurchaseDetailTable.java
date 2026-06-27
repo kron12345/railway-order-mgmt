@@ -43,9 +43,7 @@ public class PurchaseDetailTable extends Div {
 
         grid.addColumn(
                         purchase ->
-                                purchase.getDebicode() != null
-                                        ? purchase.getDebicode()
-                                        : NO_VALUE)
+                                purchase.getDebicode() != null ? purchase.getDebicode() : NO_VALUE)
                 .setHeader(tr("purchase.debicode"))
                 .setWidth("110px")
                 .setFlexGrow(0);

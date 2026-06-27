@@ -67,7 +67,8 @@ public class PredicateSelectFilterField<T, V> implements FilterField<T> {
         if (selectedValue == null) {
             return List.of();
         }
-        return List.of(new FilterChip(label + ": " + itemLabel.apply(selectedValue), select::clear));
+        return List.of(
+                new FilterChip(label + ": " + itemLabel.apply(selectedValue), select::clear));
     }
 
     @Override

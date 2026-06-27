@@ -153,7 +153,8 @@ public class SecurityConfig extends VaadinWebSecurity {
 
     @SuppressWarnings("unchecked")
     private void addClientRoles(Map<String, Object> claims, Set<String> roles) {
-        Map<String, Object> resourceAccess = (Map<String, Object>) claims.get(RESOURCE_ACCESS_CLAIM);
+        Map<String, Object> resourceAccess =
+                (Map<String, Object>) claims.get(RESOURCE_ACCESS_CLAIM);
         if (resourceAccess != null) {
             Map<String, Object> clientAccess =
                     (Map<String, Object>) resourceAccess.get(ORDER_MGMT_CLIENT);

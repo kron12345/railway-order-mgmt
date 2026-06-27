@@ -220,8 +220,7 @@ public class TagsTab extends Div {
         save.getStyle()
                 .set("background", "var(--rom-accent)")
                 .set("color", "var(--rom-bg-primary)");
-        save.addClickListener(
-                e -> saveTag(tag, name, category, color, sortOrder, active, dialog));
+        save.addClickListener(e -> saveTag(tag, name, category, color, sortOrder, active, dialog));
 
         dialog.getFooter().add(cancel, save);
         dialog.open();

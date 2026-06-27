@@ -117,7 +117,9 @@ public class GridSettingsButton<T> extends Span {
 
     private void refreshBadge(GridPreferenceBinder<T> binder, Span badge) {
         long hiddenColumnCount =
-                binder.columnsByKey().values().stream().filter(column -> !column.isVisible()).count();
+                binder.columnsByKey().values().stream()
+                        .filter(column -> !column.isVisible())
+                        .count();
         if (hiddenColumnCount == 0) {
             badge.setVisible(false);
             return;

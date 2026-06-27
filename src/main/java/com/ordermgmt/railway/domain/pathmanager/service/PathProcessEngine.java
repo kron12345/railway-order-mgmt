@@ -57,8 +57,7 @@ public class PathProcessEngine {
     private final TtrPhaseResolver ttrPhaseResolver;
 
     private static Map<PathProcessState, Set<PathAction>> createAllowedTransitions() {
-        Map<PathProcessState, Set<PathAction>> transitions =
-                new EnumMap<>(PathProcessState.class);
+        Map<PathProcessState, Set<PathAction>> transitions = new EnumMap<>(PathProcessState.class);
         transitions.put(PathProcessState.NEW, EnumSet.of(PathAction.SEND_REQUEST));
         transitions.put(
                 PathProcessState.CREATED,

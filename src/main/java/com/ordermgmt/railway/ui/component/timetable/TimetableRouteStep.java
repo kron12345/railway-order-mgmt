@@ -420,8 +420,7 @@ public class TimetableRouteStep extends Div {
         editor.activityField.setLabel(t("timetable.editor.activity"));
         editor.activityField.setValue(findActivityOption(activityCode).orElse(null));
         editor.removeButton.setText(t("common.delete"));
-        editor.removeButton.addThemeVariants(
-                ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
+        editor.removeButton.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
         editor.removeButton.getStyle().set("color", "var(--rom-status-danger)");
         editor.removeButton.addClickListener(
                 e -> {

@@ -48,6 +48,7 @@ public class BusinessService {
      * (Vaadin route is {@code @PermitAll}).
      */
     private static final String MUTATION_ROLES = "hasAnyRole('ADMIN', 'DISPATCHER')";
+
     private static final String SAFE_FALLBACK_CONTENT_TYPE = "application/octet-stream";
     private static final Set<String> ALLOWED_DOCUMENT_MIME_TYPES =
             Set.of(

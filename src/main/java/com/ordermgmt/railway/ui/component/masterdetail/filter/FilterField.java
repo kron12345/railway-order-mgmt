@@ -15,9 +15,7 @@ public interface FilterField<T> {
     /** Editable control shown inside the (collapsible) filter body. */
     Component control();
 
-    /**
-     * Current contribution to the combined filter; always true when this field is inactive.
-     */
+    /** Current contribution to the combined filter; always true when this field is inactive. */
     Predicate<T> predicate();
 
     /** Active chips for the chip row (label + per-constraint clear); empty when inactive. */

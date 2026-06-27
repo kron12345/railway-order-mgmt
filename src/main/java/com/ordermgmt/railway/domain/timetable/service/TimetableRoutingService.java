@@ -152,7 +152,12 @@ public class TimetableRoutingService {
             RoutePointRole role = roles.getOrDefault(index, RoutePointRole.AUTO);
             points.add(
                     routePoint(
-                            fullPath, pointsByUopid, index, segmentLength, distanceFromStart, role));
+                            fullPath,
+                            pointsByUopid,
+                            index,
+                            segmentLength,
+                            distanceFromStart,
+                            role));
         }
 
         return new TimetableRouteResult(points, distanceFromStart);
@@ -161,9 +166,7 @@ public class TimetableRoutingService {
     private void appendSegment(
             List<String> fullPath, List<Double> segmentLengths, PathSegment segment) {
         int firstNodeIndex = fullPath.isEmpty() ? 0 : 1;
-        for (int nodeIndex = firstNodeIndex;
-                nodeIndex < segment.nodeUopids().size();
-                nodeIndex++) {
+        for (int nodeIndex = firstNodeIndex; nodeIndex < segment.nodeUopids().size(); nodeIndex++) {
             fullPath.add(segment.nodeUopids().get(nodeIndex));
             segmentLengths.add(segment.segmentLengths().get(nodeIndex));
         }

@@ -173,8 +173,7 @@ public class TimetableDataLoader {
         }
         routeStep.getRouteSummary().setText(t("timetable.route.empty"));
         routeStep.getRouteError().setText(t("timetable.route.legacyUnresolved"));
-        return new LoadResult(
-                calendar, new TimetableRouteResult(List.of(), 0D), List.of(), false);
+        return new LoadResult(calendar, new TimetableRouteResult(List.of(), 0D), List.of(), false);
     }
 
     private String textOrBlank(String value) {

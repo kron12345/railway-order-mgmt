@@ -58,7 +58,8 @@ final class PurchaseStatusRollup {
                         ResourceBadges.small(
                                 count
                                         + " "
-                                        + t.apply("purchase.status." + status.name(), new Object[0]),
+                                        + t.apply(
+                                                "purchase.status." + status.name(), new Object[0]),
                                 ResourceBadges.purchaseStatusColor(status)));
             }
         }

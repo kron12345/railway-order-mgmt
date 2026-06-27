@@ -183,7 +183,9 @@ public final class PathManagerDtoMapper {
     }
 
     private static Map<String, String[]> buildFieldDiffs(
-            TimetableRowData orderSide, PmJourneyLocation pathManagerSide, List<String> differences) {
+            TimetableRowData orderSide,
+            PmJourneyLocation pathManagerSide,
+            List<String> differences) {
         Map<String, String[]> fieldDiffs = new LinkedHashMap<>();
         for (String field : differences) {
             fieldDiffs.put(field, diffValuesForField(field, orderSide, pathManagerSide));
@@ -200,8 +202,7 @@ public final class PathManagerDtoMapper {
                     diffValues(orderSide.getEstimatedArrival(), pathManagerSide.getArrivalTime());
             case FIELD_DEPARTURE_TIME ->
                     diffValues(
-                            orderSide.getEstimatedDeparture(),
-                            pathManagerSide.getDepartureTime());
+                            orderSide.getEstimatedDeparture(), pathManagerSide.getDepartureTime());
             case FIELD_DWELL_TIME ->
                     diffValues(orderSide.getDwellMinutes(), pathManagerSide.getDwellTime());
             default -> diffValues(EMPTY_VALUE, EMPTY_VALUE);

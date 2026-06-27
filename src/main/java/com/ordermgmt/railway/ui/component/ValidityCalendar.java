@@ -230,8 +230,7 @@ public class ValidityCalendar extends Div {
     private Div createCompactCalendarGrid() {
         List<YearMonth> months = monthsInRange();
 
-        int maxWeeks =
-                months.stream().mapToInt(this::weeksInMonth).max().orElse(DEFAULT_MAX_WEEKS);
+        int maxWeeks = months.stream().mapToInt(this::weeksInMonth).max().orElse(DEFAULT_MAX_WEEKS);
         int dayColumns = maxWeeks * DAYS_PER_WEEK;
 
         Div table = new Div();

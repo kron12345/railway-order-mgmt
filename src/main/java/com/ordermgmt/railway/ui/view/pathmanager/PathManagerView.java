@@ -186,9 +186,7 @@ public class PathManagerView extends VerticalLayout implements BeforeEnterObserv
 
         var resetBtn =
                 new Button(
-                        getTranslation("pm.reset"),
-                        VaadinIcon.TRASH.create(),
-                        e -> confirmReset());
+                        getTranslation("pm.reset"), VaadinIcon.TRASH.create(), e -> confirmReset());
         resetBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
         resetBtn.getStyle().setColor("var(--rom-status-danger)");
 
@@ -213,9 +211,7 @@ public class PathManagerView extends VerticalLayout implements BeforeEnterObserv
         try {
             pathManagerService.clearAllMockData();
             Notification.show(
-                            getTranslation("pm.reset.done"),
-                            1500,
-                            Notification.Position.BOTTOM_END)
+                            getTranslation("pm.reset.done"), 1500, Notification.Position.BOTTOM_END)
                     .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
             UI.getCurrent().getPage().reload();
         } catch (RuntimeException ex) {

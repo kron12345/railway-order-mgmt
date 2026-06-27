@@ -1,8 +1,8 @@
 package com.ordermgmt.railway.ui.component;
 
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.time.YearMonth;
+import java.time.ZoneId;
 import java.time.format.TextStyle;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -108,12 +108,7 @@ public class PurchaseCalendarGrid extends Div {
                     boolean isTimetableYearBoundary = date.equals(TIMETABLE_YEAR_2027_START);
 
                     table.add(
-                            dayCell(
-                                    dayOfMonth,
-                                    status,
-                                    isWeekend,
-                                    isTimetableYearBoundary,
-                                    date));
+                            dayCell(dayOfMonth, status, isWeekend, isTimetableYearBoundary, date));
                     dayOfMonth++;
                 } else {
                     table.add(emptyCell());
@@ -266,8 +261,7 @@ public class PurchaseCalendarGrid extends Div {
 
     private int weeksNeeded(YearMonth yearMonth) {
         int firstWeekdayColumn = yearMonth.atDay(1).getDayOfWeek().getValue() - 1;
-        return (firstWeekdayColumn + yearMonth.lengthOfMonth() + DAYS_PER_WEEK - 1)
-                / DAYS_PER_WEEK;
+        return (firstWeekdayColumn + yearMonth.lengthOfMonth() + DAYS_PER_WEEK - 1) / DAYS_PER_WEEK;
     }
 
     private List<YearMonth> buildMonthList(LocalDate from, LocalDate to) {

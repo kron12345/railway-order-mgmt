@@ -55,8 +55,10 @@ public class OrderService {
     private static final int COPIED_NAME_MAX_LENGTH = 255;
     private static final String COPIED_NAME_SUFFIX = " (Kopie)";
     private static final int SHORT_DAY_LIST_LIMIT = 8;
+
     /** Max length of the persisted change summary (OrderPositionVersion.changeSummary column). */
     private static final int CHANGE_SUMMARY_MAX_LENGTH = 500;
+
     /** Number of days within which an order's end of validity counts as a "critical deadline". */
     private static final int CRITICAL_DEADLINE_DAYS = 30;
 
@@ -407,7 +409,10 @@ public class OrderService {
                 continue;
             }
             List<LocalDate> remainingDays =
-                    siblingDays.stream().filter(day -> !claimedDays.contains(day)).sorted().toList();
+                    siblingDays.stream()
+                            .filter(day -> !claimedDays.contains(day))
+                            .sorted()
+                            .toList();
             sibling.setValidity(
                     remainingDays.isEmpty() ? null : ValidityJsonCodec.toJson(remainingDays));
             sibling.setWeekdays(Weekdays.format(weekdaysOf(remainingDays)));
@@ -449,7 +454,9 @@ public class OrderService {
 
     private static String formatHandedOverDays(List<LocalDate> handedOverDays) {
         if (handedOverDays.size() <= SHORT_DAY_LIST_LIMIT) {
-            return handedOverDays.stream().map(DAY_FORMAT::format).collect(Collectors.joining(", "));
+            return handedOverDays.stream()
+                    .map(DAY_FORMAT::format)
+                    .collect(Collectors.joining(", "));
         }
         return handedOverDays.size()
                 + " Tage ("

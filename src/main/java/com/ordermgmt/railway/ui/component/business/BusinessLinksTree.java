@@ -258,7 +258,8 @@ public class BusinessLinksTree extends Div {
                 orderPositionsById.put(orderPosition.getId(), orderPositionNode);
                 orderNode.children().add(orderPositionNode);
             }
-            orderPositionNode.children()
+            orderPositionNode
+                    .children()
                     .add(
                             BusinessLinkNode.purchasePosition(
                                     purchasePosition.getId(),
@@ -324,8 +325,7 @@ public class BusinessLinksTree extends Div {
         List<BusinessLinkNode> kept = new ArrayList<>();
         for (BusinessLinkNode node : nodes) {
             boolean nodeMatches = node.matches(lowerCaseQuery);
-            List<BusinessLinkNode> filteredChildren =
-                    filterTree(node.children(), lowerCaseQuery);
+            List<BusinessLinkNode> filteredChildren = filterTree(node.children(), lowerCaseQuery);
             if (nodeMatches || !filteredChildren.isEmpty()) {
                 BusinessLinkNode copy = cloneShallow(node);
                 copy.children().addAll(nodeMatches ? node.children() : filteredChildren);

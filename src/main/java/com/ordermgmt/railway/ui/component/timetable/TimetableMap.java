@@ -55,8 +55,7 @@ public class TimetableMap extends Div {
         JsonArray jsonOperationalPoints = Json.createArray();
         int jsonIndex = 0;
         for (OperationalPoint operationalPoint : operationalPoints) {
-            if (operationalPoint.getLatitude() == null
-                    || operationalPoint.getLongitude() == null) {
+            if (operationalPoint.getLatitude() == null || operationalPoint.getLongitude() == null) {
                 continue;
             }
             JsonObject item = Json.createObject();

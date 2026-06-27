@@ -91,7 +91,8 @@ class PositionBulkBar extends HorizontalLayout {
         if (status == null || selected.isEmpty()) {
             return;
         }
-        int updatedCount = orderService.setPositionInternalStatusBulk(new HashSet<>(selected), status);
+        int updatedCount =
+                orderService.setPositionInternalStatusBulk(new HashSet<>(selected), status);
         Notification.show(
                         t.apply("bulk.done", new Object[] {updatedCount}),
                         2500,

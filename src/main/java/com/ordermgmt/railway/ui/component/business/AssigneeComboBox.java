@@ -128,9 +128,7 @@ public class AssigneeComboBox extends ComboBox<AssigneeComboBox.Item> {
                 continue;
             }
             String fullName =
-                    (user.getOrDefault("firstName", "")
-                                    + " "
-                                    + user.getOrDefault("lastName", ""))
+                    (user.getOrDefault("firstName", "") + " " + user.getOrDefault("lastName", ""))
                             .trim();
             String label = USER_ICON + username + (fullName.isBlank() ? "" : "  ·  " + fullName);
             items.add(new Item(AssignmentType.USER, username, label));

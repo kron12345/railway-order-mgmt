@@ -277,8 +277,7 @@ public class CatalogTab extends Div {
         refresh();
     }
 
-    private boolean validateCatalogForm(
-            TextField code, TextField name, ComboBox<String> category) {
+    private boolean validateCatalogForm(TextField code, TextField name, ComboBox<String> category) {
         boolean codeMissing = code.getValue().isBlank();
         boolean nameMissing = name.getValue().isBlank();
         if (codeMissing) {

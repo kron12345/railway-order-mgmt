@@ -61,7 +61,10 @@ public class TagSelectionHelper {
     public void updateHelperText(String baseHelperKey, String legacyKey) {
         String helper = translate(baseHelperKey);
         if (!unmatchedTags.isEmpty()) {
-            helper += " " + translator.apply(legacyKey, new Object[] {String.join(", ", unmatchedTags)});
+            helper +=
+                    " "
+                            + translator.apply(
+                                    legacyKey, new Object[] {String.join(", ", unmatchedTags)});
         }
         tagSelector.setHelperText(helper);
     }

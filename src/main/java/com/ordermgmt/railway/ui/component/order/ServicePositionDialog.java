@@ -36,9 +36,9 @@ import com.ordermgmt.railway.domain.order.model.PositionStatus;
 import com.ordermgmt.railway.domain.order.model.PositionType;
 import com.ordermgmt.railway.domain.order.model.ValidityJsonCodec;
 import com.ordermgmt.railway.domain.order.service.OrderService;
-import com.ordermgmt.railway.ui.component.business.BusinessLinkField;
 import com.ordermgmt.railway.ui.component.OperationalPointComboBox;
 import com.ordermgmt.railway.ui.component.ValidityCalendar;
+import com.ordermgmt.railway.ui.component.business.BusinessLinkField;
 import com.ordermgmt.railway.ui.util.StringUtils;
 import com.ordermgmt.railway.ui.util.TagSelectionHelper;
 

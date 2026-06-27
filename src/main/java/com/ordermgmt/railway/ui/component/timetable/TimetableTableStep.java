@@ -1,8 +1,8 @@
 package com.ordermgmt.railway.ui.component.timetable;
 
+import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.DASH;
 import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.activityLabel;
 import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.arrivalConstraintLabel;
-import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.DASH;
 import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.createCard;
 import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.departureConstraintLabel;
 import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.findActivityOption;

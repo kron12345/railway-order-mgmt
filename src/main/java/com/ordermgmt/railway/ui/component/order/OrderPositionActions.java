@@ -153,8 +153,7 @@ class OrderPositionActions {
         if (position.getVariantType() != null) {
             return true; // a train identity is already split-ready
         }
-        return position.getPurchasePositions() == null
-                || position.getPurchasePositions().isEmpty();
+        return position.getPurchasePositions() == null || position.getPurchasePositions().isEmpty();
     }
 
     void respondToAlteration(OrderPosition position, boolean accept) {

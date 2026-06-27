@@ -276,8 +276,7 @@ public class OrderPositionPanel extends Div {
             for (OrderPosition child :
                     groups.childrenByParent().getOrDefault(top.getId(), List.of())) {
                 renderPosition(child, businessesByPosition, true, true);
-                trainChanges.addAll(
-                        versionsByPosition.getOrDefault(child.getId(), List.of()));
+                trainChanges.addAll(versionsByPosition.getOrDefault(child.getId(), List.of()));
             }
             // Train-level Änderungs-Feed: aggregate every expression change under the ZUG.
             if (isZug && !trainChanges.isEmpty()) {
@@ -507,8 +506,7 @@ public class OrderPositionPanel extends Div {
     private boolean hasPurchaseWithTtt(OrderPosition position, PathProcessState state) {
         return position.getPurchasePositions() != null
                 && position.getPurchasePositions().stream()
-                        .anyMatch(
-                                purchase -> state.name().equals(purchase.getPmProcessState()));
+                        .anyMatch(purchase -> state.name().equals(purchase.getPmProcessState()));
     }
 
     private boolean hasPurchaseWithStatus(OrderPosition position, PurchaseStatus status) {

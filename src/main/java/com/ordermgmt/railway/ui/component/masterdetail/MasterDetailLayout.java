@@ -38,6 +38,7 @@ public class MasterDetailLayout<T> extends Div {
     private static final int MASTER_SPLIT_POSITION = 28;
     private static final String FILTER_WIDTH = "280px";
     private static final String EMPTY_FILTER_TEXT = "";
+
     /** Auto-load when keyboard navigation reaches this close to the last loaded row. */
     private static final int AUTO_LOAD_THRESHOLD = 3;
 
@@ -166,9 +167,7 @@ public class MasterDetailLayout<T> extends Div {
 
     private void updateFilterText(String rawValue) {
         filterText =
-                rawValue == null
-                        ? EMPTY_FILTER_TEXT
-                        : rawValue.trim().toLowerCase(Locale.ROOT);
+                rawValue == null ? EMPTY_FILTER_TEXT : rawValue.trim().toLowerCase(Locale.ROOT);
         applyFilter();
     }
 
@@ -205,8 +204,7 @@ public class MasterDetailLayout<T> extends Div {
         listScroll
                 .getElement()
                 .addEventListener(
-                        "keydown",
-                        e -> onListKey(e.getEventData().getString("event.key")))
+                        "keydown", e -> onListKey(e.getEventData().getString("event.key")))
                 .addEventData("event.key")
                 .addEventData("event.preventDefault()")
                 .setFilter("['ArrowDown','ArrowUp','Home','End','Enter'].includes(event.key)");
@@ -335,9 +333,7 @@ public class MasterDetailLayout<T> extends Div {
         }
         visibleItems.clear();
         Predicate<T> text =
-                filterText.isBlank()
-                        ? item -> true
-                        : item -> spec.matcher.test(item, filterText);
+                filterText.isBlank() ? item -> true : item -> spec.matcher.test(item, filterText);
         Predicate<T> matches = text.and(panelPredicate);
         for (T item : allItems) {
             if (matches.test(item)) {

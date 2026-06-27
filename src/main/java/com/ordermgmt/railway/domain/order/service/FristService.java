@@ -194,8 +194,7 @@ public class FristService {
     }
 
     private Status status(LocalDate deadline, LocalDate today, Integer warnThresholdDays) {
-        int warn =
-                warnThresholdDays != null ? warnThresholdDays : DEFAULT_WARN_THRESHOLD_DAYS;
+        int warn = warnThresholdDays != null ? warnThresholdDays : DEFAULT_WARN_THRESHOLD_DAYS;
         if (deadline.isBefore(today)) {
             return Status.UEBERFAELLIG;
         }

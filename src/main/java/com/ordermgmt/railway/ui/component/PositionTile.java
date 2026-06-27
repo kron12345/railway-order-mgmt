@@ -257,9 +257,7 @@ public class PositionTile extends Div {
 
     private String formatTimeWindow(OrderPosition position) {
         String start =
-                position.getStart() != null
-                        ? position.getStart().format(DATE_TIME_FORMATTER)
-                        : "—";
+                position.getStart() != null ? position.getStart().format(DATE_TIME_FORMATTER) : "—";
         String end =
                 position.getEnd() != null ? position.getEnd().format(DATE_TIME_FORMATTER) : "—";
         if (position.getStart() != null && position.getEnd() != null) {

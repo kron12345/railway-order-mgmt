@@ -146,7 +146,9 @@ public class ResourcePanel extends Div {
         purchasesByNeed =
                 purchases.stream()
                         .filter(purchase -> purchase.getResourceNeed() != null)
-                        .collect(Collectors.groupingBy(purchase -> purchase.getResourceNeed().getId()));
+                        .collect(
+                                Collectors.groupingBy(
+                                        purchase -> purchase.getResourceNeed().getId()));
     }
 
     /** Reload this panel and notify the parent — used by the purchase action buttons. */
@@ -181,8 +183,7 @@ public class ResourcePanel extends Div {
         row.getStyle()
                 .set(
                         "border-left",
-                        "2px solid "
-                                + ResourceBadges.resourceColor(resourceNeed.getResourceType()))
+                        "2px solid " + ResourceBadges.resourceColor(resourceNeed.getResourceType()))
                 .set("padding", "4px 0 4px 10px")
                 .set("margin-bottom", "4px");
 
@@ -296,11 +297,12 @@ public class ResourcePanel extends Div {
             if (purchase.getPmProcessState() != null) {
                 row.add(
                         ResourceBadges.small(
-                                "TTT: " + purchase.getPmProcessState(),
-                                "var(--rom-status-info)"));
+                                "TTT: " + purchase.getPmProcessState(), "var(--rom-status-info)"));
             }
             if (purchase.getPmTtrPhase() != null) {
-                row.add(ResourceBadges.small(purchase.getPmTtrPhase(), "var(--rom-text-secondary)"));
+                row.add(
+                        ResourceBadges.small(
+                                purchase.getPmTtrPhase(), "var(--rom-text-secondary)"));
             }
 
             // Sync button (mutators on an unlocked order only)
@@ -434,7 +436,9 @@ public class ResourcePanel extends Div {
                             new PurchaseDialog(
                                     resourceNeed.getId(),
                                     tr("resource.type." + resourceNeed.getResourceType().name()),
-                                    tr("resource.coverage." + resourceNeed.getCoverageType().name()),
+                                    tr(
+                                            "resource.coverage."
+                                                    + resourceNeed.getCoverageType().name()),
                                     resourceNeed.getResourceType() == ResourceType.CAPACITY,
                                     position.getValidity(),
                                     position.getOperationalTrainNumber(),
@@ -496,9 +500,7 @@ public class ResourcePanel extends Div {
     private Span createDescriptionLabel(ResourceNeed resourceNeed) {
         String text = resourceNeed.getDescription() != null ? resourceNeed.getDescription() : "";
         if (resourceNeed.getCatalogItem() != null) {
-            text =
-                    resourceNeed.getCatalogItem().getName()
-                            + (text.isEmpty() ? "" : " " + text);
+            text = resourceNeed.getCatalogItem().getName() + (text.isEmpty() ? "" : " " + text);
         }
         if (text.isEmpty() && resourceNeed.getResourceType() == ResourceType.CAPACITY) {
             String route = buildRouteLabel();

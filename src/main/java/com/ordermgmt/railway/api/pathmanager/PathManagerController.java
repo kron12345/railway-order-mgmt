@@ -334,7 +334,8 @@ public class PathManagerController {
     private TrainDetailDto loadTrainDetail(UUID trainId) {
         PmReferenceTrain train = pathManagerService.findById(trainId);
         var trainVersions = trainVersionRepository.findWithLocationsByReferenceTrainId(trainId);
-        var processSteps = processStepRepository.findByReferenceTrainIdOrderByCreatedAtDesc(trainId);
+        var processSteps =
+                processStepRepository.findByReferenceTrainIdOrderByCreatedAtDesc(trainId);
         return PathManagerDtoMapper.toDetail(train, trainVersions, processSteps);
     }
 

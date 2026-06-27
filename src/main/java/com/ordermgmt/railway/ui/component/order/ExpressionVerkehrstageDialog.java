@@ -93,7 +93,10 @@ class ExpressionVerkehrstageDialog extends Dialog {
             BiFunction<String, Object[], String> translator,
             Consumer<List<LocalDate>> onSave) {
         String owners =
-                claimedDays.stream().map(occupied::get).distinct().collect(Collectors.joining(", "));
+                claimedDays.stream()
+                        .map(occupied::get)
+                        .distinct()
+                        .collect(Collectors.joining(", "));
         ConfirmDialog confirm = new ConfirmDialog();
         confirm.setHeader(translator.apply("verkehrstage.reassign.title", new Object[0]));
         confirm.setText(

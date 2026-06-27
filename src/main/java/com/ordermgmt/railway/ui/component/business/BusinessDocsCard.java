@@ -135,8 +135,7 @@ public class BusinessDocsCard extends Div {
                 .setWidth("160px")
                 .setFlexGrow(0);
 
-        grid.addComponentColumn(
-                        documentRow -> buildRemoveButton(documentRow, onRemove))
+        grid.addComponentColumn(documentRow -> buildRemoveButton(documentRow, onRemove))
                 .setHeader("")
                 .setWidth("44px")
                 .setFlexGrow(0);
@@ -145,8 +144,7 @@ public class BusinessDocsCard extends Div {
     private Button buildRemoveButton(DocRow documentRow, Consumer<UUID> onRemove) {
         var button =
                 new Button(
-                        VaadinIcon.CLOSE_SMALL.create(),
-                        e -> confirmRemove(documentRow, onRemove));
+                        VaadinIcon.CLOSE_SMALL.create(), e -> confirmRemove(documentRow, onRemove));
         button.addThemeVariants(
                 ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY, ButtonVariant.LUMO_ICON);
         return button;

@@ -79,7 +79,8 @@ public class KeycloakUserService {
 
                 JsonNode attributes = body.path("attributes");
                 if (attributes.isObject()) {
-                    attributes.fields()
+                    attributes
+                            .fields()
                             .forEachRemaining(
                                     attribute -> {
                                         JsonNode values = attribute.getValue();

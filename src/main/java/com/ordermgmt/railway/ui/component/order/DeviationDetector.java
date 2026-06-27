@@ -72,7 +72,9 @@ final class DeviationDetector {
             deviations.add(
                     translator.apply(
                             "deviation.end",
-                            new Object[] {position.getEnd().toLocalDate(), train.getCalendarEnd()}));
+                            new Object[] {
+                                position.getEnd().toLocalDate(), train.getCalendarEnd()
+                            }));
         }
     }
 
