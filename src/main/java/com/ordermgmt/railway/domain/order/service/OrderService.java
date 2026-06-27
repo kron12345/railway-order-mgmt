@@ -121,6 +121,8 @@ public class OrderService {
                 query.validToMax(),
                 blankToNull(query.tags()),
                 blankToNull(query.assignee()),
+                query.orderType() == null ? null : query.orderType().name(),
+                query.incompleteOnly(),
                 stableSort(pageable, "orderNumber"));
     }
 

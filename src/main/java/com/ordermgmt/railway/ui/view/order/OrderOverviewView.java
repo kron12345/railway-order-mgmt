@@ -22,6 +22,7 @@ import com.vaadin.flow.router.Route;
 import com.vaadin.flow.router.RouteAlias;
 
 import com.ordermgmt.railway.domain.business.service.BusinessService;
+import com.ordermgmt.railway.domain.order.model.OrderType;
 import com.ordermgmt.railway.domain.order.model.PositionStatus;
 import com.ordermgmt.railway.domain.order.model.ProcessStatus;
 import com.ordermgmt.railway.domain.order.repository.OrderPositionRepository;
@@ -80,6 +81,8 @@ public class OrderOverviewView extends VerticalLayout implements BeforeEnterObse
     private DateRangeFilterField<OrderListItem> dateRangeField;
     private TextFilterField<OrderListItem> tagsField;
     private ToggleFilterField<OrderListItem> assignedToMeField;
+    private SelectFilterField<OrderListItem, OrderType> orderTypeField;
+    private ToggleFilterField<OrderListItem> incompleteField;
 
     public OrderOverviewView(
             OrderService orderService,
@@ -255,8 +258,9 @@ public class OrderOverviewView extends VerticalLayout implements BeforeEnterObse
      * One lazy page of the order list: builds an {@link OrderListQuery} from the search text plus
      * the held filter controls and asks the search service for the slice at {@code offset}.
      *
-     * <p>Note: there is no server-side "order type" column (it is a derived badge), so unlike the
-     * old in-memory list this lazy filter set has no order-type field.
+     * <p>The "order type" (B2) has no column — it is a derived badge — so the query re-derives it
+     * from the order date vs validity lead time; "order incomplete" (B2) is evaluated server-side
+     * via a purchase-position EXISTS subquery.
      */
     private SliceResult<OrderListItem> lazyLoadOrders(String text, int offset) {
         String me = CurrentUserHelper.getUsername();
@@ -268,7 +272,9 @@ public class OrderOverviewView extends VerticalLayout implements BeforeEnterObse
                         dateRangeField.getFrom(),
                         dateRangeField.getTo(),
                         tagsField.getTextValue(),
-                        assignedToMeField.isToggled() ? me : null);
+                        assignedToMeField.isToggled() ? me : null,
+                        orderTypeField.getSelectedValue(),
+                        incompleteField.isToggled());
         Slice<OrderListItem> slice =
                 orderService.searchOrders(query, new OffsetPageable(offset, PAGE_SIZE));
         return new SliceResult<>(slice.getContent(), slice.hasNext());
@@ -307,12 +313,29 @@ public class OrderOverviewView extends VerticalLayout implements BeforeEnterObse
                                 "USER".equals(o.assignmentType())
                                         && me != null
                                         && me.equals(o.assignmentName()));
+        // Derived Jahres-/Einzelbestellung badge; the in-memory predicate reuses OrderListItem's
+        // own
+        // orderType() so the legacy path stays correct, while lazyLoadOrders re-derives it in SQL.
+        orderTypeField =
+                new SelectFilterField<>(
+                        getTranslation("filter.field.orderType"),
+                        List.of(OrderType.values()),
+                        t -> getTranslation("order.type." + t.name()),
+                        OrderListItem::orderType);
+        // Server-only (SOB §5.7 production-handover check): the projection carries no purchase
+        // data,
+        // so the lazy query (purchase-position EXISTS) is the only path that can evaluate it; the
+        // inert in-memory predicate matches everything (the legacy in-memory list is unused here).
+        incompleteField =
+                new ToggleFilterField<>(getTranslation("filter.field.incompleteOrder"), o -> true);
         return List.of(
                 processStatusField,
                 internalStatusField,
+                orderTypeField,
                 dateRangeField,
                 tagsField,
-                assignedToMeField);
+                assignedToMeField,
+                incompleteField);
     }
 
     private Component buildSkipLinks() {
