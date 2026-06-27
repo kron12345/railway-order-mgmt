@@ -102,10 +102,22 @@ public class FristRegel {
         AUTO_BESTELLEN
     }
 
-    /** Which positions are members of the rule (and its automatic business). */
+    /**
+     * Which positions are members of the rule (and its automatic business). Every option maps to
+     * data that already exists on the position/order, so membership is computable without extra
+     * fields (kept ≤30 chars to fit the {@code member_filter VARCHAR(30)} column).
+     */
     public enum MemberFilter {
+        /** Not yet booked: no purchase position, or at least one still {@code OFFEN}. */
         NICHT_BESTELLT,
-        ALLE_FAHRPLAN
+        /** Every bookable FAHRPLAN position. */
+        ALLE_FAHRPLAN,
+        /** No VEHICLE resource need attached (no vehicle assigned yet). */
+        KEIN_FAHRZEUG,
+        /** The order is an annual order (derived {@code OrderType.JAHRESBESTELLUNG}). */
+        AUFTRAGSTYP_JAHRES,
+        /** The order is an ad-hoc single order (derived {@code OrderType.EINZELBESTELLUNG}). */
+        AUFTRAGSTYP_ADHOC
     }
 
     /** What fires the rule. */

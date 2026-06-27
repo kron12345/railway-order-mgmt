@@ -8,6 +8,7 @@ import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
+import com.vaadin.flow.component.details.Details;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.H4;
@@ -21,9 +22,11 @@ import com.vaadin.flow.router.Route;
 
 import com.ordermgmt.railway.domain.order.model.FristRegel;
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
+import com.ordermgmt.railway.domain.order.service.AutoBusinessService;
 import com.ordermgmt.railway.domain.order.service.FristAutoOrderService;
 import com.ordermgmt.railway.domain.order.service.FristService;
 import com.ordermgmt.railway.domain.order.service.FristService.AutoBusiness;
+import com.ordermgmt.railway.domain.order.service.FristService.DayDeadline;
 import com.ordermgmt.railway.domain.order.service.FristService.FristEntry;
 import com.ordermgmt.railway.domain.order.service.FristService.Status;
 import com.ordermgmt.railway.infrastructure.keycloak.CurrentUserHelper;
@@ -40,11 +43,16 @@ public class FristenView extends VerticalLayout {
 
     private final FristService fristService;
     private final FristAutoOrderService autoOrderService;
+    private final AutoBusinessService autoBusinessService;
     private Integer lastFired;
 
-    public FristenView(FristService fristService, FristAutoOrderService autoOrderService) {
+    public FristenView(
+            FristService fristService,
+            FristAutoOrderService autoOrderService,
+            AutoBusinessService autoBusinessService) {
         this.fristService = fristService;
         this.autoOrderService = autoOrderService;
+        this.autoBusinessService = autoBusinessService;
         setWidthFull();
         setPadding(true);
         build();
@@ -89,6 +97,7 @@ public class FristenView extends VerticalLayout {
         evaluate.setVisible(CurrentUserHelper.hasAnyRole("ADMIN", "DISPATCHER"));
         evaluate.addClickListener(
                 e -> {
+                    autoBusinessService.syncAll(); // refresh the automatic businesses first
                     lastFired = autoOrderService.runOnce();
                     build(); // refresh counts in place with an inline result banner
                 });
@@ -209,7 +218,46 @@ public class FristenView extends VerticalLayout {
         HorizontalLayout right = new HorizontalLayout(badge, toOrder);
         right.setAlignItems(FlexComponent.Alignment.CENTER);
         right.setSpacing(true);
-        return row(label, right);
+        Div card = row(label, right);
+
+        // Rolling FAHRT rules carry a per-Verkehrstag breakdown (3b): show it as an expandable
+        // detail.
+        if (e.perDay().isEmpty()) {
+            return card;
+        }
+        Details perDay =
+                new Details(
+                        getTranslation("fristen.perDay.summary", e.perDay().size()),
+                        buildPerDayList(e));
+        perDay.getStyle().set("margin", "-2px 0 8px 0").set("font-size", "12px");
+        Div wrapper = new Div(card, perDay);
+        wrapper.setWidthFull();
+        return wrapper;
+    }
+
+    private Component buildPerDayList(FristEntry e) {
+        Div box = new Div();
+        box.getStyle().set("padding", "2px 14px 6px 14px");
+        for (DayDeadline day : e.perDay()) {
+            Span line =
+                    new Span(
+                            getTranslation(
+                                    "fristen.perDay.row", day.operatingDay(), day.deadline()));
+            line.getStyle()
+                    .set("display", "block")
+                    .set("font-size", "12px")
+                    .set("color", statusColor(day.status()));
+            box.add(line);
+        }
+        return box;
+    }
+
+    private static String statusColor(Status status) {
+        return switch (status) {
+            case UEBERFAELLIG -> "var(--rom-status-danger, #c0392b)";
+            case FAELLIG_BALD -> "var(--rom-status-warning, #b9770e)";
+            case OK -> "var(--rom-text-muted)";
+        };
     }
 
     private static StatusBadge.StatusType badgeType(Status status) {

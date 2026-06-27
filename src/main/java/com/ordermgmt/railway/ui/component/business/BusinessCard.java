@@ -175,6 +175,16 @@ public class BusinessCard extends Div {
         var meta = new Div();
         meta.addClassName("biz-card-tile__meta");
 
+        if (business.automatic()) {
+            var auto = new Span("⚙ " + tr.apply("business.automatic"));
+            auto.getElement()
+                    .getStyle()
+                    .set("color", "var(--rom-status-active)")
+                    .set("font-weight", "500");
+            meta.add(auto);
+            meta.add(buildSeparator());
+        }
+
         var counts =
                 new Span(
                         business.linkedOrderPositionCount()

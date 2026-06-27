@@ -174,6 +174,13 @@ public class MainLayout extends AppLayout
         sideNav.addItem(
                 new SideNavItem(
                         getTranslation("nav.fristen"), "fristen", VaadinIcon.ALARM.create()));
+        if (CurrentUserHelper.hasAnyRole("ADMIN")) {
+            sideNav.addItem(
+                    new SideNavItem(
+                            getTranslation("nav.fristRegeln"),
+                            "fristregeln",
+                            VaadinIcon.COG_O.create()));
+        }
         sideNav.addItem(
                 new SideNavItem(
                         getTranslation("nav.businesses"),

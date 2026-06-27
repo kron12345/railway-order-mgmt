@@ -3,7 +3,9 @@ package com.ordermgmt.railway.domain.order.service;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -14,10 +16,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.ordermgmt.railway.domain.order.model.FristRegel;
+import com.ordermgmt.railway.domain.order.model.OperatingDays;
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
+import com.ordermgmt.railway.domain.order.model.OrderType;
 import com.ordermgmt.railway.domain.order.model.PositionType;
 import com.ordermgmt.railway.domain.order.model.PositionVariantType;
 import com.ordermgmt.railway.domain.order.model.PurchaseStatus;
+import com.ordermgmt.railway.domain.order.model.ResourceType;
 import com.ordermgmt.railway.domain.order.model.ValidityJsonCodec;
 import com.ordermgmt.railway.domain.order.model.Weekdays;
 import com.ordermgmt.railway.domain.order.repository.FristRegelRepository;
@@ -34,6 +39,9 @@ public class FristService {
     private static final int DEFAULT_OFFSET_DAYS = 0;
     private static final int DEFAULT_WARN_THRESHOLD_DAYS = 0;
 
+    /** Cap on the per-operating-day breakdown so a year-long weekday template stays bounded. */
+    private static final int MAX_PER_DAY = 200;
+
     private final FristRegelRepository regelRepository;
     private final OrderPositionRepository positionRepository;
 
@@ -43,8 +51,21 @@ public class FristService {
         OK
     }
 
+    /** One operating day of a position with its rolling deadline (FAHRT anchor) and urgency. */
+    public record DayDeadline(LocalDate operatingDay, LocalDate deadline, Status status) {}
+
+    /**
+     * A position's deadline under a rule. {@code deadline}/{@code status} is the aggregate shown in
+     * the overview (for FAHRT: the next open trip); {@code perDay} carries the per-Verkehrstag
+     * breakdown for rolling anchors (empty for absolute/year anchors, whose single date applies to
+     * the whole position).
+     */
     public record FristEntry(
-            OrderPosition position, FristRegel regel, LocalDate deadline, Status status) {}
+            OrderPosition position,
+            FristRegel regel,
+            LocalDate deadline,
+            Status status,
+            List<DayDeadline> perDay) {}
 
     /** A rule seen as an automatic business: its dynamic members plus an urgency breakdown. */
     public record AutoBusiness(FristRegel regel, int total, long overdue, long dueSoon) {}
@@ -107,11 +128,79 @@ public class FristService {
                                 position,
                                 rule,
                                 deadline,
-                                status(deadline, today, rule.getWarnThresholdDays())));
+                                status(deadline, today, rule.getWarnThresholdDays()),
+                                perDayDeadlines(rule, position, today)));
             }
         }
         entries.sort(Comparator.comparing(FristEntry::deadline));
         return entries;
+    }
+
+    /**
+     * For a rolling FAHRT rule, the deadline of each operating day of the position (day + offset),
+     * so the overview can expand a per-Verkehrstag detail. Empty for absolute/year anchors — their
+     * single deadline already applies to the whole position — and capped at {@value #MAX_PER_DAY}.
+     */
+    private List<DayDeadline> perDayDeadlines(
+            FristRegel rule, OrderPosition position, LocalDate today) {
+        if (rule.getAnchor() != FristRegel.Anchor.FAHRT) {
+            return List.of();
+        }
+        int offset = rule.getOffsetDays() != null ? rule.getOffsetDays() : DEFAULT_OFFSET_DAYS;
+        List<LocalDate> operatingDays = OperatingDays.of(position);
+        List<DayDeadline> perDay = new ArrayList<>();
+        for (LocalDate day : operatingDays) {
+            LocalDate deadline = day.plusDays(offset);
+            perDay.add(
+                    new DayDeadline(
+                            day, deadline, status(deadline, today, rule.getWarnThresholdDays())));
+            if (perDay.size() >= MAX_PER_DAY) {
+                break;
+            }
+        }
+        perDay.sort(Comparator.comparing(DayDeadline::operatingDay));
+        return perDay;
+    }
+
+    /**
+     * The single most urgent deadline entry per position (for the order-detail Frist-chip), if any.
+     * Mirrors {@link #evaluate()} but scoped to the given positions and keeping only the earliest
+     * deadline per position across all enabled rules.
+     */
+    public Map<UUID, FristEntry> mostUrgentByPosition(Collection<OrderPosition> positions) {
+        List<FristRegel> rules = regelRepository.findByEnabledTrue();
+        LocalDate today = LocalDate.now();
+        Map<UUID, FristEntry> result = new HashMap<>();
+        for (OrderPosition position : positions) {
+            if (position.getType() != PositionType.FAHRPLAN
+                    || position.getVariantType() == PositionVariantType.ZUG
+                    || !hasOperatingDays(position)) {
+                continue;
+            }
+            FristEntry best = null;
+            for (FristRegel rule : rules) {
+                if (!isMember(rule, position)) {
+                    continue;
+                }
+                LocalDate deadline = deadline(rule, position, today);
+                if (deadline == null) {
+                    continue;
+                }
+                if (best == null || deadline.isBefore(best.deadline())) {
+                    best =
+                            new FristEntry(
+                                    position,
+                                    rule,
+                                    deadline,
+                                    status(deadline, today, rule.getWarnThresholdDays()),
+                                    perDayDeadlines(rule, position, today));
+                }
+            }
+            if (best != null) {
+                result.put(position.getId(), best);
+            }
+        }
+        return result;
     }
 
     /**
@@ -134,7 +223,23 @@ public class FristService {
         return switch (rule.getMemberFilter()) {
             case ALLE_FAHRPLAN -> true;
             case NICHT_BESTELLT -> isNotYetBooked(position);
+            case KEIN_FAHRZEUG -> hasNoVehicleNeed(position);
+            case AUFTRAGSTYP_JAHRES -> orderTypeIs(position, OrderType.JAHRESBESTELLUNG);
+            case AUFTRAGSTYP_ADHOC -> orderTypeIs(position, OrderType.EINZELBESTELLUNG);
         };
+    }
+
+    /** No VEHICLE resource need attached → no vehicle assigned to this position yet. */
+    private boolean hasNoVehicleNeed(OrderPosition position) {
+        if (position.getResourceNeeds() == null) {
+            return true;
+        }
+        return position.getResourceNeeds().stream()
+                .noneMatch(need -> need.getResourceType() == ResourceType.VEHICLE);
+    }
+
+    private boolean orderTypeIs(OrderPosition position, OrderType type) {
+        return OrderType.of(position.getOrder()) == type;
     }
 
     private boolean isNotYetBooked(OrderPosition position) {

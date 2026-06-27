@@ -1,7 +1,12 @@
 # Konzept: Frist-Regeln & automatische Geschäfte (Final-Offer / Fälligkeiten)
 
-> Status: **Konzept zur Freigabe** (2026-06-25). Bau erst **nach** Pagination + Customer-/Geschäfts-Views
-> (User-Entscheid). Ersetzt die Idee eines separaten „Final-Offer-Timers".
+> Status: **UMGESETZT** (2026-06-27, Branch `feature/overview-filters-and-deadlines`). User-Entscheid:
+> 1b/2a/3b/4a + Member-Filter. Gebaut: automatisches Geschäft = echtes `Business` (`AutoBusinessService`,
+> V48), Frist je Verkehrstag (`FristService.perDay`), erweiterte Member-Filter, Admin-CRUD
+> (`FristRegelAdminView`), Frist-Chip an der Position. **Zurückgestellt (Backlog):** Anker `TTR_PHASE`,
+> echter `PurchaseOrderService`-Auto-Versand (bewusst Mock = Status BEANTRAGT), Event-Listener auf den
+> TTT-Status-Sync (heute Schedule/Startup/Button), vollständiger Audit-Trail.
+> (Ersetzt die Idee eines separaten „Final-Offer-Timers".)
 
 ## Ziel
 
