@@ -2,6 +2,7 @@ package com.ordermgmt.railway.infrastructure.keycloak;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -10,7 +11,11 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.*;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.web.client.RestTemplate;
@@ -26,6 +31,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public class KeycloakUserService {
 
     private static final Logger log = LoggerFactory.getLogger(KeycloakUserService.class);
+    private static final String ADMIN_REALMS_PATH = "/admin/realms/";
+    private static final String USERS_COLLECTION_PATH = "/users";
+    private static final String USER_PATH_PREFIX = "/users/";
+    private static final String GROUPS_PATH = "/groups";
+    private static final String MASTER_TOKEN_PATH = "/realms/master/protocol/openid-connect/token";
+    private static final int SEARCH_LIMIT = 50;
+
     private final RestTemplate rest = new RestTemplate();
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -48,34 +60,37 @@ public class KeycloakUserService {
     public Map<String, String> getUserAttributes(String keycloakUserId) {
         try {
             String token = getAdminToken();
-            String url = keycloakUrl + "/admin/realms/" + realm + "/users/" + keycloakUserId;
+            String url = userUrl(keycloakUserId);
 
-            HttpHeaders headers = new HttpHeaders();
-            headers.setBearerAuth(token);
-            ResponseEntity<JsonNode> resp =
-                    rest.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), JsonNode.class);
+            ResponseEntity<JsonNode> response =
+                    rest.exchange(
+                            url,
+                            HttpMethod.GET,
+                            new HttpEntity<>(bearerHeaders(token)),
+                            JsonNode.class);
 
-            Map<String, String> result = new LinkedHashMap<>();
-            JsonNode body = resp.getBody();
+            Map<String, String> userAttributes = new LinkedHashMap<>();
+            JsonNode body = response.getBody();
             if (body != null) {
-                result.put("username", body.path("username").asText(""));
-                result.put("email", body.path("email").asText(""));
-                result.put("firstName", body.path("firstName").asText(""));
-                result.put("lastName", body.path("lastName").asText(""));
+                userAttributes.put("username", body.path("username").asText(""));
+                userAttributes.put("email", body.path("email").asText(""));
+                userAttributes.put("firstName", body.path("firstName").asText(""));
+                userAttributes.put("lastName", body.path("lastName").asText(""));
 
-                JsonNode attrs = body.path("attributes");
-                if (attrs.isObject()) {
-                    attrs.fields()
+                JsonNode attributes = body.path("attributes");
+                if (attributes.isObject()) {
+                    attributes.fields()
                             .forEachRemaining(
-                                    e -> {
-                                        JsonNode val = e.getValue();
-                                        if (val.isArray() && !val.isEmpty()) {
-                                            result.put(e.getKey(), val.get(0).asText());
+                                    attribute -> {
+                                        JsonNode values = attribute.getValue();
+                                        if (values.isArray() && !values.isEmpty()) {
+                                            userAttributes.put(
+                                                    attribute.getKey(), values.get(0).asText());
                                         }
                                     });
                 }
             }
-            return result;
+            return userAttributes;
         } catch (Exception e) {
             log.error("Failed to get user attributes from Keycloak", e);
             return Collections.emptyMap();
@@ -86,22 +101,18 @@ public class KeycloakUserService {
     public List<String> getUserRoles(String keycloakUserId) {
         try {
             String token = getAdminToken();
-            String url =
-                    keycloakUrl
-                            + "/admin/realms/"
-                            + realm
-                            + "/users/"
-                            + keycloakUserId
-                            + "/role-mappings/realm";
+            String url = userUrl(keycloakUserId) + "/role-mappings/realm";
 
-            HttpHeaders headers = new HttpHeaders();
-            headers.setBearerAuth(token);
-            ResponseEntity<JsonNode> resp =
-                    rest.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), JsonNode.class);
+            ResponseEntity<JsonNode> response =
+                    rest.exchange(
+                            url,
+                            HttpMethod.GET,
+                            new HttpEntity<>(bearerHeaders(token)),
+                            JsonNode.class);
 
-            List<String> roles = new java.util.ArrayList<>();
-            if (resp.getBody() != null && resp.getBody().isArray()) {
-                resp.getBody().forEach(r -> roles.add(r.path("name").asText()));
+            List<String> roles = new ArrayList<>();
+            if (response.getBody() != null && response.getBody().isArray()) {
+                response.getBody().forEach(role -> roles.add(role.path("name").asText()));
             }
             return roles;
         } catch (Exception e) {
@@ -114,16 +125,14 @@ public class KeycloakUserService {
     public boolean updateUserAttributes(String keycloakUserId, Map<String, String> attributes) {
         try {
             String token = getAdminToken();
-            String url = keycloakUrl + "/admin/realms/" + realm + "/users/" + keycloakUserId;
+            String url = userUrl(keycloakUserId);
 
-            // Convert to Keycloak format: {"attributes": {"key": ["value"]}}
-            Map<String, List<String>> kcAttrs = new LinkedHashMap<>();
-            attributes.forEach((k, v) -> kcAttrs.put(k, List.of(v)));
+            Map<String, List<String>> keycloakAttributes = new LinkedHashMap<>();
+            attributes.forEach((name, value) -> keycloakAttributes.put(name, List.of(value)));
 
-            Map<String, Object> body = Map.of("attributes", kcAttrs);
+            Map<String, Object> body = Map.of("attributes", keycloakAttributes);
 
-            HttpHeaders headers = new HttpHeaders();
-            headers.setBearerAuth(token);
+            HttpHeaders headers = bearerHeaders(token);
             headers.setContentType(MediaType.APPLICATION_JSON);
 
             rest.exchange(
@@ -142,37 +151,35 @@ public class KeycloakUserService {
     public List<Map<String, String>> searchUsers(String query) {
         try {
             String token = getAdminToken();
-            String enc = URLEncoder.encode(query == null ? "" : query, StandardCharsets.UTF_8);
+            String encodedQuery = encodeQuery(query);
             String url =
                     keycloakUrl
-                            + "/admin/realms/"
+                            + ADMIN_REALMS_PATH
                             + realm
-                            + "/users?"
+                            + USERS_COLLECTION_PATH
+                            + "?"
                             + "firstNameOrLastName=true"
                             + "&email="
-                            + enc
+                            + encodedQuery
                             + "&username="
-                            + enc
-                            + "&max=50";
+                            + encodedQuery
+                            + "&max="
+                            + SEARCH_LIMIT;
 
-            HttpHeaders headers = new HttpHeaders();
-            headers.setBearerAuth(token);
-            ResponseEntity<JsonNode[]> resp =
-                    rest.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), JsonNode[].class);
+            ResponseEntity<JsonNode[]> response =
+                    rest.exchange(
+                            url,
+                            HttpMethod.GET,
+                            new HttpEntity<>(bearerHeaders(token)),
+                            JsonNode[].class);
 
-            List<Map<String, String>> result = new java.util.ArrayList<>();
-            if (resp.getBody() != null) {
-                for (JsonNode user : resp.getBody()) {
-                    Map<String, String> entry = new LinkedHashMap<>();
-                    entry.put("id", user.path("id").asText());
-                    entry.put("username", user.path("username").asText(""));
-                    entry.put("email", user.path("email").asText(""));
-                    entry.put("firstName", user.path("firstName").asText(""));
-                    entry.put("lastName", user.path("lastName").asText(""));
-                    result.add(entry);
+            List<Map<String, String>> users = new ArrayList<>();
+            if (response.getBody() != null) {
+                for (JsonNode user : response.getBody()) {
+                    users.add(toUserSearchResult(user));
                 }
             }
-            return result;
+            return users;
         } catch (Exception e) {
             log.error("Failed to search users in Keycloak", e);
             return Collections.emptyList();
@@ -183,32 +190,32 @@ public class KeycloakUserService {
     public List<Map<String, String>> searchGroups(String query) {
         try {
             String token = getAdminToken();
-            String enc = URLEncoder.encode(query == null ? "" : query, StandardCharsets.UTF_8);
+            String encodedQuery = encodeQuery(query);
             String url =
                     keycloakUrl
-                            + "/admin/realms/"
+                            + ADMIN_REALMS_PATH
                             + realm
-                            + "/groups?"
+                            + GROUPS_PATH
+                            + "?"
                             + "search="
-                            + enc
-                            + "&max=50";
+                            + encodedQuery
+                            + "&max="
+                            + SEARCH_LIMIT;
 
-            HttpHeaders headers = new HttpHeaders();
-            headers.setBearerAuth(token);
-            ResponseEntity<JsonNode[]> resp =
-                    rest.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), JsonNode[].class);
+            ResponseEntity<JsonNode[]> response =
+                    rest.exchange(
+                            url,
+                            HttpMethod.GET,
+                            new HttpEntity<>(bearerHeaders(token)),
+                            JsonNode[].class);
 
-            List<Map<String, String>> result = new java.util.ArrayList<>();
-            if (resp.getBody() != null) {
-                for (JsonNode group : resp.getBody()) {
-                    Map<String, String> entry = new LinkedHashMap<>();
-                    entry.put("id", group.path("id").asText());
-                    entry.put("name", group.path("name").asText(""));
-                    entry.put("path", group.path("path").asText(""));
-                    result.add(entry);
+            List<Map<String, String>> groups = new ArrayList<>();
+            if (response.getBody() != null) {
+                for (JsonNode group : response.getBody()) {
+                    groups.add(toGroupSearchResult(group));
                 }
             }
-            return result;
+            return groups;
         } catch (Exception e) {
             log.error("Failed to search groups in Keycloak", e);
             return Collections.emptyList();
@@ -216,7 +223,7 @@ public class KeycloakUserService {
     }
 
     private String getAdminToken() {
-        String tokenUrl = keycloakUrl + "/realms/master/protocol/openid-connect/token";
+        String tokenUrl = keycloakUrl + MASTER_TOKEN_PATH;
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
@@ -227,13 +234,45 @@ public class KeycloakUserService {
         params.add("password", adminPassword);
         params.add("grant_type", "password");
 
-        ResponseEntity<JsonNode> resp =
+        ResponseEntity<JsonNode> response =
                 rest.exchange(
                         tokenUrl,
                         HttpMethod.POST,
                         new HttpEntity<>(params, headers),
                         JsonNode.class);
 
-        return resp.getBody().path("access_token").asText();
+        return response.getBody().path("access_token").asText();
+    }
+
+    private String userUrl(String keycloakUserId) {
+        return keycloakUrl + ADMIN_REALMS_PATH + realm + USER_PATH_PREFIX + keycloakUserId;
+    }
+
+    private HttpHeaders bearerHeaders(String token) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+        return headers;
+    }
+
+    private String encodeQuery(String query) {
+        return URLEncoder.encode(query == null ? "" : query, StandardCharsets.UTF_8);
+    }
+
+    private Map<String, String> toUserSearchResult(JsonNode user) {
+        Map<String, String> result = new LinkedHashMap<>();
+        result.put("id", user.path("id").asText());
+        result.put("username", user.path("username").asText(""));
+        result.put("email", user.path("email").asText(""));
+        result.put("firstName", user.path("firstName").asText(""));
+        result.put("lastName", user.path("lastName").asText(""));
+        return result;
+    }
+
+    private Map<String, String> toGroupSearchResult(JsonNode group) {
+        Map<String, String> result = new LinkedHashMap<>();
+        result.put("id", group.path("id").asText());
+        result.put("name", group.path("name").asText(""));
+        result.put("path", group.path("path").asText(""));
+        return result;
     }
 }

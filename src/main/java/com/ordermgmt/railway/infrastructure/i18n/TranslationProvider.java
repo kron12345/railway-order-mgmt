@@ -18,6 +18,7 @@ public class TranslationProvider implements I18NProvider {
 
     private static final Logger log = LoggerFactory.getLogger(TranslationProvider.class);
     private static final String BUNDLE_PREFIX = "i18n.messages";
+    private static final String MISSING_TRANSLATION_MARKER = "!";
 
     public static final Locale GERMAN = Locale.GERMAN;
     public static final Locale ENGLISH = Locale.ENGLISH;
@@ -38,14 +39,14 @@ public class TranslationProvider implements I18NProvider {
 
         try {
             ResourceBundle bundle = ResourceBundle.getBundle(BUNDLE_PREFIX, locale);
-            String value = bundle.getString(key);
-            if (params.length > 0) {
-                value = MessageFormat.format(value, params);
-            }
-            return value;
+            return formatTranslation(bundle.getString(key), params);
         } catch (MissingResourceException e) {
             log.warn("Missing translation: key='{}', locale='{}'", key, locale);
-            return "!" + key + "!";
+            return MISSING_TRANSLATION_MARKER + key + MISSING_TRANSLATION_MARKER;
         }
+    }
+
+    private String formatTranslation(String value, Object... params) {
+        return params.length > 0 ? MessageFormat.format(value, params) : value;
     }
 }

@@ -34,6 +34,17 @@ import com.vaadin.flow.spring.security.VaadinWebSecurity;
 public class SecurityConfig extends VaadinWebSecurity {
 
     private static final Logger log = LoggerFactory.getLogger(SecurityConfig.class);
+    private static final String API_PATTERN = "/api/**";
+    private static final String PATH_MANAGER_API_PATTERN = "/api/v1/pathmanager/**";
+    private static final String SWAGGER_UI_PATTERN = "/swagger-ui/**";
+    private static final String OPEN_API_DOCS_PATTERN = "/v3/api-docs/**";
+    private static final String ADMIN_ROLE = "ADMIN";
+    private static final String DISPATCHER_ROLE = "DISPATCHER";
+    private static final String ROLE_PREFIX = "ROLE_";
+    private static final String REALM_ACCESS_CLAIM = "realm_access";
+    private static final String RESOURCE_ACCESS_CLAIM = "resource_access";
+    private static final String ORDER_MGMT_CLIENT = "order-mgmt";
+    private static final String ROLES_CLAIM = "roles";
 
     @Value("${app.api.security-enabled:false}")
     private boolean apiSecurityEnabled;
@@ -41,12 +52,14 @@ public class SecurityConfig extends VaadinWebSecurity {
     /** Logs a warning at startup when API security is disabled (dev/demo mode). */
     @EventListener(ApplicationReadyEvent.class)
     public void logApiSecurityStatus() {
-        if (!apiSecurityEnabled) {
-            log.warn(
-                    "API security is DISABLED (app.api.security-enabled=false). "
-                            + "All /api/** endpoints are open. "
-                            + "Set app.api.security-enabled=true for production!");
+        if (apiSecurityEnabled) {
+            return;
         }
+
+        log.warn(
+                "API security is DISABLED (app.api.security-enabled=false). "
+                        + "All /api/** endpoints are open. "
+                        + "Set app.api.security-enabled=true for production!");
     }
 
     /**
@@ -60,16 +73,17 @@ public class SecurityConfig extends VaadinWebSecurity {
     @Bean
     @Order(1)
     public SecurityFilterChain apiSecurityFilterChain(HttpSecurity http) throws Exception {
-        http.securityMatcher("/api/**", "/swagger-ui/**", "/v3/api-docs/**")
+        http.securityMatcher(API_PATTERN, SWAGGER_UI_PATTERN, OPEN_API_DOCS_PATTERN)
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(
                         session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(
                         auth -> {
-                            auth.requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll();
+                            auth.requestMatchers(SWAGGER_UI_PATTERN, OPEN_API_DOCS_PATTERN)
+                                    .permitAll();
                             if (apiSecurityEnabled) {
-                                auth.requestMatchers("/api/v1/pathmanager/**")
-                                        .hasAnyRole("ADMIN", "DISPATCHER");
+                                auth.requestMatchers(PATH_MANAGER_API_PATTERN)
+                                        .hasAnyRole(ADMIN_ROLE, DISPATCHER_ROLE);
                                 auth.anyRequest().authenticated();
                             } else {
                                 auth.anyRequest().permitAll();
@@ -91,53 +105,64 @@ public class SecurityConfig extends VaadinWebSecurity {
     /** Maps Keycloak realm roles from the OIDC token to Spring Security GrantedAuthorities. */
     @Bean
     public GrantedAuthoritiesMapper keycloakGrantedAuthoritiesMapper() {
-        return authorities -> {
-            Set<GrantedAuthority> mappedAuthorities = new HashSet<>();
+        return this::mapKeycloakAuthorities;
+    }
 
-            for (GrantedAuthority authority : authorities) {
-                mappedAuthorities.add(authority);
+    private Set<GrantedAuthority> mapKeycloakAuthorities(
+            Collection<? extends GrantedAuthority> authorities) {
+        Set<GrantedAuthority> mappedAuthorities = new HashSet<>();
 
-                if (authority instanceof OidcUserAuthority oidcAuthority) {
-                    Map<String, Object> claims = oidcAuthority.getIdToken().getClaims();
-                    extractKeycloakRoles(claims)
-                            .forEach(
-                                    role ->
-                                            mappedAuthorities.add(
-                                                    new SimpleGrantedAuthority(
-                                                            "ROLE_" + role.toUpperCase())));
-                }
+        for (GrantedAuthority authority : authorities) {
+            mappedAuthorities.add(authority);
+            if (authority instanceof OidcUserAuthority oidcAuthority) {
+                addKeycloakRoles(mappedAuthorities, oidcAuthority);
             }
+        }
 
-            return mappedAuthorities;
-        };
+        return mappedAuthorities;
+    }
+
+    private void addKeycloakRoles(
+            Set<GrantedAuthority> mappedAuthorities, OidcUserAuthority oidcAuthority) {
+        Map<String, Object> claims = oidcAuthority.getIdToken().getClaims();
+        extractKeycloakRoles(claims)
+                .forEach(
+                        role ->
+                                mappedAuthorities.add(
+                                        new SimpleGrantedAuthority(
+                                                ROLE_PREFIX + role.toUpperCase())));
+    }
+
+    private Collection<String> extractKeycloakRoles(Map<String, Object> claims) {
+        Set<String> roles = new HashSet<>();
+        addRealmRoles(claims, roles);
+        addClientRoles(claims, roles);
+        return roles;
     }
 
     @SuppressWarnings("unchecked")
-    private Collection<String> extractKeycloakRoles(Map<String, Object> claims) {
-        Set<String> roles = new HashSet<>();
-
-        // Realm roles
-        Map<String, Object> realmAccess = (Map<String, Object>) claims.get("realm_access");
+    private void addRealmRoles(Map<String, Object> claims, Set<String> roles) {
+        Map<String, Object> realmAccess = (Map<String, Object>) claims.get(REALM_ACCESS_CLAIM);
         if (realmAccess != null) {
-            List<String> realmRoles = (List<String>) realmAccess.get("roles");
+            List<String> realmRoles = (List<String>) realmAccess.get(ROLES_CLAIM);
             if (realmRoles != null) {
                 roles.addAll(realmRoles);
             }
         }
+    }
 
-        // Client roles
-        Map<String, Object> resourceAccess = (Map<String, Object>) claims.get("resource_access");
+    @SuppressWarnings("unchecked")
+    private void addClientRoles(Map<String, Object> claims, Set<String> roles) {
+        Map<String, Object> resourceAccess = (Map<String, Object>) claims.get(RESOURCE_ACCESS_CLAIM);
         if (resourceAccess != null) {
             Map<String, Object> clientAccess =
-                    (Map<String, Object>) resourceAccess.get("order-mgmt");
+                    (Map<String, Object>) resourceAccess.get(ORDER_MGMT_CLIENT);
             if (clientAccess != null) {
-                List<String> clientRoles = (List<String>) clientAccess.get("roles");
+                List<String> clientRoles = (List<String>) clientAccess.get(ROLES_CLAIM);
                 if (clientRoles != null) {
                     roles.addAll(clientRoles);
                 }
             }
         }
-
-        return roles;
     }
 }

@@ -16,14 +16,14 @@ public final class CurrentUserHelper {
      * rule via {@code @PreAuthorize}, so this is defence-in-depth, not the only gate.
      */
     public static boolean hasAnyRole(String... roles) {
-        var auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null) {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null) {
             return false;
         }
         for (String role : roles) {
-            String target = role.startsWith("ROLE_") ? role : "ROLE_" + role;
-            for (GrantedAuthority authority : auth.getAuthorities()) {
-                if (target.equals(authority.getAuthority())) {
+            String requiredAuthority = role.startsWith("ROLE_") ? role : "ROLE_" + role;
+            for (GrantedAuthority authority : authentication.getAuthorities()) {
+                if (requiredAuthority.equals(authority.getAuthority())) {
                     return true;
                 }
             }
@@ -32,8 +32,8 @@ public final class CurrentUserHelper {
     }
 
     public static OidcUser getOidcUser() {
-        var auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth != null && auth.getPrincipal() instanceof OidcUser oidcUser) {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.getPrincipal() instanceof OidcUser oidcUser) {
             return oidcUser;
         }
         return null;
