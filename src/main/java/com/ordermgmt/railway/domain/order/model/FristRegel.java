@@ -93,7 +93,8 @@ public class FristRegel {
     public enum Anchor {
         ABSOLUT,
         FAHRT,
-        FAHRPLANJAHR_START
+        FAHRPLANJAHR_START,
+        TTR_PHASE
     }
 
     /** What happens when the rule fires. */

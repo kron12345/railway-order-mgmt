@@ -30,27 +30,20 @@ import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.order.model.OrderPositionVersion;
 import com.ordermgmt.railway.domain.order.model.PositionChangeSource;
 import com.ordermgmt.railway.domain.order.model.PositionOtnHistory;
-import com.ordermgmt.railway.domain.order.model.PositionStatus;
 import com.ordermgmt.railway.domain.order.model.PositionType;
 import com.ordermgmt.railway.domain.order.model.PositionVariantType;
-import com.ordermgmt.railway.domain.order.model.PurchaseStatus;
 import com.ordermgmt.railway.domain.order.repository.ResourceCatalogItemRepository;
 import com.ordermgmt.railway.domain.order.service.AuditService;
 import com.ordermgmt.railway.domain.order.service.FristService;
 import com.ordermgmt.railway.domain.order.service.OrderService;
 import com.ordermgmt.railway.domain.order.service.PurchaseOrderService;
 import com.ordermgmt.railway.domain.order.service.ResourceNeedService;
-import com.ordermgmt.railway.domain.pathmanager.model.PathProcessState;
 import com.ordermgmt.railway.domain.pathmanager.model.PmReferenceTrain;
 import com.ordermgmt.railway.domain.pathmanager.service.PathManagerService;
 import com.ordermgmt.railway.domain.timetable.service.TimetableArchiveService;
 import com.ordermgmt.railway.infrastructure.keycloak.CurrentUserHelper;
-import com.ordermgmt.railway.ui.component.StatusBadge;
 import com.ordermgmt.railway.ui.component.business.BusinessChips;
-import com.ordermgmt.railway.ui.component.masterdetail.filter.FilterField;
 import com.ordermgmt.railway.ui.component.masterdetail.filter.FilterPanel;
-import com.ordermgmt.railway.ui.component.masterdetail.filter.PredicateSelectFilterField;
-import com.ordermgmt.railway.ui.component.masterdetail.filter.SelectFilterField;
 
 /** Displays and manages the positions that belong to an order. */
 public class OrderPositionPanel extends Div {
@@ -124,7 +117,13 @@ public class OrderPositionPanel extends Div {
                 .set("padding", "var(--lumo-space-m) var(--lumo-space-l)")
                 .set("box-sizing", "border-box");
 
-        filterPanel = buildFilterPanel();
+        filterPanel =
+                OrderPositionFilters.build(
+                        translator,
+                        predicate -> {
+                            positionFilter = predicate;
+                            refreshPositions();
+                        });
         bulkBar = new PositionBulkBar(orderService, translator, this::refreshPositions);
         actions =
                 new OrderPositionActions(
@@ -368,7 +367,8 @@ public class OrderPositionPanel extends Div {
                         p -> actions.respondToAlteration(p, false),
                         auditService,
                         editable);
-        addDeadlineChip(row, position);
+        OrderPositionDeadlineBadge.apply(
+                row, deadlinesByPosition.get(position.getId()), translator);
         if (card) {
             // Expressions (and legacy flat positions) render as full-width cards, no indent.
             row.getStyle()
@@ -475,76 +475,8 @@ public class OrderPositionPanel extends Div {
         }
     }
 
-    /**
-     * Reusable, collapsible filter for this order's positions, by their Bestellpositions-status.
-     */
-    private FilterPanel<OrderPosition> buildFilterPanel() {
-        List<FilterField<OrderPosition>> fields =
-                List.of(
-                        new SelectFilterField<>(
-                                t("position.filter.internalStatus"),
-                                List.of(PositionStatus.values()),
-                                v -> t("position.status." + v.name()),
-                                OrderPosition::getInternalStatus),
-                        new PredicateSelectFilterField<OrderPosition, PathProcessState>(
-                                t("position.filter.tttStatus"),
-                                List.of(PathProcessState.values()),
-                                v -> t("pm.state." + v.name()),
-                                this::hasPurchaseWithTtt),
-                        new PredicateSelectFilterField<OrderPosition, PurchaseStatus>(
-                                t("position.filter.purchaseStatus"),
-                                List.of(PurchaseStatus.values()),
-                                v -> t("purchase.status." + v.name()),
-                                this::hasPurchaseWithStatus));
-        FilterPanel.Labels labels =
-                new FilterPanel.Labels(
-                        t("filter.toggle"),
-                        t("filter.clearAll"),
-                        t("filter.chip.clearAria"),
-                        t("filter.panel.aria"));
-        return new FilterPanel<>(
-                fields,
-                predicate -> {
-                    positionFilter = predicate;
-                    refreshPositions();
-                },
-                labels);
-    }
-
-    private boolean hasPurchaseWithTtt(OrderPosition position, PathProcessState state) {
-        return position.getPurchasePositions() != null
-                && position.getPurchasePositions().stream()
-                        .anyMatch(purchase -> state.name().equals(purchase.getPmProcessState()));
-    }
-
-    private boolean hasPurchaseWithStatus(OrderPosition position, PurchaseStatus status) {
-        return position.getPurchasePositions() != null
-                && position.getPurchasePositions().stream()
-                        .anyMatch(purchase -> purchase.getPurchaseStatus() == status);
-    }
-
     private String t(String key) {
         return translator.apply(key, new Object[0]);
-    }
-
-    /** Adds the most-urgent deadline chip to a position row, if a rule produced one. */
-    private void addDeadlineChip(OrderPositionRow row, OrderPosition position) {
-        FristService.FristEntry entry = deadlinesByPosition.get(position.getId());
-        if (entry == null) {
-            return;
-        }
-        String text =
-                translator.apply(
-                        "fristen.chip", new Object[] {entry.deadline(), entry.regel().getName()});
-        row.addDeadlineBadge(text, deadlineBadgeType(entry.status()));
-    }
-
-    private static StatusBadge.StatusType deadlineBadgeType(FristService.Status status) {
-        return switch (status) {
-            case UEBERFAELLIG -> StatusBadge.StatusType.DANGER;
-            case FAELLIG_BALD -> StatusBadge.StatusType.WARNING;
-            case OK -> StatusBadge.StatusType.NEUTRAL;
-        };
     }
 
     private record PositionGroups(

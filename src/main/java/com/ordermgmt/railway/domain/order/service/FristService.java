@@ -2,6 +2,7 @@ package com.ordermgmt.railway.domain.order.service;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -27,6 +28,8 @@ import com.ordermgmt.railway.domain.order.model.ValidityJsonCodec;
 import com.ordermgmt.railway.domain.order.model.Weekdays;
 import com.ordermgmt.railway.domain.order.repository.FristRegelRepository;
 import com.ordermgmt.railway.domain.order.repository.OrderPositionRepository;
+import com.ordermgmt.railway.domain.pathmanager.repository.PmTimetableYearRepository;
+import com.ordermgmt.railway.domain.pathmanager.service.TtrPhaseResolver;
 
 import lombok.RequiredArgsConstructor;
 
@@ -42,8 +45,13 @@ public class FristService {
     /** Cap on the per-operating-day breakdown so a year-long weekday template stays bounded. */
     private static final int MAX_PER_DAY = 200;
 
+    /** A mid-December timetable-change date already belongs to the next timetable year. */
+    private static final int TTR_YEAR_ROLLOVER_DAY = 14;
+
     private final FristRegelRepository regelRepository;
     private final OrderPositionRepository positionRepository;
+    private final PmTimetableYearRepository timetableYearRepository;
+    private final TtrPhaseResolver ttrPhaseResolver;
 
     public enum Status {
         UEBERFAELLIG,
@@ -265,7 +273,44 @@ public class FristService {
                     position.getOrder() != null && position.getOrder().getValidFrom() != null
                             ? position.getOrder().getValidFrom().plusDays(offset)
                             : null;
+            case TTR_PHASE -> {
+                LocalDate stichtag = ttrOrderingDeadline(position);
+                yield stichtag != null ? stichtag.plusDays(offset) : null;
+            }
         };
+    }
+
+    /**
+     * The TTR ordering deadline (X-2) of the position's timetable year, resolved via {@link
+     * TtrPhaseResolver}; {@code null} when the year can't be determined or isn't seeded.
+     */
+    private LocalDate ttrOrderingDeadline(OrderPosition position) {
+        Integer year = referenceTimetableYear(position);
+        if (year == null) {
+            return null;
+        }
+        return timetableYearRepository
+                .findByYear(year)
+                .map(ttrPhaseResolver::orderingDeadline)
+                .orElse(null);
+    }
+
+    /** Timetable year for a position (from its start day, else the order's validity start). */
+    private Integer referenceTimetableYear(OrderPosition position) {
+        LocalDate reference = null;
+        if (position.getStart() != null) {
+            reference = position.getStart().toLocalDate();
+        } else if (position.getOrder() != null && position.getOrder().getValidFrom() != null) {
+            reference = position.getOrder().getValidFrom();
+        }
+        if (reference == null) {
+            return null;
+        }
+        if (reference.getMonth() == Month.DECEMBER
+                && reference.getDayOfMonth() >= TTR_YEAR_ROLLOVER_DAY) {
+            return reference.getYear() + 1;
+        }
+        return reference.getYear();
     }
 
     /**

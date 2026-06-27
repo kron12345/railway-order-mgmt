@@ -90,18 +90,26 @@ public class AutoBusinessService {
         return changed;
     }
 
-    /** Immediate sync once the app is up, so seeded rules surface as businesses without a click. */
+    /**
+     * Immediate sync once the app is up, so seeded rules surface as businesses without a click.
+     * {@code @Transactional} on the entry point (not only on the self-invoked {@link #syncAll()})
+     * so reading an existing business's lazy members has an open session.
+     */
     @EventListener(ApplicationReadyEvent.class)
+    @Transactional
     public void syncOnStartup() {
         syncAll();
     }
 
     /**
      * Background refresh; long delay so the demo is driven mainly by edits and the manual button.
+     * {@code @Transactional} here too — see {@link #syncOnStartup()} (self-invoked {@code syncAll}
+     * would otherwise run without a session).
      */
     @Scheduled(
             initialDelayString = "${app.frist.auto.initial-delay-ms:600000}",
             fixedDelayString = "${app.frist.auto.fixed-delay-ms:600000}")
+    @Transactional
     public void scheduledSync() {
         syncAll();
     }

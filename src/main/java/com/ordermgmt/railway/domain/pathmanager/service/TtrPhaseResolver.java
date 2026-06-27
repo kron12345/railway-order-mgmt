@@ -64,6 +64,14 @@ public class TtrPhaseResolver {
         return TtrPhase.AD_HOC_ORDERING;
     }
 
+    /**
+     * The TTR ordering deadline (Stichtag) for a timetable year: X-2 months, i.e. the last day
+     * before only ad-hoc ordering remains. Used as the deadline anchor for {@code TTR_PHASE} rules.
+     */
+    public LocalDate orderingDeadline(PmTimetableYear year) {
+        return year.getStartDate().minusMonths(AD_HOC_ORDERING_MONTHS_BEFORE);
+    }
+
     private LocalDate lateOrderingStart(LocalDate timetableStartDate) {
         return timetableStartDate
                 .minusMonths(LATE_ORDERING_MONTHS_BEFORE)

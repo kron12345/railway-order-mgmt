@@ -38,4 +38,16 @@ public class AutoOrderLog {
 
     @Column(nullable = false)
     private Instant triggeredAt;
+
+    /** What fired the rule: {@code DATUM} (deadline reached) or {@code STATUS} (TTT state). */
+    @Column(length = 20)
+    private String triggerType;
+
+    /** The rule name at firing time, so the log reads without joining a possibly-deleted rule. */
+    @Column(length = 255)
+    private String ruleName;
+
+    /** Human-readable outcome (e.g. deadline + how many purchases were ordered). */
+    @Column(length = 500)
+    private String detail;
 }

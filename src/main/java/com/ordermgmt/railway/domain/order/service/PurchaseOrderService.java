@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import com.ordermgmt.railway.domain.order.event.TttStatusChangedEvent;
 import com.ordermgmt.railway.domain.order.model.CoverageType;
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.order.model.PurchasePosition;
@@ -62,6 +63,7 @@ public class PurchaseOrderService {
     private final PathProcessEngine pathProcessEngine;
     private final TtrPhaseResolver ttrPhaseResolver;
     private final TimetableArchiveService timetableArchiveService;
+    private final org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     /**
      * Creates a new purchase position for a resource need.
@@ -178,6 +180,27 @@ public class PurchaseOrderService {
     }
 
     /**
+     * Auto-orders everything still open on a position: capacity/path needs via TTT (creating
+     * purchase positions as needed), then any remaining open purchases (vehicle/personnel) via R2P.
+     * Returns how many purchase positions of the order position are ordered ({@code BESTELLT})
+     * afterwards. Used by the deadline-rule automation ({@code AUTO_BESTELLEN}).
+     */
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
+    public int triggerOrderForPosition(UUID orderPositionId) {
+        triggerAllCapacityOrders(orderPositionId);
+        for (PurchasePosition purchasePosition :
+                purchasePositionRepository.findByOrderPositionId(orderPositionId)) {
+            if (purchasePosition.getPurchaseStatus() == PurchaseStatus.OFFEN) {
+                triggerR2pOrder(purchasePosition.getId());
+            }
+        }
+        return (int)
+                purchasePositionRepository.findByOrderPositionId(orderPositionId).stream()
+                        .filter(p -> p.getPurchaseStatus() == PurchaseStatus.BESTELLT)
+                        .count();
+    }
+
+    /**
      * Synchronizes the TTT status for a single purchase position from the path manager data.
      *
      * @param purchasePositionId the purchase position to sync
@@ -196,7 +219,9 @@ public class PurchaseOrderService {
             return;
         }
 
-        purchasePosition.setPmProcessState(train.getProcessState().name());
+        String previousState = purchasePosition.getPmProcessState();
+        String newState = train.getProcessState().name();
+        purchasePosition.setPmProcessState(newState);
         resolveTtrPhase(position).ifPresent(phase -> purchasePosition.setPmTtrPhase(phase.name()));
         purchasePosition.setPmLastSynced(Instant.now());
 
@@ -207,6 +232,11 @@ public class PurchaseOrderService {
         }
 
         purchasePositionRepository.save(purchasePosition);
+
+        // Fire status-triggered deadline rules immediately when the TTT state actually changed.
+        if (!newState.equals(previousState)) {
+            eventPublisher.publishEvent(new TttStatusChangedEvent(position.getId(), newState));
+        }
     }
 
     /**

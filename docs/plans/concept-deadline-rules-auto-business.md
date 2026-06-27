@@ -1,12 +1,14 @@
 # Konzept: Frist-Regeln & automatische Geschäfte (Final-Offer / Fälligkeiten)
 
-> Status: **UMGESETZT** (2026-06-27, Branch `feature/overview-filters-and-deadlines`). User-Entscheid:
-> 1b/2a/3b/4a + Member-Filter. Gebaut: automatisches Geschäft = echtes `Business` (`AutoBusinessService`,
-> V48), Frist je Verkehrstag (`FristService.perDay`), erweiterte Member-Filter, Admin-CRUD
-> (`FristRegelAdminView`), Frist-Chip an der Position. **Zurückgestellt (Backlog):** Anker `TTR_PHASE`,
-> echter `PurchaseOrderService`-Auto-Versand (bewusst Mock = Status BEANTRAGT), Event-Listener auf den
-> TTT-Status-Sync (heute Schedule/Startup/Button), vollständiger Audit-Trail.
-> (Ersetzt die Idee eines separaten „Final-Offer-Timers".)
+> Status: **VOLLSTÄNDIG UMGESETZT** (2026-06-27, Branch `feature/overview-filters-and-deadlines`).
+> User-Entscheid: 1b/2a/3b + Member-Filter; 4a (Mock) später auf echten Versand umgestellt. Gebaut:
+> automatisches Geschäft = echtes `Business` (`AutoBusinessService`, V48), Frist je Verkehrstag
+> (`FristService.perDay`), erweiterte Member-Filter, Admin-CRUD (`FristRegelAdminView`), Frist-Chip an
+> der Position; **Feinschliff (2. Runde):** Anker `TTR_PHASE` (`TtrPhaseResolver.orderingDeadline`),
+> Event-Listener auf den TTT-Status-Sync (`TttStatusChangedEvent`), vollständiger Audit-Trail
+> (`AutoOrderLog` + V49), echte Auto-Bestellung über `PurchaseOrderService.triggerOrderForPosition`
+> (System-Sicherheitskontext für Schedule/Event). **Offen:** Member-Filter „nicht verrechnet" (kein
+> Abrechnungsmodell vorhanden). (Ersetzt die Idee eines separaten „Final-Offer-Timers".)
 
 ## Ziel
 
