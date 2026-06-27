@@ -5,6 +5,8 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 import org.springframework.stereotype.Service;
 
@@ -38,6 +40,9 @@ import com.ordermgmt.railway.domain.timetable.model.TimetableRowData;
 public class TimetableEditingService {
 
     private static final DateTimeFormatter HH_MM = DateTimeFormatter.ofPattern("HH:mm");
+    /** Default cruise speed for fringe rows before the first or after the last anchor: 70 km/h. */
+    private static final double DEFAULT_SPEED_MIN_PER_METER = 60.0 / 70_000d;
+    private static final long MINUTES_PER_DAY = 1440L;
 
     @SuppressWarnings("unused") // reserved for future OP lookups during inserts
     private final OperationalPointRepository operationalPointRepository;
@@ -94,10 +99,13 @@ public class TimetableEditingService {
 
     /** Toggle a row's soft-deleted flag. Origin and destination cannot be deleted. */
     public void softDeleteStop(List<TimetableRowData> rows, int index) {
-        if (index < 0 || index >= rows.size()) return;
+        if (index < 0 || index >= rows.size()) {
+            return;
+        }
         TimetableRowData row = rows.get(index);
-        if (row.getRoutePointRole() == RoutePointRole.ORIGIN
-                || row.getRoutePointRole() == RoutePointRole.DESTINATION) return;
+        if (isRouteEndpoint(row)) {
+            return;
+        }
         row.setDeleted(!Boolean.TRUE.equals(row.getDeleted()));
     }
 
@@ -125,10 +133,11 @@ public class TimetableEditingService {
             LocalTime arrival, int arrivalOffset, LocalTime departure, int departureOffset) {}
 
     public TimeSnapshot snapshot(TimetableRowData row) {
-        int aOff = row.getArrivalOffset() == null ? 0 : row.getArrivalOffset();
-        int dOff = row.getDepartureOffset() == null ? 0 : row.getDepartureOffset();
         return new TimeSnapshot(
-                effectiveArrivalAnchor(row), aOff, effectiveDepartureAnchor(row), dOff);
+                effectiveArrivalAnchor(row),
+                offsetOrZero(row.getArrivalOffset()),
+                effectiveDepartureAnchor(row),
+                offsetOrZero(row.getDepartureOffset()));
     }
 
     /**
@@ -136,8 +145,7 @@ public class TimetableEditingService {
      * TimeConstraintMode}. Used as the anchor for backwards propagation.
      */
     public LocalTime effectiveArrivalAnchor(TimetableRowData row) {
-        TimeConstraintMode mode = row.getArrivalMode();
-        if (mode == null) mode = TimeConstraintMode.NONE;
+        TimeConstraintMode mode = modeOrNone(row.getArrivalMode());
         return switch (mode) {
             case EXACT ->
                     firstNonNull(
@@ -166,8 +174,7 @@ public class TimetableEditingService {
      * permitted time range.
      */
     public LocalTime effectiveDepartureAnchor(TimetableRowData row) {
-        TimeConstraintMode mode = row.getDepartureMode();
-        if (mode == null) mode = TimeConstraintMode.NONE;
+        TimeConstraintMode mode = modeOrNone(row.getDepartureMode());
         return switch (mode) {
             case EXACT ->
                     firstNonNull(
@@ -204,7 +211,9 @@ public class TimetableEditingService {
             int changedIndex,
             TimeSnapshot oldSnapshot,
             TimePropagationMode mode) {
-        if (oldSnapshot == null || changedIndex < 0 || changedIndex >= rows.size()) return;
+        if (oldSnapshot == null || changedIndex < 0 || changedIndex >= rows.size()) {
+            return;
+        }
         TimetableRowData row = rows.get(changedIndex);
         TimeSnapshot now = snapshot(row);
 
@@ -259,13 +268,14 @@ public class TimetableEditingService {
      * <p>Rows outside the anchor range (before the first or after the last) are left untouched —
      * the caller can apply a default speed there.
      */
-    /** Default cruise speed for fringe rows (before first / after last anchor): 70 km/h. */
-    private static final double DEFAULT_SPEED_MIN_PER_METER = 60.0 / 70_000d;
-
     public void interpolateBetweenAnchors(List<TimetableRowData> rows) {
-        if (rows == null || rows.isEmpty()) return;
+        if (rows == null || rows.isEmpty()) {
+            return;
+        }
         List<AnchorPoint> anchors = collectAnchors(rows);
-        if (anchors.isEmpty()) return;
+        if (anchors.isEmpty()) {
+            return;
+        }
 
         // Segments between consecutive anchors → segmental average speed.
         for (int a = 0; a < anchors.size() - 1; a++) {
@@ -273,7 +283,9 @@ public class TimetableEditingService {
             AnchorPoint p2 = anchors.get(a + 1);
             double distSpan = p2.distance() - p1.distance();
             long timeSpan = p2.absMinutes() - p1.absMinutes();
-            if (distSpan <= 0 || timeSpan <= 0) continue;
+            if (distSpan <= 0 || timeSpan <= 0) {
+                continue;
+            }
             double minPerMeter = (double) timeSpan / distSpan;
 
             for (int r = p1.rowIndex() + 1; r < p2.rowIndex(); r++) {
@@ -303,10 +315,12 @@ public class TimetableEditingService {
     private void fillRow(
             TimetableRowData row, double anchorDist, long anchorAbsMin, double minPerMeter) {
         Double dist = row.getDistanceFromStartMeters();
-        if (dist == null) return;
+        if (dist == null) {
+            return;
+        }
         long arrAbs = anchorAbsMin + Math.round((dist - anchorDist) * minPerMeter);
-        int dwell = row.getDwellMinutes() != null ? row.getDwellMinutes() : 0;
-        long depAbs = arrAbs + dwell;
+        int dwellMinutes = row.getDwellMinutes() != null ? row.getDwellMinutes() : 0;
+        long depAbs = arrAbs + dwellMinutes;
         row.setEstimatedArrival(wallClock(arrAbs).format(HH_MM));
         row.setEstimatedDeparture(wallClock(depAbs).format(HH_MM));
         row.setArrivalOffset(dayOffset(arrAbs));
@@ -321,23 +335,36 @@ public class TimetableEditingService {
         for (int i = 0; i < rows.size(); i++) {
             TimetableRowData row = rows.get(i);
             Double dist = row.getDistanceFromStartMeters();
-            if (dist == null) continue;
+            if (dist == null) {
+                continue;
+            }
             if (hasIntentArrival(row)) {
-                LocalTime t = effectiveArrivalAnchor(row);
-                int off = row.getArrivalOffset() == null ? 0 : row.getArrivalOffset();
-                if (t != null) {
-                    anchors.add(new AnchorPoint(i, dist, toAbsoluteMinutes(t, off)));
-                }
+                addAnchorIfPresent(
+                        anchors, i, dist, effectiveArrivalAnchor(row), row.getArrivalOffset());
             }
             if (hasIntentDeparture(row)) {
-                LocalTime t = effectiveDepartureAnchor(row);
-                int off = row.getDepartureOffset() == null ? 0 : row.getDepartureOffset();
-                if (t != null) {
-                    anchors.add(new AnchorPoint(i, dist, toAbsoluteMinutes(t, off)));
-                }
+                addAnchorIfPresent(
+                        anchors,
+                        i,
+                        dist,
+                        effectiveDepartureAnchor(row),
+                        row.getDepartureOffset());
             }
         }
         return anchors;
+    }
+
+    private void addAnchorIfPresent(
+            List<AnchorPoint> anchors,
+            int rowIndex,
+            double distance,
+            LocalTime time,
+            Integer offset) {
+        if (time != null) {
+            anchors.add(
+                    new AnchorPoint(
+                            rowIndex, distance, toAbsoluteMinutes(time, offsetOrZero(offset))));
+        }
     }
 
     /**
@@ -349,14 +376,18 @@ public class TimetableEditingService {
      * train may leave", which is the planning-relevant figure.
      */
     private boolean hasIntentArrival(TimetableRowData row) {
-        if (hasUserEnteredArrival(row)) return true;
+        if (hasUserEnteredArrival(row)) {
+            return true;
+        }
         return Boolean.TRUE.equals(row.getHalt())
                 && Boolean.TRUE.equals(row.getUserEnteredDwell())
                 && hasUserEnteredDeparture(row);
     }
 
     private boolean hasIntentDeparture(TimetableRowData row) {
-        if (hasUserEnteredDeparture(row)) return true;
+        if (hasUserEnteredDeparture(row)) {
+            return true;
+        }
         return Boolean.TRUE.equals(row.getHalt())
                 && Boolean.TRUE.equals(row.getUserEnteredDwell())
                 && hasUserEnteredArrival(row);
@@ -380,7 +411,9 @@ public class TimetableEditingService {
      * estimated times — only user-entered constraint fields are mutated.
      */
     public void applyHaltRules(TimetableRowData row) {
-        if (row == null) return;
+        if (row == null) {
+            return;
+        }
 
         // Origin and destination are implicit halts with no dwell. They constrain only one side:
         // origin → departure-only, destination → arrival-only. Strip the irrelevant fields so
@@ -481,72 +514,94 @@ public class TimetableEditingService {
 
     private void mirrorArrivalToDeparture(TimetableRowData row) {
         Integer dwell = row.getDwellMinutes();
-        if (dwell == null || dwell < 0) return;
-        TimeConstraintMode mode = row.getArrivalMode();
-        if (mode == null) mode = TimeConstraintMode.NONE;
+        if (dwell == null || dwell < 0) {
+            return;
+        }
+        TimeConstraintMode mode = modeOrNone(row.getArrivalMode());
         // Same-mode rule (Regel 5): force departure mode to match arrival.
         row.setDepartureMode(mode);
         switch (mode) {
             case EXACT -> {
                 LocalTime t = parseTime(row.getArrivalExact());
-                if (t != null) row.setDepartureExact(t.plusMinutes(dwell).format(HH_MM));
+                if (t != null) {
+                    row.setDepartureExact(t.plusMinutes(dwell).format(HH_MM));
+                }
             }
             case WINDOW -> {
                 LocalTime e = parseTime(row.getArrivalEarliest());
                 LocalTime l = parseTime(row.getArrivalLatest());
-                if (e != null) row.setDepartureEarliest(e.plusMinutes(dwell).format(HH_MM));
-                if (l != null) row.setDepartureLatest(l.plusMinutes(dwell).format(HH_MM));
+                if (e != null) {
+                    row.setDepartureEarliest(e.plusMinutes(dwell).format(HH_MM));
+                }
+                if (l != null) {
+                    row.setDepartureLatest(l.plusMinutes(dwell).format(HH_MM));
+                }
             }
             case AFTER -> {
                 LocalTime e = parseTime(row.getArrivalEarliest());
-                if (e != null) row.setDepartureEarliest(e.plusMinutes(dwell).format(HH_MM));
+                if (e != null) {
+                    row.setDepartureEarliest(e.plusMinutes(dwell).format(HH_MM));
+                }
             }
             case BEFORE -> {
                 LocalTime l = parseTime(row.getArrivalLatest());
-                if (l != null) row.setDepartureLatest(l.plusMinutes(dwell).format(HH_MM));
+                if (l != null) {
+                    row.setDepartureLatest(l.plusMinutes(dwell).format(HH_MM));
+                }
             }
             case COMMERCIAL -> {
                 LocalTime t = parseTime(row.getCommercialArrival());
-                if (t != null) row.setCommercialDeparture(t.plusMinutes(dwell).format(HH_MM));
+                if (t != null) {
+                    row.setCommercialDeparture(t.plusMinutes(dwell).format(HH_MM));
+                }
             }
-            case NONE -> {
-                /* no-op */
-            }
+            case NONE -> {}
         }
     }
 
     private void mirrorDepartureToArrival(TimetableRowData row) {
         Integer dwell = row.getDwellMinutes();
-        if (dwell == null || dwell < 0) return;
-        TimeConstraintMode mode = row.getDepartureMode();
-        if (mode == null) mode = TimeConstraintMode.NONE;
+        if (dwell == null || dwell < 0) {
+            return;
+        }
+        TimeConstraintMode mode = modeOrNone(row.getDepartureMode());
         row.setArrivalMode(mode);
         switch (mode) {
             case EXACT -> {
                 LocalTime t = parseTime(row.getDepartureExact());
-                if (t != null) row.setArrivalExact(t.minusMinutes(dwell).format(HH_MM));
+                if (t != null) {
+                    row.setArrivalExact(t.minusMinutes(dwell).format(HH_MM));
+                }
             }
             case WINDOW -> {
                 LocalTime e = parseTime(row.getDepartureEarliest());
                 LocalTime l = parseTime(row.getDepartureLatest());
-                if (e != null) row.setArrivalEarliest(e.minusMinutes(dwell).format(HH_MM));
-                if (l != null) row.setArrivalLatest(l.minusMinutes(dwell).format(HH_MM));
+                if (e != null) {
+                    row.setArrivalEarliest(e.minusMinutes(dwell).format(HH_MM));
+                }
+                if (l != null) {
+                    row.setArrivalLatest(l.minusMinutes(dwell).format(HH_MM));
+                }
             }
             case AFTER -> {
                 LocalTime e = parseTime(row.getDepartureEarliest());
-                if (e != null) row.setArrivalEarliest(e.minusMinutes(dwell).format(HH_MM));
+                if (e != null) {
+                    row.setArrivalEarliest(e.minusMinutes(dwell).format(HH_MM));
+                }
             }
             case BEFORE -> {
                 LocalTime l = parseTime(row.getDepartureLatest());
-                if (l != null) row.setArrivalLatest(l.minusMinutes(dwell).format(HH_MM));
+                if (l != null) {
+                    row.setArrivalLatest(l.minusMinutes(dwell).format(HH_MM));
+                }
             }
             case COMMERCIAL -> {
                 LocalTime t = parseTime(row.getCommercialDeparture());
-                if (t != null) row.setCommercialArrival(t.minusMinutes(dwell).format(HH_MM));
+                if (t != null) {
+                    row.setCommercialArrival(t.minusMinutes(dwell).format(HH_MM));
+                }
             }
-            case NONE -> {
-                /* no-op */
-            }
+            case NONE -> {}
         }
     }
 
@@ -560,7 +615,9 @@ public class TimetableEditingService {
             boolean arrivalSide,
             TimeConstraintMode oldMode,
             TimeConstraintMode newMode) {
-        if (row == null || oldMode == null || newMode == null || oldMode == newMode) return;
+        if (row == null || oldMode == null || newMode == null || oldMode == newMode) {
+            return;
+        }
 
         // Source value: pick the most representative time from the old mode.
         LocalTime source =
@@ -581,12 +638,17 @@ public class TimetableEditingService {
             row.setCommercialDeparture(null);
         }
 
-        if (source == null || newMode == TimeConstraintMode.NONE) return;
+        if (source == null || newMode == TimeConstraintMode.NONE) {
+            return;
+        }
         String formatted = source.format(HH_MM);
         switch (newMode) {
             case EXACT -> {
-                if (arrivalSide) row.setArrivalExact(formatted);
-                else row.setDepartureExact(formatted);
+                if (arrivalSide) {
+                    row.setArrivalExact(formatted);
+                } else {
+                    row.setDepartureExact(formatted);
+                }
             }
             case WINDOW -> {
                 if (arrivalSide) {
@@ -598,20 +660,27 @@ public class TimetableEditingService {
                 }
             }
             case AFTER -> {
-                if (arrivalSide) row.setArrivalEarliest(formatted);
-                else row.setDepartureEarliest(formatted);
+                if (arrivalSide) {
+                    row.setArrivalEarliest(formatted);
+                } else {
+                    row.setDepartureEarliest(formatted);
+                }
             }
             case BEFORE -> {
-                if (arrivalSide) row.setArrivalLatest(formatted);
-                else row.setDepartureLatest(formatted);
+                if (arrivalSide) {
+                    row.setArrivalLatest(formatted);
+                } else {
+                    row.setDepartureLatest(formatted);
+                }
             }
             case COMMERCIAL -> {
-                if (arrivalSide) row.setCommercialArrival(formatted);
-                else row.setCommercialDeparture(formatted);
+                if (arrivalSide) {
+                    row.setCommercialArrival(formatted);
+                } else {
+                    row.setCommercialDeparture(formatted);
+                }
             }
-            case NONE -> {
-                /* unreachable */
-            }
+            case NONE -> {}
         }
     }
 
@@ -663,13 +732,21 @@ public class TimetableEditingService {
      * @return {@code true} if the departure side was filled or refreshed, {@code false} otherwise.
      */
     public boolean deriveDepartureFromDwell(TimetableRowData row) {
-        if (row == null || !Boolean.TRUE.equals(row.getHalt())) return false;
+        if (row == null || !Boolean.TRUE.equals(row.getHalt())) {
+            return false;
+        }
         Integer dwell = row.getDwellMinutes();
-        if (dwell == null || dwell <= 0) return false;
+        if (dwell == null || dwell <= 0) {
+            return false;
+        }
 
-        TimeConstraintMode arrMode = row.getArrivalMode();
-        if (arrMode == null || arrMode == TimeConstraintMode.NONE) return false;
-        if (!isDepartureEmpty(row)) return false;
+        TimeConstraintMode arrMode = modeOrNone(row.getArrivalMode());
+        if (arrMode == TimeConstraintMode.NONE) {
+            return false;
+        }
+        if (!isDepartureEmpty(row)) {
+            return false;
+        }
 
         return switch (arrMode) {
             case EXACT -> mirrorExact(row, dwell);
@@ -682,9 +759,11 @@ public class TimetableEditingService {
     }
 
     private boolean isDepartureEmpty(TimetableRowData row) {
-        TimeConstraintMode m = row.getDepartureMode();
-        if (m == null || m == TimeConstraintMode.NONE) return true;
-        return switch (m) {
+        TimeConstraintMode mode = modeOrNone(row.getDepartureMode());
+        if (mode == TimeConstraintMode.NONE) {
+            return true;
+        }
+        return switch (mode) {
             case EXACT -> row.getDepartureExact() == null || row.getDepartureExact().isBlank();
             case WINDOW ->
                     (row.getDepartureEarliest() == null || row.getDepartureEarliest().isBlank())
@@ -701,7 +780,9 @@ public class TimetableEditingService {
 
     private boolean mirrorExact(TimetableRowData row, int dwell) {
         LocalTime ala = parseTime(row.getArrivalExact());
-        if (ala == null) return false;
+        if (ala == null) {
+            return false;
+        }
         row.setDepartureMode(TimeConstraintMode.EXACT);
         row.setDepartureExact(ala.plusMinutes(dwell).format(HH_MM));
         // Don't touch estimatedDeparture: propagate's shift uses it as the OLD anchor reference,
@@ -712,7 +793,9 @@ public class TimetableEditingService {
     private boolean mirrorWindow(TimetableRowData row, int dwell) {
         LocalTime ela = parseTime(row.getArrivalEarliest());
         LocalTime lla = parseTime(row.getArrivalLatest());
-        if (ela == null || lla == null) return false;
+        if (ela == null || lla == null) {
+            return false;
+        }
         row.setDepartureMode(TimeConstraintMode.WINDOW);
         row.setDepartureEarliest(ela.plusMinutes(dwell).format(HH_MM));
         row.setDepartureLatest(lla.plusMinutes(dwell).format(HH_MM));
@@ -721,7 +804,9 @@ public class TimetableEditingService {
 
     private boolean mirrorCommercial(TimetableRowData row, int dwell) {
         LocalTime pla = parseTime(row.getCommercialArrival());
-        if (pla == null) return false;
+        if (pla == null) {
+            return false;
+        }
         row.setDepartureMode(TimeConstraintMode.COMMERCIAL);
         row.setCommercialDeparture(pla.plusMinutes(dwell).format(HH_MM));
         return true;
@@ -729,7 +814,9 @@ public class TimetableEditingService {
 
     private boolean mirrorAfter(TimetableRowData row, int dwell) {
         LocalTime ela = parseTime(row.getArrivalEarliest());
-        if (ela == null) return false;
+        if (ela == null) {
+            return false;
+        }
         row.setDepartureMode(TimeConstraintMode.AFTER);
         row.setDepartureEarliest(ela.plusMinutes(dwell).format(HH_MM));
         return true;
@@ -737,7 +824,9 @@ public class TimetableEditingService {
 
     private boolean mirrorBefore(TimetableRowData row, int dwell) {
         LocalTime lla = parseTime(row.getArrivalLatest());
-        if (lla == null) return false;
+        if (lla == null) {
+            return false;
+        }
         row.setDepartureMode(TimeConstraintMode.BEFORE);
         row.setDepartureLatest(lla.plusMinutes(dwell).format(HH_MM));
         return true;
@@ -757,20 +846,25 @@ public class TimetableEditingService {
      * @return {@code true} if {@code dwellMinutes} was changed.
      */
     public boolean reconcileDwell(TimetableRowData row) {
-        if (row == null || !Boolean.TRUE.equals(row.getHalt())) return false;
+        if (row == null || !Boolean.TRUE.equals(row.getHalt())) {
+            return false;
+        }
         LocalTime arr = earliestArrivalForDwell(row);
         LocalTime dep = earliestDepartureForDwell(row);
-        if (arr == null || dep == null || dep.isBefore(arr)) return false;
+        if (arr == null || dep == null || dep.isBefore(arr)) {
+            return false;
+        }
         int actual = (int) Duration.between(arr, dep).toMinutes();
         Integer current = row.getDwellMinutes();
-        if (current != null && current == actual) return false;
+        if (current != null && current == actual) {
+            return false;
+        }
         row.setDwellMinutes(actual);
         return true;
     }
 
     private LocalTime earliestArrivalForDwell(TimetableRowData row) {
-        TimeConstraintMode mode = row.getArrivalMode();
-        if (mode == null) mode = TimeConstraintMode.NONE;
+        TimeConstraintMode mode = modeOrNone(row.getArrivalMode());
         return switch (mode) {
             case EXACT -> parseTime(row.getArrivalExact());
             case WINDOW, AFTER -> parseTime(row.getArrivalEarliest());
@@ -781,8 +875,7 @@ public class TimetableEditingService {
     }
 
     private LocalTime earliestDepartureForDwell(TimetableRowData row) {
-        TimeConstraintMode mode = row.getDepartureMode();
-        if (mode == null) mode = TimeConstraintMode.NONE;
+        TimeConstraintMode mode = modeOrNone(row.getDepartureMode());
         return switch (mode) {
             case EXACT -> parseTime(row.getDepartureExact());
             case WINDOW, AFTER -> parseTime(row.getDepartureEarliest());
@@ -801,7 +894,9 @@ public class TimetableEditingService {
      */
     public List<String> validate(List<TimetableRowData> rows) {
         List<String> errors = new ArrayList<>();
-        if (rows == null || rows.isEmpty()) return errors;
+        if (rows == null || rows.isEmpty()) {
+            return errors;
+        }
 
         // Regel 9: at least one halt must exist anywhere on the route. ORIGIN and DESTINATION
         // count as implicit halts (the train stops there by definition), so a pure A→B route
@@ -884,9 +979,13 @@ public class TimetableEditingService {
     // ── Backwards-compatible legacy entry points ───────────────────────────
 
     public LocalTime resolveRelativeTime(String input, LocalTime baseTime) {
-        if (input == null || baseTime == null) return null;
+        if (input == null || baseTime == null) {
+            return null;
+        }
         String trimmed = input.trim();
-        if (!trimmed.startsWith("+") && !trimmed.startsWith("-")) return null;
+        if (!trimmed.startsWith("+") && !trimmed.startsWith("-")) {
+            return null;
+        }
         try {
             return baseTime.plusMinutes(Integer.parseInt(trimmed));
         } catch (NumberFormatException e) {
@@ -924,12 +1023,16 @@ public class TimetableEditingService {
 
     private boolean hasForwardAnchor(List<TimetableRowData> rows, int from) {
         for (int i = from + 1; i < rows.size(); i++) {
-            if (Boolean.TRUE.equals(rows.get(i).getPinned())) return true;
+            if (isPinned(rows.get(i))) {
+                return true;
+            }
         }
         // Destination acts as an implicit pin only if its arrival was user-entered.
         if (!rows.isEmpty()) {
             TimetableRowData last = rows.get(rows.size() - 1);
-            if (hasUserEnteredArrival(last)) return true;
+            if (hasUserEnteredArrival(last)) {
+                return true;
+            }
         }
         return false;
     }
@@ -962,7 +1065,9 @@ public class TimetableEditingService {
         // matching estimated* field separately so we don't double-shift.
         for (int i = fromIndex + 1; i < rows.size(); i++) {
             TimetableRowData row = rows.get(i);
-            if (Boolean.TRUE.equals(row.getPinned())) break;
+            if (isPinned(row)) {
+                break;
+            }
             shiftTimeField(row, true, deltaMinutes);
             shiftTimeField(row, false, deltaMinutes);
         }
@@ -975,7 +1080,9 @@ public class TimetableEditingService {
         // need help if it was previously linked to the arrival.
         for (int i = fromIndex - 1; i >= 0; i--) {
             TimetableRowData row = rows.get(i);
-            if (Boolean.TRUE.equals(row.getPinned())) break;
+            if (isPinned(row)) {
+                break;
+            }
             shiftTimeField(row, true, deltaMinutes);
             shiftTimeField(row, false, deltaMinutes);
         }
@@ -998,16 +1105,22 @@ public class TimetableEditingService {
             LocalTime oldAnchor,
             LocalTime newAnchor) {
         int pinIndex = findNextPin(rows, changedIndex);
-        if (pinIndex <= changedIndex) return;
+        if (pinIndex <= changedIndex) {
+            return;
+        }
         TimetableRowData pinRow = rows.get(pinIndex);
         LocalTime pinTime =
                 firstNonNull(
                         parseTime(pinRow.getEstimatedArrival()),
                         parseTime(pinRow.getEstimatedDeparture()));
-        if (pinTime == null) return;
+        if (pinTime == null) {
+            return;
+        }
         long oldSpan = Duration.between(oldAnchor, pinTime).toMinutes();
         long newSpan = Duration.between(newAnchor, pinTime).toMinutes();
-        if (oldSpan <= 0 || newSpan <= 0) return;
+        if (oldSpan <= 0 || newSpan <= 0) {
+            return;
+        }
         double ratio = (double) newSpan / oldSpan;
         for (int i = changedIndex + 1; i < pinIndex; i++) {
             TimetableRowData row = rows.get(i);
@@ -1022,17 +1135,23 @@ public class TimetableEditingService {
             LocalTime oldAnchor,
             LocalTime newAnchor) {
         int pinIndex = findPreviousPin(rows, changedIndex);
-        if (pinIndex >= changedIndex) return;
+        if (pinIndex >= changedIndex) {
+            return;
+        }
         TimetableRowData pinRow = rows.get(pinIndex);
         LocalTime pinTime =
                 firstNonNull(
                         parseTime(pinRow.getEstimatedDeparture()),
                         parseTime(pinRow.getEstimatedArrival()));
-        if (pinTime == null) return;
+        if (pinTime == null) {
+            return;
+        }
         // Span ist negativ (pin vor changedIndex), rechnen mit absoluten Beträgen.
         long oldSpan = Duration.between(pinTime, oldAnchor).toMinutes();
         long newSpan = Duration.between(pinTime, newAnchor).toMinutes();
-        if (oldSpan <= 0 || newSpan <= 0) return;
+        if (oldSpan <= 0 || newSpan <= 0) {
+            return;
+        }
         double ratio = (double) newSpan / oldSpan;
         for (int i = pinIndex + 1; i < changedIndex; i++) {
             TimetableRowData row = rows.get(i);
@@ -1046,7 +1165,9 @@ public class TimetableEditingService {
             TimetableRowData row, boolean isArrival, LocalTime anchor, double ratio) {
         for (TimeFieldAccessor f : timeFields(row, isArrival)) {
             LocalTime t = parseTime(f.getter().get());
-            if (t == null) continue;
+            if (t == null) {
+                continue;
+            }
             long offset = Duration.between(anchor, t).toMinutes();
             long newOffset = Math.round(offset * ratio);
             f.setter().accept(anchor.plusMinutes(newOffset).format(HH_MM));
@@ -1066,7 +1187,9 @@ public class TimetableEditingService {
             double ratio) {
         for (TimeFieldAccessor f : timeFields(row, isArrival)) {
             LocalTime t = parseTime(f.getter().get());
-            if (t == null) continue;
+            if (t == null) {
+                continue;
+            }
             long originalOffset = Duration.between(oldAnchor, t).toMinutes();
             long newOffset = Math.round(originalOffset * ratio);
             f.setter().accept(newAnchor.plusMinutes(newOffset).format(HH_MM));
@@ -1075,8 +1198,8 @@ public class TimetableEditingService {
 
     /** Lightweight getter/setter pair so the shift/stretch loops can iterate over fields. */
     private record TimeFieldAccessor(
-            java.util.function.Supplier<String> getter,
-            java.util.function.Consumer<String> setter) {}
+            Supplier<String> getter,
+            Consumer<String> setter) {}
 
     /** All time fields for one side of a row (arrival or departure) in iteration order. */
     private List<TimeFieldAccessor> timeFields(TimetableRowData row, boolean isArrival) {
@@ -1098,20 +1221,26 @@ public class TimetableEditingService {
 
     private int findNextPin(List<TimetableRowData> rows, int from) {
         for (int i = from + 1; i < rows.size(); i++) {
-            if (Boolean.TRUE.equals(rows.get(i).getPinned())) return i;
+            if (isPinned(rows.get(i))) {
+                return i;
+            }
         }
         return rows.size() - 1;
     }
 
     private int findPreviousPin(List<TimetableRowData> rows, int from) {
         for (int i = from - 1; i >= 0; i--) {
-            if (Boolean.TRUE.equals(rows.get(i).getPinned())) return i;
+            if (isPinned(rows.get(i))) {
+                return i;
+            }
         }
         return 0;
     }
 
     private LocalTime parseTime(String value) {
-        if (value == null || value.isBlank()) return null;
+        if (value == null || value.isBlank()) {
+            return null;
+        }
         try {
             return LocalTime.parse(value, HH_MM);
         } catch (Exception e) {
@@ -1121,11 +1250,11 @@ public class TimetableEditingService {
 
     // ── Offset-aware arithmetic helpers ────────────────────────────────────
 
-    private static final long MINUTES_PER_DAY = 1440L;
-
     /** Convert a (LocalTime, dayOffset) pair into absolute minutes since day 0. */
     private long toAbsoluteMinutes(LocalTime time, int offsetDays) {
-        if (time == null) return 0L;
+        if (time == null) {
+            return 0L;
+        }
         return offsetDays * MINUTES_PER_DAY + (time.toSecondOfDay() / 60L);
     }
 
@@ -1151,26 +1280,54 @@ public class TimetableEditingService {
         // on the same side share the same offset.
         int currentOffset =
                 isArrival
-                        ? (row.getArrivalOffset() == null ? 0 : row.getArrivalOffset())
-                        : (row.getDepartureOffset() == null ? 0 : row.getDepartureOffset());
+                        ? offsetOrZero(row.getArrivalOffset())
+                        : offsetOrZero(row.getDepartureOffset());
         // Track the new offset using any one parsed field as reference.
         Integer newOffset = null;
         for (TimeFieldAccessor f : timeFields(row, isArrival)) {
             LocalTime t = parseTime(f.getter().get());
-            if (t == null) continue;
+            if (t == null) {
+                continue;
+            }
             long abs = toAbsoluteMinutes(t, currentOffset) + deltaMinutes;
             f.setter().accept(wallClock(abs).format(HH_MM));
-            if (newOffset == null) newOffset = dayOffset(abs);
+            if (newOffset == null) {
+                newOffset = dayOffset(abs);
+            }
         }
         if (newOffset != null) {
-            if (isArrival) row.setArrivalOffset(newOffset);
-            else row.setDepartureOffset(newOffset);
+            if (isArrival) {
+                row.setArrivalOffset(newOffset);
+            } else {
+                row.setDepartureOffset(newOffset);
+            }
         }
     }
 
     @SafeVarargs
     private static <T> T firstNonNull(T... values) {
-        for (T v : values) if (v != null) return v;
+        for (T value : values) {
+            if (value != null) {
+                return value;
+            }
+        }
         return null;
+    }
+
+    private boolean isRouteEndpoint(TimetableRowData row) {
+        return row.getRoutePointRole() == RoutePointRole.ORIGIN
+                || row.getRoutePointRole() == RoutePointRole.DESTINATION;
+    }
+
+    private boolean isPinned(TimetableRowData row) {
+        return Boolean.TRUE.equals(row.getPinned());
+    }
+
+    private int offsetOrZero(Integer offset) {
+        return offset == null ? 0 : offset;
+    }
+
+    private TimeConstraintMode modeOrNone(TimeConstraintMode mode) {
+        return mode == null ? TimeConstraintMode.NONE : mode;
     }
 }

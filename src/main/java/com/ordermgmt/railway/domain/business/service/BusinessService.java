@@ -1,8 +1,16 @@
 package com.ordermgmt.railway.domain.business.service;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import jakarta.persistence.EntityNotFoundException;
@@ -16,6 +24,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.ordermgmt.railway.domain.business.model.AssignmentType;
 import com.ordermgmt.railway.domain.business.model.Business;
 import com.ordermgmt.railway.domain.business.model.BusinessDocument;
 import com.ordermgmt.railway.domain.business.model.BusinessStatus;
@@ -39,6 +48,24 @@ public class BusinessService {
      * (Vaadin route is {@code @PermitAll}).
      */
     private static final String MUTATION_ROLES = "hasAnyRole('ADMIN', 'DISPATCHER')";
+    private static final String SAFE_FALLBACK_CONTENT_TYPE = "application/octet-stream";
+    private static final Set<String> ALLOWED_DOCUMENT_MIME_TYPES =
+            Set.of(
+                    "application/pdf",
+                    "application/msword",
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    "application/vnd.ms-excel",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    "application/vnd.ms-powerpoint",
+                    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                    "application/zip",
+                    "application/x-zip-compressed",
+                    "image/png",
+                    "image/jpeg",
+                    "image/gif",
+                    "image/webp",
+                    "text/plain",
+                    "text/csv");
 
     private final BusinessRepository businessRepository;
     private final OrderPositionRepository orderPositionRepository;
@@ -58,6 +85,24 @@ public class BusinessService {
         return businessRepository
                 .findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Business not found: " + id));
+    }
+
+    private OrderPosition requireOrderPosition(UUID orderPositionId) {
+        return orderPositionRepository
+                .findById(orderPositionId)
+                .orElseThrow(
+                        () ->
+                                new EntityNotFoundException(
+                                        "OrderPosition not found: " + orderPositionId));
+    }
+
+    private PurchasePosition requirePurchasePosition(UUID purchasePositionId) {
+        return purchasePositionRepository
+                .findById(purchasePositionId)
+                .orElseThrow(
+                        () ->
+                                new EntityNotFoundException(
+                                        "PurchasePosition not found: " + purchasePositionId));
     }
 
     /** Creates a new business in the given status. */
@@ -126,14 +171,12 @@ public class BusinessService {
      */
     @PreAuthorize(MUTATION_ROLES)
     @Transactional
-    public Business setAssignee(
-            UUID id, com.ordermgmt.railway.domain.business.model.AssignmentType type, String name) {
+    public Business setAssignee(UUID id, AssignmentType type, String name) {
         Business business = requireBusiness(id);
         String newType = type == null ? null : type.name();
         String currentType = business.getAssignmentType();
         String currentName = business.getAssignmentName();
-        if (java.util.Objects.equals(currentType, newType)
-                && java.util.Objects.equals(currentName, name)) {
+        if (Objects.equals(currentType, newType) && Objects.equals(currentName, name)) {
             return business;
         }
         business.setAssignmentType(newType);
@@ -163,13 +206,7 @@ public class BusinessService {
     @Transactional
     public void linkOrderPosition(UUID businessId, UUID orderPositionId) {
         Business business = requireBusiness(businessId);
-        OrderPosition position =
-                orderPositionRepository
-                        .findById(orderPositionId)
-                        .orElseThrow(
-                                () ->
-                                        new EntityNotFoundException(
-                                                "OrderPosition not found: " + orderPositionId));
+        OrderPosition position = requireOrderPosition(orderPositionId);
         business.getOrderPositions().add(position);
         businessRepository.save(business);
     }
@@ -190,25 +227,21 @@ public class BusinessService {
      */
     @PreAuthorize(MUTATION_ROLES)
     @Transactional
-    public void setOrderPositionLinks(UUID orderPositionId, java.util.Set<UUID> businessIds) {
-        OrderPosition position =
-                orderPositionRepository
-                        .findById(orderPositionId)
-                        .orElseThrow(
-                                () ->
-                                        new EntityNotFoundException(
-                                                "OrderPosition not found: " + orderPositionId));
-        java.util.Set<UUID> target = businessIds == null ? java.util.Set.of() : businessIds;
-        java.util.Set<UUID> linkedIds = new java.util.HashSet<>();
-        for (Business b : businessRepository.findByLinkedOrderPositionId(orderPositionId)) {
-            linkedIds.add(b.getId());
-            if (!target.contains(b.getId())) {
-                b.getOrderPositions().removeIf(p -> p.getId().equals(orderPositionId));
+    public void setOrderPositionLinks(UUID orderPositionId, Set<UUID> businessIds) {
+        OrderPosition position = requireOrderPosition(orderPositionId);
+        Set<UUID> targetBusinessIds = businessIds == null ? Set.of() : businessIds;
+        Set<UUID> currentlyLinkedBusinessIds = new HashSet<>();
+
+        for (Business business : businessRepository.findByLinkedOrderPositionId(orderPositionId)) {
+            currentlyLinkedBusinessIds.add(business.getId());
+            if (!targetBusinessIds.contains(business.getId())) {
+                business.getOrderPositions().removeIf(p -> p.getId().equals(orderPositionId));
             }
         }
-        for (Business b : businessRepository.findAllById(target)) {
-            if (!linkedIds.contains(b.getId())) {
-                b.getOrderPositions().add(position);
+
+        for (Business business : businessRepository.findAllById(targetBusinessIds)) {
+            if (!currentlyLinkedBusinessIds.contains(business.getId())) {
+                business.getOrderPositions().add(position);
             }
         }
     }
@@ -217,12 +250,8 @@ public class BusinessService {
     @Transactional(readOnly = true)
     public List<OrderPosition> getLinkedOrderPositions(UUID businessId) {
         Business business = requireBusiness(businessId);
-        // Force initialization of lazy associations referenced by the UI.
-        for (OrderPosition op : business.getOrderPositions()) {
-            Hibernate.initialize(op.getOrder());
-        }
-        // Detach from the persistent collection so the UI can iterate / size() outside the tx.
-        return new java.util.ArrayList<>(business.getOrderPositions());
+        initializeOrders(business.getOrderPositions());
+        return new ArrayList<>(business.getOrderPositions());
     }
 
     /** A business plus its three UI collections, loaded together for the read view. */
@@ -242,22 +271,14 @@ public class BusinessService {
                 .findById(businessId)
                 .map(
                         business -> {
-                            for (OrderPosition op : business.getOrderPositions()) {
-                                Hibernate.initialize(op.getOrder());
-                            }
-                            for (PurchasePosition pp : business.getPurchasePositions()) {
-                                OrderPosition op = pp.getOrderPosition();
-                                if (op != null) {
-                                    Hibernate.initialize(op);
-                                    Hibernate.initialize(op.getOrder());
-                                }
-                            }
+                            initializeOrders(business.getOrderPositions());
+                            initializePurchasePositions(business.getPurchasePositions());
                             Hibernate.initialize(business.getDocuments());
                             return new BusinessReadModel(
                                     business,
-                                    new java.util.ArrayList<>(business.getOrderPositions()),
-                                    new java.util.ArrayList<>(business.getPurchasePositions()),
-                                    new java.util.ArrayList<>(business.getDocuments()));
+                                    new ArrayList<>(business.getOrderPositions()),
+                                    new ArrayList<>(business.getPurchasePositions()),
+                                    new ArrayList<>(business.getDocuments()));
                         });
     }
 
@@ -271,14 +292,7 @@ public class BusinessService {
     @Transactional
     public void linkPurchasePosition(UUID businessId, UUID purchasePositionId) {
         Business business = requireBusiness(businessId);
-        PurchasePosition position =
-                purchasePositionRepository
-                        .findById(purchasePositionId)
-                        .orElseThrow(
-                                () ->
-                                        new EntityNotFoundException(
-                                                "PurchasePosition not found: "
-                                                        + purchasePositionId));
+        PurchasePosition position = requirePurchasePosition(purchasePositionId);
         if (business.getPurchasePositions().stream()
                 .noneMatch(p -> p.getId().equals(purchasePositionId))) {
             business.getPurchasePositions().add(position);
@@ -297,43 +311,14 @@ public class BusinessService {
     @Transactional(readOnly = true)
     public List<PurchasePosition> getLinkedPurchasePositions(UUID businessId) {
         Business business = requireBusiness(businessId);
-        for (PurchasePosition pp : business.getPurchasePositions()) {
-            OrderPosition op = pp.getOrderPosition();
-            if (op != null) {
-                Hibernate.initialize(op);
-                Hibernate.initialize(op.getOrder());
-            }
-        }
-        return new java.util.ArrayList<>(business.getPurchasePositions());
+        initializePurchasePositions(business.getPurchasePositions());
+        return new ArrayList<>(business.getPurchasePositions());
     }
 
     @Transactional(readOnly = true)
     public List<PurchasePosition> getAllPurchasePositions() {
         return purchasePositionRepository.findAllWithOrderPosition();
     }
-
-    /**
-     * Whitelist of MIME types we accept on document upload. The client-supplied content-type is
-     * sanitised against this list so an attacker cannot upload {@code text/html} or {@code
-     * image/svg+xml} and have it served back inline.
-     */
-    private static final java.util.Set<String> ALLOWED_DOCUMENT_MIME_TYPES =
-            java.util.Set.of(
-                    "application/pdf",
-                    "application/msword",
-                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    "application/vnd.ms-excel",
-                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    "application/vnd.ms-powerpoint",
-                    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                    "application/zip",
-                    "application/x-zip-compressed",
-                    "image/png",
-                    "image/jpeg",
-                    "image/gif",
-                    "image/webp",
-                    "text/plain",
-                    "text/csv");
 
     /**
      * Add a document to the business. Sanitises the client-supplied MIME type against {@link
@@ -356,12 +341,17 @@ public class BusinessService {
     }
 
     private static String sanitiseContentType(String raw) {
-        if (raw == null) return "application/octet-stream";
-        String trimmed = raw.toLowerCase(java.util.Locale.ROOT).trim();
+        if (raw == null) {
+            return SAFE_FALLBACK_CONTENT_TYPE;
+        }
+        String trimmed = raw.toLowerCase(Locale.ROOT).trim();
         // Strip parameters such as ; charset=utf-8 before matching the whitelist.
-        int semi = trimmed.indexOf(';');
-        String base = semi < 0 ? trimmed : trimmed.substring(0, semi).trim();
-        return ALLOWED_DOCUMENT_MIME_TYPES.contains(base) ? base : "application/octet-stream";
+        int parameterStart = trimmed.indexOf(';');
+        String baseContentType =
+                parameterStart < 0 ? trimmed : trimmed.substring(0, parameterStart).trim();
+        return ALLOWED_DOCUMENT_MIME_TYPES.contains(baseContentType)
+                ? baseContentType
+                : SAFE_FALLBACK_CONTENT_TYPE;
     }
 
     /** Remove a document from the business (cascades to BusinessDocument). */
@@ -377,7 +367,7 @@ public class BusinessService {
     @Transactional(readOnly = true)
     public List<BusinessDocument> getDocuments(UUID businessId) {
         Business business = requireBusiness(businessId);
-        return new java.util.ArrayList<>(business.getDocuments());
+        return new ArrayList<>(business.getDocuments());
     }
 
     /** Get business by ID. */
@@ -444,27 +434,43 @@ public class BusinessService {
 
     /** Batched linked-business lookup for many positions at once (avoids one query per row). */
     @Transactional(readOnly = true)
-    public java.util.Map<UUID, List<Business>> findByLinkedOrderPositions(
-            java.util.Collection<UUID> orderPositionIds) {
+    public Map<UUID, List<Business>> findByLinkedOrderPositions(Collection<UUID> orderPositionIds) {
         return groupByFirstId(
                 businessRepository.findBusinessesByOrderPositionIds(orderPositionIds));
     }
 
     /** Batched linked-business lookup for many purchase positions at once. */
     @Transactional(readOnly = true)
-    public java.util.Map<UUID, List<Business>> findByLinkedPurchasePositions(
-            java.util.Collection<UUID> purchasePositionIds) {
+    public Map<UUID, List<Business>> findByLinkedPurchasePositions(
+            Collection<UUID> purchasePositionIds) {
         return groupByFirstId(
                 businessRepository.findBusinessesByPurchasePositionIds(purchasePositionIds));
     }
 
-    private java.util.Map<UUID, List<Business>> groupByFirstId(List<Object[]> rows) {
-        java.util.Map<UUID, List<Business>> map = new java.util.HashMap<>();
+    private Map<UUID, List<Business>> groupByFirstId(List<Object[]> rows) {
+        Map<UUID, List<Business>> businessesByLinkedPositionId = new HashMap<>();
         for (Object[] row : rows) {
-            map.computeIfAbsent((UUID) row[0], k -> new java.util.ArrayList<>())
+            businessesByLinkedPositionId
+                    .computeIfAbsent((UUID) row[0], ignored -> new ArrayList<>())
                     .add((Business) row[1]);
         }
-        return map;
+        return businessesByLinkedPositionId;
+    }
+
+    private void initializeOrders(Collection<OrderPosition> orderPositions) {
+        for (OrderPosition orderPosition : orderPositions) {
+            Hibernate.initialize(orderPosition.getOrder());
+        }
+    }
+
+    private void initializePurchasePositions(Collection<PurchasePosition> purchasePositions) {
+        for (PurchasePosition purchasePosition : purchasePositions) {
+            OrderPosition orderPosition = purchasePosition.getOrderPosition();
+            if (orderPosition != null) {
+                Hibernate.initialize(orderPosition);
+                Hibernate.initialize(orderPosition.getOrder());
+            }
+        }
     }
 
     @Transactional(readOnly = true)

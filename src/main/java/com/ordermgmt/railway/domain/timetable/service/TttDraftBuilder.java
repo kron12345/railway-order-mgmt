@@ -19,6 +19,15 @@ import com.ordermgmt.railway.domain.timetable.model.TttTiming;
 @Service
 public class TttDraftBuilder {
 
+    private static final String COMMERCIAL_ARRIVAL_QUALIFIER = "PLA";
+    private static final String ARRIVAL_EARLIEST_QUALIFIER = "ELA";
+    private static final String ARRIVAL_EXACT_QUALIFIER = "ALA";
+    private static final String ARRIVAL_LATEST_QUALIFIER = "LLA";
+    private static final String COMMERCIAL_DEPARTURE_QUALIFIER = "PLD";
+    private static final String DEPARTURE_EARLIEST_QUALIFIER = "ELD";
+    private static final String DEPARTURE_EXACT_QUALIFIER = "ALD";
+    private static final String DEPARTURE_LATEST_QUALIFIER = "LLD";
+
     public TttPathRequestDraft fromRows(List<TimetableRowData> rows) {
         if (rows == null || rows.isEmpty()) {
             return new TttPathRequestDraft(List.of(), null);
@@ -63,49 +72,49 @@ public class TttDraftBuilder {
         addIfUserEntered(
                 timings,
                 row.getUserEnteredCommercialArrival(),
-                "PLA",
+                COMMERCIAL_ARRIVAL_QUALIFIER,
                 row.getCommercialArrival(),
                 arrivalOffset);
         addIfUserEntered(
                 timings,
                 row.getUserEnteredArrivalEarliest(),
-                "ELA",
+                ARRIVAL_EARLIEST_QUALIFIER,
                 row.getArrivalEarliest(),
                 arrivalOffset);
         addIfUserEntered(
                 timings,
                 row.getUserEnteredArrivalExact(),
-                "ALA",
+                ARRIVAL_EXACT_QUALIFIER,
                 row.getArrivalExact(),
                 arrivalOffset);
         addIfUserEntered(
                 timings,
                 row.getUserEnteredArrivalLatest(),
-                "LLA",
+                ARRIVAL_LATEST_QUALIFIER,
                 row.getArrivalLatest(),
                 arrivalOffset);
         addIfUserEntered(
                 timings,
                 row.getUserEnteredCommercialDeparture(),
-                "PLD",
+                COMMERCIAL_DEPARTURE_QUALIFIER,
                 row.getCommercialDeparture(),
                 departureOffset);
         addIfUserEntered(
                 timings,
                 row.getUserEnteredDepartureEarliest(),
-                "ELD",
+                DEPARTURE_EARLIEST_QUALIFIER,
                 row.getDepartureEarliest(),
                 departureOffset);
         addIfUserEntered(
                 timings,
                 row.getUserEnteredDepartureExact(),
-                "ALD",
+                DEPARTURE_EXACT_QUALIFIER,
                 row.getDepartureExact(),
                 departureOffset);
         addIfUserEntered(
                 timings,
                 row.getUserEnteredDepartureLatest(),
-                "LLD",
+                DEPARTURE_LATEST_QUALIFIER,
                 row.getDepartureLatest(),
                 departureOffset);
         return List.copyOf(timings);
@@ -168,11 +177,19 @@ public class TttDraftBuilder {
      * can never diverge.
      */
     public static boolean isExportedToTtt(TimetableRowData row) {
-        if (row == null) return false;
-        if (Boolean.TRUE.equals(row.getHalt())) return true;
-        if (Boolean.TRUE.equals(row.getTttRelevant())) return true;
+        if (row == null) {
+            return false;
+        }
+        if (Boolean.TRUE.equals(row.getHalt())) {
+            return true;
+        }
+        if (Boolean.TRUE.equals(row.getTttRelevant())) {
+            return true;
+        }
         if (row.getRoutePointRole() == RoutePointRole.ORIGIN
-                || row.getRoutePointRole() == RoutePointRole.DESTINATION) return true;
+                || row.getRoutePointRole() == RoutePointRole.DESTINATION) {
+            return true;
+        }
         return Boolean.TRUE.equals(row.getManuallyAdded());
     }
 

@@ -42,6 +42,11 @@ public class TimetableArchiveService {
 
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final String TIMETABLE_POSITION_TYPE = "FAHRPLAN";
+    private static final int MAX_POSITION_NAME_LENGTH = 255;
+    private static final int MAX_COMMENT_LENGTH = 2000;
+    private static final int MAX_OPERATIONAL_TRAIN_NUMBER_LENGTH = 20;
+    private static final LocalTime DEFAULT_END_TIME = LocalTime.of(23, 59);
 
     private final TimetableArchiveRepository timetableArchiveRepository;
     private final OrderPositionRepository orderPositionRepository;
@@ -119,33 +124,76 @@ public class TimetableArchiveService {
             List<LocalDate> validityDates,
             List<TimetableRowData> rows,
             String operationalTrainNumber) {
-        if (name == null || name.isBlank()) {
-            throw new IllegalArgumentException("Position name is required");
-        }
-        if (name.length() > 255) {
-            throw new IllegalArgumentException("Position name too long (max 255)");
-        }
-        if (comment != null && comment.length() > 2000) {
-            throw new IllegalArgumentException("Comment too long (max 2000)");
-        }
-        if (operationalTrainNumber != null && operationalTrainNumber.length() > 20) {
-            throw new IllegalArgumentException("OTN too long (max 20)");
-        }
-        if (rows == null || rows.isEmpty()) {
-            throw new IllegalArgumentException("Timetable rows are required.");
-        }
+        validateTimetablePositionInput(name, comment, rows, operationalTrainNumber);
 
         List<TimetableRowData> preparedRows = prepareRows(rows);
         validateRows(preparedRows);
 
         TimetableArchive archive =
+                saveArchive(existingPosition, preparedRows, operationalTrainNumber);
+
+        OrderPosition position =
+                savePosition(
+                        order,
+                        existingPosition,
+                        name,
+                        tags,
+                        comment,
+                        validityDates,
+                        preparedRows,
+                        operationalTrainNumber,
+                        archive);
+
+        pathManagerService.syncFromTimetable(position, archive, preparedRows);
+        return orderPositionRepository.save(position);
+    }
+
+    private void validateTimetablePositionInput(
+            String name,
+            String comment,
+            List<TimetableRowData> rows,
+            String operationalTrainNumber) {
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException("Position name is required");
+        }
+        if (name.length() > MAX_POSITION_NAME_LENGTH) {
+            throw new IllegalArgumentException("Position name too long (max 255)");
+        }
+        if (comment != null && comment.length() > MAX_COMMENT_LENGTH) {
+            throw new IllegalArgumentException("Comment too long (max 2000)");
+        }
+        if (operationalTrainNumber != null
+                && operationalTrainNumber.length() > MAX_OPERATIONAL_TRAIN_NUMBER_LENGTH) {
+            throw new IllegalArgumentException("OTN too long (max 20)");
+        }
+        if (rows == null || rows.isEmpty()) {
+            throw new IllegalArgumentException("Timetable rows are required.");
+        }
+    }
+
+    private TimetableArchive saveArchive(
+            OrderPosition existingPosition,
+            List<TimetableRowData> preparedRows,
+            String operationalTrainNumber) {
+        TimetableArchive archive =
                 findArchiveForExistingPosition(existingPosition).orElseGet(TimetableArchive::new);
-        archive.setTimetableType("FAHRPLAN");
+        archive.setTimetableType(TIMETABLE_POSITION_TYPE);
         archive.setOperationalTrainNumber(blankToNull(operationalTrainNumber));
         archive.setRouteSummary(routeSummary(preparedRows));
         archive.setTableData(writeRows(preparedRows));
-        archive = timetableArchiveRepository.save(archive);
+        return timetableArchiveRepository.save(archive);
+    }
 
+    private OrderPosition savePosition(
+            Order order,
+            OrderPosition existingPosition,
+            String name,
+            String tags,
+            String comment,
+            List<LocalDate> validityDates,
+            List<TimetableRowData> preparedRows,
+            String operationalTrainNumber,
+            TimetableArchive archive) {
         OrderPosition position = existingPosition != null ? existingPosition : new OrderPosition();
         position.setOrder(order);
         position.setType(PositionType.FAHRPLAN);
@@ -165,13 +213,7 @@ public class TimetableArchiveService {
         ResourceNeed resourceNeed = ensureCapacityResourceNeed(position);
         resourceNeed.setLinkedFahrplanId(archive.getId());
 
-        position = orderPositionRepository.save(position);
-
-        // Sync timetable data to Path Manager (create or update reference train)
-        pathManagerService.syncFromTimetable(position, archive, preparedRows);
-        orderPositionRepository.save(position);
-
-        return position;
+        return orderPositionRepository.save(position);
     }
 
     private Optional<TimetableArchive> findArchiveForExistingPosition(
@@ -224,8 +266,6 @@ public class TimetableArchiveService {
     private void validateRows(List<TimetableRowData> rows) {
         for (int index = 0; index < rows.size(); index++) {
             TimetableRowData row = rows.get(index);
-            boolean isOrigin = index == 0;
-            boolean isDestination = index == rows.size() - 1;
 
             validateTimeMode(
                     row.getArrivalMode(),
@@ -240,32 +280,41 @@ public class TimetableArchiveService {
                     row.getDepartureLatest(),
                     row.getCommercialDeparture());
 
-            if (isOrigin
-                    && row.getDepartureMode() == TimeConstraintMode.NONE
-                    && blank(row.getEstimatedDeparture())) {
-                throw new IllegalArgumentException("Origin requires a departure time.");
-            }
-            if (isDestination
-                    && row.getArrivalMode() == TimeConstraintMode.NONE
-                    && blank(row.getEstimatedArrival())) {
-                throw new IllegalArgumentException("Destination requires an arrival time.");
-            }
+            validateRequiredRouteTimes(row, index == 0, index == rows.size() - 1);
+            validateHalt(row, index == 0, index == rows.size() - 1);
+        }
+    }
 
-            if (Boolean.TRUE.equals(row.getHalt())) {
-                if (!isOrigin
-                        && row.getArrivalMode() == TimeConstraintMode.NONE
-                        && blank(row.getEstimatedArrival())) {
-                    throw new IllegalArgumentException("Halts require an arrival time.");
-                }
-                if (!isDestination
-                        && row.getDepartureMode() == TimeConstraintMode.NONE
-                        && blank(row.getEstimatedDeparture())) {
-                    throw new IllegalArgumentException("Halts require a departure time.");
-                }
-                if (blank(row.getActivityCode())) {
-                    throw new IllegalArgumentException("Halts require an activity code.");
-                }
-            }
+    private void validateRequiredRouteTimes(
+            TimetableRowData row, boolean isOrigin, boolean isDestination) {
+        if (isOrigin
+                && row.getDepartureMode() == TimeConstraintMode.NONE
+                && blank(row.getEstimatedDeparture())) {
+            throw new IllegalArgumentException("Origin requires a departure time.");
+        }
+        if (isDestination
+                && row.getArrivalMode() == TimeConstraintMode.NONE
+                && blank(row.getEstimatedArrival())) {
+            throw new IllegalArgumentException("Destination requires an arrival time.");
+        }
+    }
+
+    private void validateHalt(TimetableRowData row, boolean isOrigin, boolean isDestination) {
+        if (!Boolean.TRUE.equals(row.getHalt())) {
+            return;
+        }
+        if (!isOrigin
+                && row.getArrivalMode() == TimeConstraintMode.NONE
+                && blank(row.getEstimatedArrival())) {
+            throw new IllegalArgumentException("Halts require an arrival time.");
+        }
+        if (!isDestination
+                && row.getDepartureMode() == TimeConstraintMode.NONE
+                && blank(row.getEstimatedDeparture())) {
+            throw new IllegalArgumentException("Halts require a departure time.");
+        }
+        if (blank(row.getActivityCode())) {
+            throw new IllegalArgumentException("Halts require an activity code.");
         }
     }
 
@@ -328,62 +377,64 @@ public class TimetableArchiveService {
 
     private LocalDateTime resolvePositionStart(
             List<LocalDate> validityDates, List<TimetableRowData> rows) {
-        LocalDate date =
-                validityDates.isEmpty()
-                        ? LocalDate.now()
-                        : validityDates.stream().sorted().findFirst().orElse(LocalDate.now());
+        LocalDate date = firstValidityDate(validityDates);
         LocalTime time = firstMeaningfulTime(rows.getFirst(), false);
         return date.atTime(time != null ? time : LocalTime.MIDNIGHT);
     }
 
     private LocalDateTime resolvePositionEnd(
             List<LocalDate> validityDates, List<TimetableRowData> rows) {
-        LocalDate date =
-                validityDates.isEmpty()
-                        ? LocalDate.now()
-                        : validityDates.stream()
-                                .sorted()
-                                .reduce((first, second) -> second)
-                                .orElse(LocalDate.now());
+        LocalDate date = lastValidityDate(validityDates);
         LocalTime time = firstMeaningfulTime(rows.getLast(), true);
-        return date.atTime(time != null ? time : LocalTime.of(23, 59));
+        return date.atTime(time != null ? time : DEFAULT_END_TIME);
+    }
+
+    private LocalDate firstValidityDate(List<LocalDate> validityDates) {
+        if (validityDates.isEmpty()) {
+            return LocalDate.now();
+        }
+        return validityDates.stream().sorted().findFirst().orElse(LocalDate.now());
+    }
+
+    private LocalDate lastValidityDate(List<LocalDate> validityDates) {
+        if (validityDates.isEmpty()) {
+            return LocalDate.now();
+        }
+        return validityDates.stream()
+                .sorted()
+                .reduce((first, second) -> second)
+                .orElse(LocalDate.now());
     }
 
     private LocalTime firstMeaningfulTime(TimetableRowData row, boolean arrival) {
         if (arrival) {
-            if (row.getArrivalMode() == TimeConstraintMode.EXACT) {
-                return parseTime(row.getArrivalExact());
-            }
-            if (row.getArrivalMode() == TimeConstraintMode.WINDOW) {
-                return parseTime(row.getArrivalLatest());
-            }
-            if (row.getArrivalMode() == TimeConstraintMode.AFTER) {
-                return parseTime(row.getArrivalEarliest());
-            }
-            if (row.getArrivalMode() == TimeConstraintMode.BEFORE) {
-                return parseTime(row.getArrivalLatest());
-            }
-            if (row.getArrivalMode() == TimeConstraintMode.COMMERCIAL) {
-                return parseTime(row.getCommercialArrival());
-            }
-            return parseTime(row.getEstimatedArrival());
+            return firstMeaningfulArrivalTime(row);
         }
-        if (row.getDepartureMode() == TimeConstraintMode.EXACT) {
-            return parseTime(row.getDepartureExact());
-        }
-        if (row.getDepartureMode() == TimeConstraintMode.WINDOW) {
-            return parseTime(row.getDepartureEarliest());
-        }
-        if (row.getDepartureMode() == TimeConstraintMode.AFTER) {
-            return parseTime(row.getDepartureEarliest());
-        }
-        if (row.getDepartureMode() == TimeConstraintMode.BEFORE) {
-            return parseTime(row.getDepartureLatest());
-        }
-        if (row.getDepartureMode() == TimeConstraintMode.COMMERCIAL) {
-            return parseTime(row.getCommercialDeparture());
-        }
-        return parseTime(row.getEstimatedDeparture());
+        return firstMeaningfulDepartureTime(row);
+    }
+
+    private LocalTime firstMeaningfulArrivalTime(TimetableRowData row) {
+        return switch (modeOrNone(row.getArrivalMode())) {
+            case EXACT -> parseTime(row.getArrivalExact());
+            case WINDOW, BEFORE -> parseTime(row.getArrivalLatest());
+            case AFTER -> parseTime(row.getArrivalEarliest());
+            case COMMERCIAL -> parseTime(row.getCommercialArrival());
+            case NONE -> parseTime(row.getEstimatedArrival());
+        };
+    }
+
+    private LocalTime firstMeaningfulDepartureTime(TimetableRowData row) {
+        return switch (modeOrNone(row.getDepartureMode())) {
+            case EXACT -> parseTime(row.getDepartureExact());
+            case WINDOW, AFTER -> parseTime(row.getDepartureEarliest());
+            case BEFORE -> parseTime(row.getDepartureLatest());
+            case COMMERCIAL -> parseTime(row.getCommercialDeparture());
+            case NONE -> parseTime(row.getEstimatedDeparture());
+        };
+    }
+
+    private TimeConstraintMode modeOrNone(TimeConstraintMode mode) {
+        return mode == null ? TimeConstraintMode.NONE : mode;
     }
 
     private boolean isTttRelevant(TimetableRowData row) {

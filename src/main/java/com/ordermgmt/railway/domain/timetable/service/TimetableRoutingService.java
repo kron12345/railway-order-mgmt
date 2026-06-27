@@ -132,16 +132,7 @@ public class TimetableRoutingService {
             OperationalPoint start = orderedWaypoints.get(i);
             OperationalPoint end = orderedWaypoints.get(i + 1);
             PathSegment segment = shortestPath(start.getUopid(), end.getUopid(), graph, dijkstra);
-
-            if (fullPath.isEmpty()) {
-                fullPath.addAll(segment.nodeUopids());
-                segmentLengths.addAll(segment.segmentLengths());
-            } else {
-                for (int nodeIndex = 1; nodeIndex < segment.nodeUopids().size(); nodeIndex++) {
-                    fullPath.add(segment.nodeUopids().get(nodeIndex));
-                    segmentLengths.add(segment.segmentLengths().get(nodeIndex));
-                }
-            }
+            appendSegment(fullPath, segmentLengths, segment);
         }
 
         Map<Integer, RoutePointRole> roles = explicitRoles(fullPath, orderedWaypoints);
@@ -160,23 +151,46 @@ public class TimetableRoutingService {
             }
             RoutePointRole role = roles.getOrDefault(index, RoutePointRole.AUTO);
             points.add(
-                    new TimetableRoutePoint(
-                            point.getUopid(),
-                            point.getName(),
-                            point.getCountry(),
-                            point.getLatitude(),
-                            point.getLongitude(),
-                            segmentLength,
-                            distanceFromStart,
-                            role,
-                            journeyLocationType(role),
-                            index > 0 ? pointsByUopid.get(fullPath.get(index - 1)).getName() : null,
-                            index < fullPath.size() - 1
-                                    ? pointsByUopid.get(fullPath.get(index + 1)).getName()
-                                    : null));
+                    routePoint(
+                            fullPath, pointsByUopid, index, segmentLength, distanceFromStart, role));
         }
 
         return new TimetableRouteResult(points, distanceFromStart);
+    }
+
+    private void appendSegment(
+            List<String> fullPath, List<Double> segmentLengths, PathSegment segment) {
+        int firstNodeIndex = fullPath.isEmpty() ? 0 : 1;
+        for (int nodeIndex = firstNodeIndex;
+                nodeIndex < segment.nodeUopids().size();
+                nodeIndex++) {
+            fullPath.add(segment.nodeUopids().get(nodeIndex));
+            segmentLengths.add(segment.segmentLengths().get(nodeIndex));
+        }
+    }
+
+    private TimetableRoutePoint routePoint(
+            List<String> fullPath,
+            Map<String, OperationalPoint> pointsByUopid,
+            int index,
+            double segmentLength,
+            double distanceFromStart,
+            RoutePointRole role) {
+        OperationalPoint point = pointsByUopid.get(fullPath.get(index));
+        return new TimetableRoutePoint(
+                point.getUopid(),
+                point.getName(),
+                point.getCountry(),
+                point.getLatitude(),
+                point.getLongitude(),
+                segmentLength,
+                distanceFromStart,
+                role,
+                journeyLocationType(role),
+                index > 0 ? pointsByUopid.get(fullPath.get(index - 1)).getName() : null,
+                index < fullPath.size() - 1
+                        ? pointsByUopid.get(fullPath.get(index + 1)).getName()
+                        : null);
     }
 
     public TimetableRouteResult routeFromStoredRows(List<TimetableRowData> rows) {
@@ -237,31 +251,38 @@ public class TimetableRoutingService {
         }
 
         if (originDeparture != null) {
-            rows.getFirst().setEstimatedDeparture(formatTime(originDeparture));
-            LocalTime cursor = originDeparture;
-            for (int index = 1; index < rows.size(); index++) {
-                cursor =
-                        cursor.plusSeconds(travelSeconds(rows.get(index).getSegmentLengthMeters()));
-                rows.get(index).setEstimatedArrival(formatTime(cursor));
-                if (index < rows.size() - 1) {
-                    rows.get(index).setEstimatedDeparture(formatTime(cursor));
-                }
-            }
+            estimateFromOriginDeparture(rows, originDeparture);
         } else {
-            rows.getLast().setEstimatedArrival(formatTime(destinationArrival));
-            LocalTime cursor = destinationArrival;
-            for (int index = rows.size() - 2; index >= 0; index--) {
-                cursor =
-                        cursor.minusSeconds(
-                                travelSeconds(rows.get(index + 1).getSegmentLengthMeters()));
-                rows.get(index).setEstimatedDeparture(formatTime(cursor));
-                if (index > 0) {
-                    rows.get(index).setEstimatedArrival(formatTime(cursor));
-                }
-            }
+            estimateFromDestinationArrival(rows, destinationArrival);
         }
 
         return rows;
+    }
+
+    private void estimateFromOriginDeparture(List<TimetableRowData> rows, LocalTime departure) {
+        rows.getFirst().setEstimatedDeparture(formatTime(departure));
+        LocalTime cursor = departure;
+        for (int index = 1; index < rows.size(); index++) {
+            cursor = cursor.plusSeconds(travelSeconds(rows.get(index).getSegmentLengthMeters()));
+            rows.get(index).setEstimatedArrival(formatTime(cursor));
+            if (index < rows.size() - 1) {
+                rows.get(index).setEstimatedDeparture(formatTime(cursor));
+            }
+        }
+    }
+
+    private void estimateFromDestinationArrival(List<TimetableRowData> rows, LocalTime arrival) {
+        rows.getLast().setEstimatedArrival(formatTime(arrival));
+        LocalTime cursor = arrival;
+        for (int index = rows.size() - 2; index >= 0; index--) {
+            cursor =
+                    cursor.minusSeconds(
+                            travelSeconds(rows.get(index + 1).getSegmentLengthMeters()));
+            rows.get(index).setEstimatedDeparture(formatTime(cursor));
+            if (index > 0) {
+                rows.get(index).setEstimatedArrival(formatTime(cursor));
+            }
+        }
     }
 
     private PathSegment shortestPath(

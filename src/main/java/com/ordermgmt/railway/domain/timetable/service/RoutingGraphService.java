@@ -97,12 +97,7 @@ public class RoutingGraphService {
         }
 
         for (SectionOfLine section : sectionOfLineRepository.findAll()) {
-            if (!pointsByUopid.containsKey(section.getStartOpUopid())
-                    || !pointsByUopid.containsKey(section.getEndOpUopid())) {
-                continue;
-            }
-            // Skip self-loops — SimpleWeightedGraph does not allow them
-            if (section.getStartOpUopid().equals(section.getEndOpUopid())) {
+            if (!canRouteSection(section, pointsByUopid)) {
                 continue;
             }
             double length = section.getLengthMeters() != null ? section.getLengthMeters() : 0D;
@@ -113,5 +108,12 @@ public class RoutingGraphService {
             }
         }
         return graph;
+    }
+
+    private boolean canRouteSection(
+            SectionOfLine section, Map<String, OperationalPoint> pointsByUopid) {
+        return pointsByUopid.containsKey(section.getStartOpUopid())
+                && pointsByUopid.containsKey(section.getEndOpUopid())
+                && !section.getStartOpUopid().equals(section.getEndOpUopid());
     }
 }

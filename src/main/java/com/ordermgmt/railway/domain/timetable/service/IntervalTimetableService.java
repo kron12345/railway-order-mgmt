@@ -24,6 +24,7 @@ import com.ordermgmt.railway.domain.timetable.model.TimetableRowData;
 public class IntervalTimetableService {
 
     private static final DateTimeFormatter HH_MM = DateTimeFormatter.ofPattern("HH:mm");
+    private static final int MINUTES_PER_DAY = 24 * 60;
 
     private final TimetableArchiveService archiveService;
 
@@ -55,7 +56,7 @@ public class IntervalTimetableService {
 
         List<OrderPosition> positions = new ArrayList<>();
         for (int i = 0; i < departures.size(); i++) {
-            LocalTime dep = departures.get(i);
+            LocalTime departure = departures.get(i);
             positions.add(
                     createShiftedPosition(
                             cmd.order(),
@@ -63,7 +64,7 @@ public class IntervalTimetableService {
                             cmd.otnStart(),
                             cmd.baseRows(),
                             baseDeparture,
-                            dep,
+                            departure,
                             cmd.crossesMidnight(),
                             cmd.validityDates(),
                             cmd.tags(),
@@ -97,12 +98,19 @@ public class IntervalTimetableService {
                         departure,
                         crossesMidnight && departure.isBefore(baseDeparture));
 
-        List<TimetableRowData> shifted = cloneAndShiftRows(baseRows, delta);
-        String posName = namePrefix + " " + departure.format(HH_MM);
-        String otn = incrementOtn(otnStart, index);
+        List<TimetableRowData> shiftedRows = cloneAndShiftRows(baseRows, delta);
+        String positionName = namePrefix + " " + departure.format(HH_MM);
+        String operationalTrainNumber = incrementOtn(otnStart, index);
 
         return archiveService.saveTimetablePosition(
-                order, null, posName, tags, comment, validityDates, shifted, otn);
+                order,
+                null,
+                positionName,
+                tags,
+                comment,
+                validityDates,
+                shiftedRows,
+                operationalTrainNumber);
     }
 
     /**
@@ -129,60 +137,70 @@ public class IntervalTimetableService {
             LocalTime first, LocalTime last, boolean crossesMidnight, int intervalMinutes) {
 
         List<LocalTime> times = new ArrayList<>();
-        int firstMin = first.getHour() * 60 + first.getMinute();
-        int lastMin = last.getHour() * 60 + last.getMinute();
+        int firstMinute = minutesSinceMidnight(first);
+        int lastMinute = minutesSinceMidnight(last);
 
-        if (crossesMidnight && lastMin <= firstMin) {
-            lastMin += 1440; // next day
+        if (crossesMidnight && lastMinute <= firstMinute) {
+            lastMinute += MINUTES_PER_DAY;
         }
 
-        for (int min = firstMin; min <= lastMin; min += intervalMinutes) {
-            int normalized = min % 1440;
-            times.add(LocalTime.of(normalized / 60, normalized % 60));
+        for (int minute = firstMinute; minute <= lastMinute; minute += intervalMinutes) {
+            int normalizedMinute = minute % MINUTES_PER_DAY;
+            times.add(LocalTime.of(normalizedMinute / 60, normalizedMinute % 60));
         }
         return times;
     }
 
     private List<TimetableRowData> cloneAndShiftRows(
-            List<TimetableRowData> base, long deltaMinutes) {
-        List<TimetableRowData> result = new ArrayList<>();
-        for (TimetableRowData src : base) {
+            List<TimetableRowData> baseRows, long deltaMinutes) {
+        List<TimetableRowData> shiftedRows = new ArrayList<>();
+        for (TimetableRowData src : baseRows) {
             TimetableRowData copy = new TimetableRowData();
-            copy.setSequence(src.getSequence());
-            copy.setUopid(src.getUopid());
-            copy.setName(src.getName());
-            copy.setCountry(src.getCountry());
-            copy.setRoutePointRole(src.getRoutePointRole());
-            copy.setJourneyLocationType(src.getJourneyLocationType());
-            copy.setFromName(src.getFromName());
-            copy.setToName(src.getToName());
-            copy.setSegmentLengthMeters(src.getSegmentLengthMeters());
-            copy.setDistanceFromStartMeters(src.getDistanceFromStartMeters());
-            copy.setHalt(src.getHalt());
-            copy.setTttRelevant(src.getTttRelevant());
-            copy.setActivityCode(src.getActivityCode());
-            copy.setDwellMinutes(src.getDwellMinutes());
-            copy.setArrivalMode(src.getArrivalMode());
-            copy.setDepartureMode(src.getDepartureMode());
-            copy.setPinned(src.getPinned());
-            copy.setManuallyAdded(src.getManuallyAdded());
-            copy.setDeleted(src.getDeleted());
-
-            // Shift all time fields
-            copy.setEstimatedArrival(shiftTime(src.getEstimatedArrival(), deltaMinutes));
-            copy.setEstimatedDeparture(shiftTime(src.getEstimatedDeparture(), deltaMinutes));
-            copy.setArrivalExact(shiftTime(src.getArrivalExact(), deltaMinutes));
-            copy.setDepartureExact(shiftTime(src.getDepartureExact(), deltaMinutes));
-            copy.setArrivalEarliest(shiftTime(src.getArrivalEarliest(), deltaMinutes));
-            copy.setArrivalLatest(shiftTime(src.getArrivalLatest(), deltaMinutes));
-            copy.setDepartureEarliest(shiftTime(src.getDepartureEarliest(), deltaMinutes));
-            copy.setDepartureLatest(shiftTime(src.getDepartureLatest(), deltaMinutes));
-            copy.setCommercialArrival(shiftTime(src.getCommercialArrival(), deltaMinutes));
-            copy.setCommercialDeparture(shiftTime(src.getCommercialDeparture(), deltaMinutes));
-
-            result.add(copy);
+            copyRouteData(src, copy);
+            copyPlanningData(src, copy);
+            copyShiftedTimes(src, copy, deltaMinutes);
+            shiftedRows.add(copy);
         }
-        return result;
+        return shiftedRows;
+    }
+
+    private void copyRouteData(TimetableRowData source, TimetableRowData target) {
+        target.setSequence(source.getSequence());
+        target.setUopid(source.getUopid());
+        target.setName(source.getName());
+        target.setCountry(source.getCountry());
+        target.setRoutePointRole(source.getRoutePointRole());
+        target.setJourneyLocationType(source.getJourneyLocationType());
+        target.setFromName(source.getFromName());
+        target.setToName(source.getToName());
+        target.setSegmentLengthMeters(source.getSegmentLengthMeters());
+        target.setDistanceFromStartMeters(source.getDistanceFromStartMeters());
+    }
+
+    private void copyPlanningData(TimetableRowData source, TimetableRowData target) {
+        target.setHalt(source.getHalt());
+        target.setTttRelevant(source.getTttRelevant());
+        target.setActivityCode(source.getActivityCode());
+        target.setDwellMinutes(source.getDwellMinutes());
+        target.setArrivalMode(source.getArrivalMode());
+        target.setDepartureMode(source.getDepartureMode());
+        target.setPinned(source.getPinned());
+        target.setManuallyAdded(source.getManuallyAdded());
+        target.setDeleted(source.getDeleted());
+    }
+
+    private void copyShiftedTimes(
+            TimetableRowData source, TimetableRowData target, long deltaMinutes) {
+        target.setEstimatedArrival(shiftTime(source.getEstimatedArrival(), deltaMinutes));
+        target.setEstimatedDeparture(shiftTime(source.getEstimatedDeparture(), deltaMinutes));
+        target.setArrivalExact(shiftTime(source.getArrivalExact(), deltaMinutes));
+        target.setDepartureExact(shiftTime(source.getDepartureExact(), deltaMinutes));
+        target.setArrivalEarliest(shiftTime(source.getArrivalEarliest(), deltaMinutes));
+        target.setArrivalLatest(shiftTime(source.getArrivalLatest(), deltaMinutes));
+        target.setDepartureEarliest(shiftTime(source.getDepartureEarliest(), deltaMinutes));
+        target.setDepartureLatest(shiftTime(source.getDepartureLatest(), deltaMinutes));
+        target.setCommercialArrival(shiftTime(source.getCommercialArrival(), deltaMinutes));
+        target.setCommercialDeparture(shiftTime(source.getCommercialDeparture(), deltaMinutes));
     }
 
     private String shiftTime(String timeStr, long deltaMinutes) {
@@ -198,12 +216,16 @@ public class IntervalTimetableService {
     }
 
     private long minutesBetween(LocalTime from, LocalTime to, boolean nextDay) {
-        int fromMin = from.getHour() * 60 + from.getMinute();
-        int toMin = to.getHour() * 60 + to.getMinute();
+        int fromMin = minutesSinceMidnight(from);
+        int toMin = minutesSinceMidnight(to);
         if (nextDay) {
-            toMin += 1440;
+            toMin += MINUTES_PER_DAY;
         }
         return toMin - fromMin;
+    }
+
+    private int minutesSinceMidnight(LocalTime time) {
+        return time.getHour() * 60 + time.getMinute();
     }
 
     /** If base is numeric, returns base+offset as string. Otherwise returns base unchanged. */

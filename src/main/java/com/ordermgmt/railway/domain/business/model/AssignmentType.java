@@ -13,10 +13,12 @@ public enum AssignmentType {
     GROUP;
 
     /** Defensive parse that returns {@code null} for unknown / legacy values. */
-    public static AssignmentType fromString(String s) {
-        if (s == null) return null;
+    public static AssignmentType fromString(String value) {
+        if (value == null) {
+            return null;
+        }
         try {
-            return AssignmentType.valueOf(s);
+            return AssignmentType.valueOf(value);
         } catch (IllegalArgumentException ex) {
             return null;
         }

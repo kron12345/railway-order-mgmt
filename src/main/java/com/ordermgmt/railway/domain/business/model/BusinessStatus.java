@@ -1,5 +1,8 @@
 package com.ordermgmt.railway.domain.business.model;
 
+import java.util.Collections;
+import java.util.Set;
+
 /** Lifecycle states for a business work item. */
 public enum BusinessStatus {
     IN_BEARBEITUNG,
@@ -12,13 +15,12 @@ public enum BusinessStatus {
      * Returns the valid next status targets for this status. Closed/annulled states are absorbing
      * (no transitions allowed).
      */
-    public java.util.Set<BusinessStatus> nextTargets() {
+    public Set<BusinessStatus> nextTargets() {
         return switch (this) {
-            case ABGESCHLOSSEN, ANNULLIERT -> java.util.Collections.emptySet();
-            case IN_BEARBEITUNG -> java.util.Set.of(FREIGEGEBEN);
-            case FREIGEGEBEN ->
-                    java.util.Set.of(IN_BEARBEITUNG, UEBERARBEITEN, ABGESCHLOSSEN, ANNULLIERT);
-            case UEBERARBEITEN -> java.util.Set.of(ABGESCHLOSSEN, ANNULLIERT);
+            case ABGESCHLOSSEN, ANNULLIERT -> Collections.emptySet();
+            case IN_BEARBEITUNG -> Set.of(FREIGEGEBEN);
+            case FREIGEGEBEN -> Set.of(IN_BEARBEITUNG, UEBERARBEITEN, ABGESCHLOSSEN, ANNULLIERT);
+            case UEBERARBEITEN -> Set.of(ABGESCHLOSSEN, ANNULLIERT);
         };
     }
 
