@@ -216,7 +216,10 @@ public class MasterDetailLayout<T> extends Div {
         listPane.add(listScroll);
 
         // Terminal-style readout footer, shown only in lazy mode (setLazyLoader makes it visible).
+        // Not a live region here — this layout's AriaLive is the single announcer (avoids a second
+        // competing polite region double-announcing selection + load status).
         readout.setVisible(false);
+        readout.setAnnouncing(false);
         listPane.add(readout);
 
         detailPane.addClassName("md-detail");
@@ -359,7 +362,9 @@ public class MasterDetailLayout<T> extends Div {
         if (lazyMode && lazyController.hasMore()) {
             LazyLoadSentinel sentinel =
                     new LazyLoadSentinel(
-                            spec.sentinelLabel, () -> lazyController.loadNext(filterText));
+                            spec.sentinelLabel,
+                            () -> lazyController.loadNext(filterText),
+                            this::loadNextAndFocusFirstNew);
             listScroll.add(sentinel);
             sentinel.observe(listScroll.getElement());
         } else if (lazyMode) {
@@ -380,6 +385,22 @@ public class MasterDetailLayout<T> extends Div {
         cardWrapper.applySelection(Objects.equals(id, selectedId));
         cardWrappers.add(cardWrapper);
         return wrapper;
+    }
+
+    /**
+     * Interactive "load more" (click/keyboard on the sentinel): append the next page, then move
+     * focus to the first newly-loaded card so keyboard users land on the new content. The
+     * scroll-triggered auto-load path deliberately does not move focus.
+     */
+    private void loadNextAndFocusFirstNew() {
+        int firstNewIndex = lazyController.loadedCount();
+        lazyController.loadNext(filterText);
+        listScroll
+                .getElement()
+                .executeJs(
+                        "const opts=this.querySelectorAll('[role=option]');"
+                                + "const el=opts[$0]; if(el){el.focus();}",
+                        firstNewIndex);
     }
 
     /** Disconnect the auto-load observer when no further pages remain (no sentinel to watch). */

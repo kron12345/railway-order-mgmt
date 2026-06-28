@@ -9,7 +9,6 @@ import java.util.function.Function;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.Span;
-import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.select.Select;
 
@@ -117,30 +116,7 @@ public class BusinessCard extends Div {
 
     private HorizontalLayout buildStaticStatusPill(
             BusinessStatus status, Function<String, String> tr) {
-        var pill = new HorizontalLayout();
-        pill.addClassName("biz-status-pill-icon");
-        pill.addClassName("biz-card-tile__status-pill");
-        pill.addClassName("biz-status-pill-icon--" + cssName(status.name()));
-        pill.setPadding(false);
-        pill.setSpacing(false);
-
-        VaadinIcon iconSpec =
-                switch (status) {
-                    case IN_BEARBEITUNG -> VaadinIcon.HOURGLASS;
-                    case FREIGEGEBEN -> VaadinIcon.CHECK_CIRCLE_O;
-                    case UEBERARBEITEN -> VaadinIcon.WARNING;
-                    case ABGESCHLOSSEN -> VaadinIcon.LOCK;
-                    case ANNULLIERT -> VaadinIcon.BAN;
-                };
-        var icon = iconSpec.create();
-        icon.addClassName("biz-status-pill-icon__icon");
-        icon.getElement().setAttribute("aria-hidden", "true");
-        pill.add(icon);
-
-        var label = new Span(tr.apply(statusKey(status)));
-        label.addClassName("biz-status-pill-icon__label");
-        pill.add(label);
-        return pill;
+        return BusinessStatusPill.icon(status, tr, "biz-card-tile__status-pill");
     }
 
     // ─── Assignee always-on combo styled like text ─────────────

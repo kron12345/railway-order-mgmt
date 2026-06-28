@@ -11,12 +11,21 @@ import com.vaadin.flow.component.html.Div;
  */
 class LazyLoadSentinel extends Div {
 
-    private final transient Runnable onLoad;
+    // onAutoLoad fires when scrolled into view (no focus move — the user is scrolling, not
+    // tabbing);
+    // onInteractiveLoad fires on click/Enter/Space (the layout then moves focus to the new
+    // content).
+    private final transient Runnable onAutoLoad;
+    private final transient Runnable onInteractiveLoad;
 
-    LazyLoadSentinel(String label, Runnable onLoad) {
-        this.onLoad = onLoad;
+    LazyLoadSentinel(String label, Runnable onAutoLoad, Runnable onInteractiveLoad) {
+        this.onAutoLoad = onAutoLoad;
+        this.onInteractiveLoad = onInteractiveLoad;
         addClassName("md-load-more");
-        getElement().setAttribute("role", "button");
+        // A role=listbox may only contain role=option children — the cards are options, so this
+        // "load more" row is an option too (activating it loads the next page) rather than a
+        // role=button nested illegally inside the listbox.
+        getElement().setAttribute("role", "option");
         getElement().setAttribute("tabindex", "0");
         setText(label);
         getElement().setAttribute("aria-label", label);
@@ -27,11 +36,11 @@ class LazyLoadSentinel extends Div {
                 .set("font-size", "12px")
                 .set("color", "var(--rom-accent)")
                 .set("outline", "none");
-        getElement().addEventListener("click", e -> onLoad.run());
+        getElement().addEventListener("click", e -> onInteractiveLoad.run());
         // stopPropagation so Enter/Space doesn't also bubble to the listbox keydown handler (which
         // would select the current row in the same keystroke).
         getElement()
-                .addEventListener("keydown", e -> onLoad.run())
+                .addEventListener("keydown", e -> onInteractiveLoad.run())
                 .addEventData("event.preventDefault()")
                 .addEventData("event.stopPropagation()")
                 .setFilter(
@@ -41,7 +50,7 @@ class LazyLoadSentinel extends Div {
     /** Client callback: the IntersectionObserver saw this sentinel enter the scroll viewport. */
     @ClientCallable
     public void onVisible() {
-        onLoad.run();
+        onAutoLoad.run();
     }
 
     /**

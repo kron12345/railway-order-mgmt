@@ -41,8 +41,10 @@ spring:
 
   cache:
     type: caffeine
+    # Shared per-cache spec. routingTopology holds one entry; the Keycloak user caches
+    # (attributes/roles) hold one per active user — 500 is ample, 5m keeps directory edits fresh.
     caffeine:
-      spec: maximumSize=10,expireAfterWrite=5m
+      spec: maximumSize=500,expireAfterWrite=5m
 
   servlet:
     multipart:

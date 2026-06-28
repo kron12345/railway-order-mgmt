@@ -27,13 +27,14 @@ import com.vaadin.flow.server.StreamResource;
 
 import com.ordermgmt.railway.domain.business.model.AssignmentType;
 import com.ordermgmt.railway.domain.business.model.Business;
-import com.ordermgmt.railway.domain.business.model.BusinessDocument;
 import com.ordermgmt.railway.domain.business.service.BusinessService;
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.order.model.PurchasePosition;
 import com.ordermgmt.railway.domain.order.service.AuditService;
+import com.ordermgmt.railway.dto.business.BusinessDocumentMeta;
 import com.ordermgmt.railway.infrastructure.keycloak.CurrentUserHelper;
 import com.ordermgmt.railway.ui.component.AuditHistoryDialog;
+import com.ordermgmt.railway.ui.component.business.BusinessStatusPill;
 import com.ordermgmt.railway.ui.util.StringUtils;
 
 /**
@@ -56,7 +57,7 @@ public class BusinessReadView extends VerticalLayout {
     private final Business business;
     private final List<OrderPosition> linkedOrderPositions;
     private final List<PurchasePosition> linkedPurchasePositions;
-    private final List<BusinessDocument> documents;
+    private final List<BusinessDocumentMeta> documents;
 
     public BusinessReadView(
             BusinessService businessService,
@@ -105,7 +106,7 @@ public class BusinessReadView extends VerticalLayout {
         var titleSpan = new Span(safe(business.getTitle()).isEmpty() ? "—" : business.getTitle());
         titleSpan.addClassName("biz-read__title");
 
-        var statusBadge = buildStatusPillWithIcon(tr);
+        var statusBadge = BusinessStatusPill.icon(business.getStatus(), tr);
 
         var spacer = new Div();
         spacer.getStyle().set("flex", "1");
@@ -141,31 +142,6 @@ public class BusinessReadView extends VerticalLayout {
                         entries,
                         (k, args) -> tr.apply(k))
                 .open();
-    }
-
-    /** Status pill with icon, matching the master-card style. */
-    private HorizontalLayout buildStatusPillWithIcon(Function<String, String> tr) {
-        var pill = new HorizontalLayout();
-        pill.addClassName("biz-status-pill-icon");
-        pill.addClassName("biz-status-pill-icon--" + business.getStatus().name().toLowerCase());
-        pill.setPadding(false);
-        pill.setSpacing(false);
-        var iconSpec =
-                switch (business.getStatus()) {
-                    case IN_BEARBEITUNG -> VaadinIcon.HOURGLASS;
-                    case FREIGEGEBEN -> VaadinIcon.CHECK_CIRCLE_O;
-                    case UEBERARBEITEN -> VaadinIcon.WARNING;
-                    case ABGESCHLOSSEN -> VaadinIcon.LOCK;
-                    case ANNULLIERT -> VaadinIcon.BAN;
-                };
-        var icon = iconSpec.create();
-        icon.addClassName("biz-status-pill-icon__icon");
-        icon.getElement().setAttribute("aria-hidden", "true");
-        pill.add(icon);
-        var label = new Span(tr.apply("business.status." + business.getStatus().name()));
-        label.addClassName("biz-status-pill-icon__label");
-        pill.add(label);
-        return pill;
     }
 
     private Component buildStammdatenCard() {
@@ -336,21 +312,21 @@ public class BusinessReadView extends VerticalLayout {
         card.addClassName("biz-card");
         card.add(sectionTitle(tr.apply("business.documents")));
 
-        List<BusinessDocument> docs = documents;
+        List<BusinessDocumentMeta> docs = documents;
         if (docs.isEmpty()) {
             card.add(empty(tr.apply("business.noDocuments")));
             return card;
         }
         Div list = new Div();
         list.addClassName("biz-link-list");
-        for (BusinessDocument doc : docs) {
+        for (BusinessDocumentMeta doc : docs) {
             list.add(buildDocumentRow(doc));
         }
         card.add(list);
         return card;
     }
 
-    private Component buildDocumentRow(BusinessDocument doc) {
+    private Component buildDocumentRow(BusinessDocumentMeta doc) {
         var row = new HorizontalLayout();
         row.addClassName("biz-link-row");
         row.setWidthFull();
@@ -361,14 +337,14 @@ public class BusinessReadView extends VerticalLayout {
         var icon = VaadinIcon.FILE_O.create();
         icon.addClassName("biz-doc-icon");
 
-        var name = new Span(safe(doc.getFilename()));
+        var name = new Span(safe(doc.filename()));
         name.addClassName("biz-link-row__name");
 
         var meta =
                 new Span(
-                        (doc.getContentType() == null ? "" : doc.getContentType())
-                                + (doc.getCreatedAt() != null
-                                        ? "  ·  " + formatAudit(doc.getCreatedAt())
+                        (doc.contentType() == null ? "" : doc.contentType())
+                                + (doc.createdAt() != null
+                                        ? "  ·  " + formatAudit(doc.createdAt())
                                         : ""));
         meta.addClassName("biz-link-row__sub");
 
@@ -378,14 +354,13 @@ public class BusinessReadView extends VerticalLayout {
         // Always force download. Even with a sanitised content-type, never let the
         // browser render uploaded business documents inline (defence in depth against
         // user-supplied HTML/SVG slipping past the MIME whitelist via filename guesses).
-        String safeName = doc.getFilename() != null ? doc.getFilename() : "document";
+        // The blob is fetched on demand here, not when the document list is rendered.
+        String safeName = doc.filename() != null ? doc.filename() : "document";
         StreamResource resource =
                 new StreamResource(
                         safeName,
-                        () ->
-                                new ByteArrayInputStream(
-                                        doc.getData() == null ? new byte[0] : doc.getData()));
-        if (doc.getContentType() != null) resource.setContentType(doc.getContentType());
+                        () -> new ByteArrayInputStream(businessService.getDocumentData(doc.id())));
+        if (doc.contentType() != null) resource.setContentType(doc.contentType());
         resource.setHeader(
                 "Content-Disposition",
                 "attachment; filename=\"" + sanitiseHeaderValue(safeName) + "\"");
@@ -406,10 +381,10 @@ public class BusinessReadView extends VerticalLayout {
         return row;
     }
 
-    private void openDocumentHistory(BusinessDocument doc) {
-        var entries = auditService.getBusinessDocumentHistory(doc.getId());
+    private void openDocumentHistory(BusinessDocumentMeta doc) {
+        var entries = auditService.getBusinessDocumentHistory(doc.id());
         new AuditHistoryDialog(
-                        tr.apply("audit.title") + " — " + safe(doc.getFilename()),
+                        tr.apply("audit.title") + " — " + safe(doc.filename()),
                         entries,
                         (k, args) -> tr.apply(k))
                 .open();

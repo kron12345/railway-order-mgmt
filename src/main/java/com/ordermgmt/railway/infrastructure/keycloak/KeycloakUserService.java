@@ -11,6 +11,8 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -38,6 +40,12 @@ public class KeycloakUserService {
     private static final String MASTER_TOKEN_PATH = "/realms/master/protocol/openid-connect/token";
     private static final int SEARCH_LIMIT = 50;
 
+    /**
+     * Minimum query length before a directory search runs — a blank/1-char query would otherwise
+     * let any signed-in user enumerate the whole Keycloak directory (mitigates the M2 finding).
+     */
+    private static final int MIN_SEARCH_LENGTH = 2;
+
     private final RestTemplate rest = new RestTemplate();
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -57,6 +65,10 @@ public class KeycloakUserService {
     private String adminPassword;
 
     /** Get user attributes from Keycloak. */
+    @Cacheable(
+            value = "keycloakUserAttributes",
+            key = "#keycloakUserId",
+            unless = "#result == null || #result.isEmpty()")
     public Map<String, String> getUserAttributes(String keycloakUserId) {
         try {
             String token = getAdminToken();
@@ -99,6 +111,10 @@ public class KeycloakUserService {
     }
 
     /** Get user's realm roles from Keycloak. */
+    @Cacheable(
+            value = "keycloakUserRoles",
+            key = "#keycloakUserId",
+            unless = "#result == null || #result.isEmpty()")
     public List<String> getUserRoles(String keycloakUserId) {
         try {
             String token = getAdminToken();
@@ -123,6 +139,7 @@ public class KeycloakUserService {
     }
 
     /** Update user attributes in Keycloak. */
+    @CacheEvict(value = "keycloakUserAttributes", key = "#keycloakUserId")
     public boolean updateUserAttributes(String keycloakUserId, Map<String, String> attributes) {
         try {
             String token = getAdminToken();
@@ -148,8 +165,15 @@ public class KeycloakUserService {
         }
     }
 
-    /** Search users in Keycloak by username or email. */
+    private static boolean isTooShort(String query) {
+        return query == null || query.strip().length() < MIN_SEARCH_LENGTH;
+    }
+
+    /** Search users in Keycloak by username or email. Short/blank queries return nothing (M2). */
     public List<Map<String, String>> searchUsers(String query) {
+        if (isTooShort(query)) {
+            return Collections.emptyList();
+        }
         try {
             String token = getAdminToken();
             String encodedQuery = encodeQuery(query);
@@ -187,8 +211,11 @@ public class KeycloakUserService {
         }
     }
 
-    /** Search groups in Keycloak by name. */
+    /** Search groups in Keycloak by name. Short/blank queries return nothing (M2). */
     public List<Map<String, String>> searchGroups(String query) {
+        if (isTooShort(query)) {
+            return Collections.emptyList();
+        }
         try {
             String token = getAdminToken();
             String encodedQuery = encodeQuery(query);
