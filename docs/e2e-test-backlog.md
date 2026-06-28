@@ -18,6 +18,16 @@ werden per UI wieder gelöscht).
   Resource — siehe Fortschritt unten).
 - **Fahrplan-Builder**: Route ohne Start/Ziel → Fehler.
 
+## Gefundene Bugs (per Klicktest)
+- **Order-Übersicht: Validitäts-Datumsfilter (From/To) filtert die Liste nicht.** Beim Setzen
+  von „From" (auch `1/1/2030`) bleiben alle Aufträge sichtbar, obwohl die DB für
+  `valid_to >= Datum` weniger Treffer liefert; der Filter-Chip erscheint (Server hat den Wert) und
+  die Query enthält `o.validTo >= :validFromMin`, dennoch ist das Ergebnis ungefiltert. Test
+  `clicktest-order-filters.spec.ts` „Validity 'From' filter…" ist als `test.fixme` hinterlegt —
+  nach dem Fix das `fixme` entfernen. Andere Filter (Status, Auftragstyp, Tags, Bearb.-Status,
+  „assigned to me", „incomplete") funktionieren.
+- (früher gefunden, bereits gefixt) Filter-Chip-✕ rief Record-Accessor `clear()` ohne `.run()`.
+
 ## Offen
 
 ### Groß (eigenes Paket) — `sbahn-integration.spec.ts` als echte Klicktests neu schreiben
