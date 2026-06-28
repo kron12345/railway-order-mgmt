@@ -189,6 +189,14 @@ public class OrderPositionRow extends Div {
         return button;
     }
 
+    /** Adds a deadline chip (next due date + rule) to the position header. */
+    public void addDeadlineBadge(String text, StatusBadge.StatusType type) {
+        if (summaryHeader == null) {
+            return;
+        }
+        summaryHeader.add(new StatusBadge(text, type));
+    }
+
     /** Inserts an extra action chip (e.g. Verkehrstage) before the edit/delete buttons. */
     public void addActionChip(String label, VaadinIcon icon, Runnable onClick) {
         if (!editable || actionRow == null) {

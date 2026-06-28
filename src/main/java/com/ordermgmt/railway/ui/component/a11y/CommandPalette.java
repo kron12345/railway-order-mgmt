@@ -43,6 +43,9 @@ public class CommandPalette extends Dialog {
     private final VerticalLayout results = new VerticalLayout();
     private final List<Item> all = new ArrayList<>();
     private final List<Item> filtered = new ArrayList<>();
+    // Shown (outside the results listbox) when matches exceed the display cap, so extra hits are
+    // never silently dropped — the user is told to narrow the search.
+    private final Span moreHint = new Span();
     private int activeIndex = -1;
 
     public CommandPalette(OrderService orderService, BusinessService businessService) {
@@ -74,7 +77,16 @@ public class CommandPalette extends Dialog {
         results.getElement().setAttribute("role", "listbox");
         results.getElement().setAttribute("aria-label", "Treffer");
 
-        add(input, results);
+        moreHint.addClassName("cmd-palette__more");
+        moreHint.getElement().setAttribute("aria-live", "polite");
+        moreHint.getStyle()
+                .set("display", "block")
+                .set("padding", "6px 10px")
+                .set("font-size", "11px")
+                .set("color", "var(--rom-text-muted)");
+        moreHint.setVisible(false);
+
+        add(input, results, moreHint);
 
         // Keyboard handler at the dialog level.
         getElement()
@@ -150,19 +162,26 @@ public class CommandPalette extends Dialog {
 
     private void applyFilter(String query) {
         filtered.clear();
+        boolean truncated;
         if (query.isBlank()) {
-            filtered.addAll(all.subList(0, Math.min(DEFAULT_RESULT_LIMIT, all.size())));
+            int shown = Math.min(DEFAULT_RESULT_LIMIT, all.size());
+            filtered.addAll(all.subList(0, shown));
+            truncated = all.size() > shown;
         } else {
+            int matches = 0;
             for (Item item : all) {
                 if (item.searchKey().contains(query)) {
-                    filtered.add(item);
-                }
-                if (filtered.size() >= FILTERED_RESULT_LIMIT) {
-                    break;
+                    matches++;
+                    if (filtered.size() < FILTERED_RESULT_LIMIT) {
+                        filtered.add(item);
+                    }
                 }
             }
+            truncated = matches > filtered.size();
         }
         activeIndex = filtered.isEmpty() ? -1 : 0;
+        moreHint.setText(truncated ? "Weitere Treffer — Suche eingrenzen" : "");
+        moreHint.setVisible(truncated);
         renderResults();
     }
 

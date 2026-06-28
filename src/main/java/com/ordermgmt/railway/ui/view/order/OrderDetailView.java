@@ -33,6 +33,7 @@ import com.ordermgmt.railway.domain.order.model.OrderType;
 import com.ordermgmt.railway.domain.order.model.ProcessStatus;
 import com.ordermgmt.railway.domain.order.repository.ResourceCatalogItemRepository;
 import com.ordermgmt.railway.domain.order.service.AuditService;
+import com.ordermgmt.railway.domain.order.service.FristService;
 import com.ordermgmt.railway.domain.order.service.OrderService;
 import com.ordermgmt.railway.domain.order.service.PurchaseOrderService;
 import com.ordermgmt.railway.domain.order.service.ResourceNeedService;
@@ -70,6 +71,7 @@ public class OrderDetailView extends VerticalLayout {
     private final AuditService auditService;
     private final BusinessService businessService;
     private final TimetableArchiveService timetableArchiveService;
+    private final FristService fristService;
     private Order order;
     private boolean isNew;
 
@@ -86,9 +88,11 @@ public class OrderDetailView extends VerticalLayout {
             ResourceCatalogItemRepository catalogItemRepository,
             AuditService auditService,
             BusinessService businessService,
-            TimetableArchiveService timetableArchiveService) {
+            TimetableArchiveService timetableArchiveService,
+            FristService fristService) {
         this.orderService = orderService;
         this.timetableArchiveService = timetableArchiveService;
+        this.fristService = fristService;
         this.customerRepository = customerRepository;
         this.predefinedTagRepository = predefinedTagRepository;
         this.opRepo = opRepo;
@@ -198,6 +202,7 @@ public class OrderDetailView extends VerticalLayout {
                         catalogItemRepository,
                         auditService,
                         businessService,
+                        fristService,
                         this::getTranslation);
 
         var tabPositions = new Tab(getTranslation("order.tab.positions"));

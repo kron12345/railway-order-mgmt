@@ -1,22 +1,16 @@
 package com.ordermgmt.railway.ui.component.timetable;
 
 import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.activityOptionLabel;
-import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.defaultMode;
 import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.findActivityOption;
 import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.firstNonBlank;
 import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.formatTime;
 import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.nvl;
 import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.parseTime;
 import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.roleLabel;
-import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.timeModeLabel;
-import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.timeOrDash;
-import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.timingQualifierCode;
 
-import java.time.Duration;
 import java.time.LocalTime;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -36,7 +30,6 @@ import com.vaadin.flow.component.select.Select;
 import com.vaadin.flow.component.textfield.IntegerField;
 import com.vaadin.flow.component.textfield.TextArea;
 import com.vaadin.flow.component.textfield.TextField;
-import com.vaadin.flow.component.timepicker.TimePicker;
 
 import com.ordermgmt.railway.domain.timetable.model.JourneyLocationType;
 import com.ordermgmt.railway.domain.timetable.model.TimeConstraintMode;
@@ -47,25 +40,26 @@ import com.ordermgmt.railway.domain.timetable.model.TimetableRowData;
 /**
  * Right-side editor panel for a single timetable row.
  *
- * <p>Provides fields for halt/dwell, arrival/departure time constraints (exact, window,
- * commercial), time propagation mode, and activity selection. Changes are applied back to the
- * {@link TimetableRowData} via {@link #syncToRow}.
+ * <p>Owns the row-level fields (halt/dwell, activity, journey-location type, propagation) and
+ * delegates the arrival and departure time-constraint inputs to two symmetric {@link
+ * TimetableTimeConstraintFields} instances. Changes are applied back to the {@link
+ * TimetableRowData} via {@link #syncToRow}.
  *
  * <p>Extracted from {@link TimetableTableStep} to keep file sizes manageable.
  */
 class TimetableRowEditorPanel extends Div {
 
     private static final int TIME_VALIDATION_NOTIFICATION_DURATION_MS = 3000;
-    private static final Duration TIME_PICKER_STEP = Duration.ofMinutes(1);
+
+    private static final Set<String> VEHICLE_LINK_ACTIVITIES =
+            Set.of("0010", "0011", "0012", "0013", "0014", "0015", "0016", "0017", "0044", "0045");
 
     private final List<TimetableActivityOption> activityOptions;
 
-    // ── Header fields ────────────────────────────────────────────────────
+    // ── Row-level fields ──────────────────────────────────────────────────
 
     private final Span titleLabel = new Span();
     private final Span contextLabel = new Span();
-    private final Span arrivalEstimateLabel = new Span();
-    private final Span departureEstimateLabel = new Span();
     private final Select<JourneyLocationType> journeyLocationTypeField = new Select<>();
     private final Checkbox tttRelevantField = new Checkbox();
     private final Checkbox haltField = new Checkbox();
@@ -76,43 +70,23 @@ class TimetableRowEditorPanel extends Div {
     private final TextField locationSubsidiaryField = new TextField();
     private final TextArea networkSpecificParametersField = new TextArea();
 
-    // ── Arrival Section ──────────────────────────────────────────────────
+    // ── Time constraints (one symmetric component per side) ───────────────
 
-    private final Select<TimeConstraintMode> arrivalModeField = new Select<>();
-    private final TimePicker arrivalExactField = createTimePicker();
-    private final TimePicker arrivalEarliestField = createTimePicker();
-    private final TimePicker arrivalLatestField = createTimePicker();
-    private final TimePicker arrivalCommercialField = createTimePicker();
-    private final Div arrivalExactWrapper = new Div();
-    private final Div arrivalWindowWrapper = new Div();
-    private final Div arrivalCommercialWrapper = new Div();
-    private final Div arrivalSection = new Div();
-    private final IntegerField arrivalOffsetField = new IntegerField();
+    private final TimetableTimeConstraintFields arrivalFields;
+    private final TimetableTimeConstraintFields departureFields;
 
-    // ── Departure Section ────────────────────────────────────────────────
-
-    private final Select<TimeConstraintMode> departureModeField = new Select<>();
-    private final TimePicker departureExactField = createTimePicker();
-    private final TimePicker departureEarliestField = createTimePicker();
-    private final TimePicker departureLatestField = createTimePicker();
-    private final TimePicker departureCommercialField = createTimePicker();
-    private final Div departureExactWrapper = new Div();
-    private final Div departureWindowWrapper = new Div();
-    private final Div departureCommercialWrapper = new Div();
-    private final Div departureSection = new Div();
-    private final IntegerField departureOffsetField = new IntegerField();
-
-    // ── Propagation ──────────────────────────────────────────────────────
+    // ── Propagation ───────────────────────────────────────────────────────
 
     private final Select<TimePropagationMode> propagationModeField = new Select<>();
     private final Checkbox pinnedField = new Checkbox();
 
     TimetableRowEditorPanel(List<TimetableActivityOption> activityOptions, Runnable onApply) {
         this.activityOptions = activityOptions;
+        this.arrivalFields = new TimetableTimeConstraintFields(true, this);
+        this.departureFields = new TimetableTimeConstraintFields(false, this);
         setWidthFull();
         buildLayout(onApply);
         setVisible(false);
-        updateModeVisibility();
     }
 
     // ── Public accessors for TimetableTableStep ───────────────────────
@@ -155,34 +129,9 @@ class TimetableRowEditorPanel extends Div {
                         : "");
         updateAssociatedTrainVisibility();
 
-        populateEstimateLabel(arrivalEstimateLabel, row, true);
-        populateEstimateLabel(departureEstimateLabel, row, false);
-
-        arrivalModeField.setValue(defaultMode(row.getArrivalMode()));
-        departureModeField.setValue(defaultMode(row.getDepartureMode()));
-        arrivalExactField.setValue(parseTime(row.getArrivalExact()));
-        arrivalEarliestField.setValue(parseTime(row.getArrivalEarliest()));
-        arrivalLatestField.setValue(parseTime(row.getArrivalLatest()));
-        arrivalCommercialField.setValue(parseTime(row.getCommercialArrival()));
-        departureExactField.setValue(parseTime(row.getDepartureExact()));
-        departureEarliestField.setValue(parseTime(row.getDepartureEarliest()));
-        departureLatestField.setValue(parseTime(row.getDepartureLatest()));
-        departureCommercialField.setValue(parseTime(row.getCommercialDeparture()));
-        arrivalOffsetField.setValue(row.getArrivalOffset() == null ? 0 : row.getArrivalOffset());
-        departureOffsetField.setValue(
-                row.getDepartureOffset() == null ? 0 : row.getDepartureOffset());
+        arrivalFields.populate(row);
+        departureFields.populate(row);
         pinnedField.setValue(Boolean.TRUE.equals(row.getPinned()));
-
-        // Clear any leftover invalid states from a previously selected row.
-        clearInvalid(
-                arrivalExactField,
-                arrivalEarliestField,
-                arrivalLatestField,
-                arrivalCommercialField,
-                departureExactField,
-                departureEarliestField,
-                departureLatestField,
-                departureCommercialField);
 
         // Origin and destination are implicit halts (the train stops there by definition) —
         // they have no halt-checkbox or dwell-input. Origin only allows departure-side
@@ -193,8 +142,8 @@ class TimetableRowEditorPanel extends Div {
         if (isEndpoint) {
             haltField.setValue(true);
         }
-        arrivalSection.setVisible(!isOrigin && halt);
-        departureSection.setVisible(!isDestination && halt);
+        arrivalFields.setSectionVisible(!isOrigin && halt);
+        departureFields.setSectionVisible(!isDestination && halt);
         // No dwell at origin (no arrival to compute from) or destination (no departure).
         dwellMinutesField.setVisible(halt && !isEndpoint);
         activityField.setVisible(halt);
@@ -204,7 +153,6 @@ class TimetableRowEditorPanel extends Div {
         } else {
             activityField.getStyle().remove("background");
         }
-        updateModeVisibility();
     }
 
     /**
@@ -238,31 +186,11 @@ class TimetableRowEditorPanel extends Div {
         row.setLocationSubsidiaryCode(blankToNull(locationSubsidiaryField.getValue()));
         row.setNetworkSpecificParametersText(
                 blankToNull(networkSpecificParametersField.getValue()));
-        row.setArrivalOffset(
-                arrivalOffsetField.getValue() == null ? 0 : arrivalOffsetField.getValue());
-        row.setDepartureOffset(
-                departureOffsetField.getValue() == null ? 0 : departureOffsetField.getValue());
 
-        if (!writeTimeMode(
-                row,
-                true,
-                arrivalModeField.getValue(),
-                arrivalExactField,
-                arrivalEarliestField,
-                arrivalLatestField,
-                arrivalCommercialField,
-                showNotifications)) {
+        if (!arrivalFields.writeToRow(row, showNotifications)) {
             return false;
         }
-        if (!writeTimeMode(
-                row,
-                false,
-                departureModeField.getValue(),
-                departureExactField,
-                departureEarliestField,
-                departureLatestField,
-                departureCommercialField,
-                showNotifications)) {
+        if (!departureFields.writeToRow(row, showNotifications)) {
             return false;
         }
 
@@ -322,39 +250,6 @@ class TimetableRowEditorPanel extends Div {
         configureLocationSubsidiaryField();
         configureNetworkSpecificParametersField();
         configureDwellField();
-        configureConstraintMode(arrivalModeField, "timetable.editor.arrivalMode");
-        configureConstraintMode(departureModeField, "timetable.editor.departureMode");
-        configureTimePickers();
-
-        styleEstimateLabel(arrivalEstimateLabel);
-        styleEstimateLabel(departureEstimateLabel);
-
-        buildTimeSection(
-                arrivalSection,
-                arrivalExactWrapper,
-                arrivalExactField,
-                arrivalWindowWrapper,
-                arrivalEarliestField,
-                arrivalLatestField,
-                arrivalCommercialWrapper,
-                arrivalCommercialField,
-                arrivalEstimateLabel,
-                arrivalModeField,
-                "timetable.editor.arrival");
-        arrivalSection.add(arrivalOffsetField);
-        buildTimeSection(
-                departureSection,
-                departureExactWrapper,
-                departureExactField,
-                departureWindowWrapper,
-                departureEarliestField,
-                departureLatestField,
-                departureCommercialWrapper,
-                departureCommercialField,
-                departureEstimateLabel,
-                departureModeField,
-                "timetable.editor.departure");
-        departureSection.add(departureOffsetField);
 
         Div propagationSection = buildPropagationSection();
 
@@ -380,8 +275,8 @@ class TimetableRowEditorPanel extends Div {
                 associatedTrainField,
                 locationSubsidiaryField,
                 networkSpecificParametersField,
-                arrivalSection,
-                departureSection,
+                arrivalFields,
+                departureFields,
                 propagationSection,
                 applyBtn);
     }
@@ -415,29 +310,17 @@ class TimetableRowEditorPanel extends Div {
      * pinning a pass-through is allowed (Edge-Case #5).
      */
     private void applyHaltVisibility(boolean halt) {
-        arrivalSection.setVisible(halt);
-        departureSection.setVisible(halt);
+        arrivalFields.setSectionVisible(halt);
+        departureFields.setSectionVisible(halt);
         dwellMinutesField.setVisible(halt);
     }
 
     /** Clear all editor time inputs and their displays — used when halt is unchecked. */
     private void clearAllTimeFields() {
-        arrivalModeField.setValue(TimeConstraintMode.NONE);
-        departureModeField.setValue(TimeConstraintMode.NONE);
-        arrivalExactField.clear();
-        arrivalEarliestField.clear();
-        arrivalLatestField.clear();
-        arrivalCommercialField.clear();
-        departureExactField.clear();
-        departureEarliestField.clear();
-        departureLatestField.clear();
-        departureCommercialField.clear();
+        arrivalFields.clearFields();
+        departureFields.clearFields();
         dwellMinutesField.clear();
     }
-
-    private static final java.util.Set<String> VEHICLE_LINK_ACTIVITIES =
-            java.util.Set.of(
-                    "0010", "0011", "0012", "0013", "0014", "0015", "0016", "0017", "0044", "0045");
 
     private void configureActivityField() {
         activityField.setLabel(t("timetable.editor.activity"));
@@ -504,135 +387,6 @@ class TimetableRowEditorPanel extends Div {
         dwellMinutesField.setWidthFull();
     }
 
-    private void configureTimePickers() {
-        configureNamedTimePicker(arrivalExactField, t("timetable.editor.exact"));
-        configureNamedTimePicker(arrivalEarliestField, t("timetable.editor.earliestArrival"));
-        configureNamedTimePicker(arrivalLatestField, t("timetable.editor.latestArrival"));
-        configureNamedTimePicker(arrivalCommercialField, t("timetable.editor.commercial"));
-        configureNamedTimePicker(departureExactField, t("timetable.editor.exact"));
-        configureNamedTimePicker(departureEarliestField, t("timetable.editor.earliestDeparture"));
-        configureNamedTimePicker(departureLatestField, t("timetable.editor.latestDeparture"));
-        configureNamedTimePicker(departureCommercialField, t("timetable.editor.commercial"));
-
-        configureOffsetField(arrivalOffsetField);
-        configureOffsetField(departureOffsetField);
-
-        String relativeHelp = t("timetable.time.relative.help");
-        arrivalExactField.setHelperText(relativeHelp);
-        departureExactField.setHelperText(relativeHelp);
-    }
-
-    private void configureOffsetField(IntegerField field) {
-        field.setLabel(t("timetable.editor.dayOffset"));
-        field.setHelperText(t("timetable.editor.dayOffset.help"));
-        field.setMin(-1);
-        field.setMax(2);
-        field.setStepButtonsVisible(true);
-        field.setValue(0);
-        field.setWidthFull();
-    }
-
-    private void configureConstraintMode(Select<TimeConstraintMode> field, String labelKey) {
-        field.setLabel(t(labelKey));
-        field.setItems(TimeConstraintMode.values());
-        field.setItemLabelGenerator(mode -> timeModeLabel(mode, this));
-        field.setValue(TimeConstraintMode.NONE);
-        boolean isArrival = (field == arrivalModeField);
-        field.addValueChangeListener(
-                e -> {
-                    if (e.isFromClient()) {
-                        preserveValueAcrossMode(isArrival, e.getOldValue(), e.getValue());
-                    }
-                    updateModeVisibility();
-                });
-    }
-
-    /** Move whatever single value the user had under the old mode into the new-mode pickers. */
-    private void preserveValueAcrossMode(
-            boolean isArrival, TimeConstraintMode oldMode, TimeConstraintMode newMode) {
-        if (oldMode == null || newMode == null || oldMode == newMode) {
-            return;
-        }
-        LocalTime source = sourceForMode(isArrival, oldMode);
-        if (source == null) {
-            return;
-        }
-        switch (newMode) {
-            case EXACT -> {
-                if (isArrival) {
-                    arrivalExactField.setValue(source);
-                } else {
-                    departureExactField.setValue(source);
-                }
-            }
-            case WINDOW -> {
-                if (isArrival) {
-                    arrivalEarliestField.setValue(source);
-                    arrivalLatestField.setValue(source);
-                } else {
-                    departureEarliestField.setValue(source);
-                    departureLatestField.setValue(source);
-                }
-            }
-            case AFTER -> {
-                // Half-window "≥ X": only earliest is meaningful
-                if (isArrival) {
-                    arrivalEarliestField.setValue(source);
-                } else {
-                    departureEarliestField.setValue(source);
-                }
-            }
-            case BEFORE -> {
-                // Half-window "≤ X": only latest is meaningful
-                if (isArrival) {
-                    arrivalLatestField.setValue(source);
-                } else {
-                    departureLatestField.setValue(source);
-                }
-            }
-            case COMMERCIAL -> {
-                if (isArrival) {
-                    arrivalCommercialField.setValue(source);
-                } else {
-                    departureCommercialField.setValue(source);
-                }
-            }
-            case NONE -> {
-                /* user explicitly cleared */
-            }
-        }
-    }
-
-    private LocalTime sourceForMode(boolean isArrival, TimeConstraintMode mode) {
-        if (mode == null) {
-            return null;
-        }
-        return switch (mode) {
-            case EXACT -> isArrival ? arrivalExactField.getValue() : departureExactField.getValue();
-            case WINDOW -> {
-                if (isArrival) {
-                    yield firstNonNullTime(
-                            arrivalEarliestField.getValue(), arrivalLatestField.getValue());
-                }
-                yield firstNonNullTime(
-                        departureLatestField.getValue(), departureEarliestField.getValue());
-            }
-            case AFTER ->
-                    isArrival ? arrivalEarliestField.getValue() : departureEarliestField.getValue();
-            case BEFORE ->
-                    isArrival ? arrivalLatestField.getValue() : departureLatestField.getValue();
-            case COMMERCIAL ->
-                    isArrival
-                            ? arrivalCommercialField.getValue()
-                            : departureCommercialField.getValue();
-            case NONE -> null;
-        };
-    }
-
-    private LocalTime firstNonNullTime(LocalTime first, LocalTime second) {
-        return first != null ? first : second;
-    }
-
     private Div buildPropagationSection() {
         Div section = new Div();
         section.getStyle()
@@ -659,207 +413,7 @@ class TimetableRowEditorPanel extends Div {
         return section;
     }
 
-    private void buildTimeSection(
-            Div section,
-            Div exactWrapper,
-            TimePicker exactField,
-            Div windowWrapper,
-            TimePicker earliestField,
-            TimePicker latestField,
-            Div commercialWrapper,
-            TimePicker commercialField,
-            Span estimateLabel,
-            Select<TimeConstraintMode> modeField,
-            String headerKey) {
-        exactWrapper.add(exactField);
-        windowWrapper
-                .getStyle()
-                .set("display", "grid")
-                .set("grid-template-columns", "1fr 1fr")
-                .set("gap", "12px");
-        windowWrapper.add(earliestField, latestField);
-        commercialWrapper.add(commercialField);
-        section.add(
-                sectionHeader(t(headerKey)),
-                estimateLabel,
-                modeField,
-                exactWrapper,
-                windowWrapper,
-                commercialWrapper);
-        section.getStyle()
-                .set("padding", "12px")
-                .set("border", "1px solid var(--rom-border)")
-                .set("border-radius", "6px")
-                .set("display", "flex")
-                .set("flex-direction", "column")
-                .set("gap", "10px");
-    }
-
     // ── Sync helpers ──────────────────────────────────────────────────
-
-    private boolean writeTimeMode(
-            TimetableRowData row,
-            boolean arrival,
-            TimeConstraintMode mode,
-            TimePicker exactField,
-            TimePicker earliestField,
-            TimePicker latestField,
-            TimePicker commercialField,
-            boolean showNotifications) {
-
-        // Reset any prior invalid markers on this side; we only re-mark on the actual offender.
-        clearInvalid(exactField, earliestField, latestField, commercialField);
-
-        TimeConstraintMode resolvedMode = defaultMode(mode);
-        if (arrival) {
-            row.setArrivalMode(resolvedMode);
-            row.setArrivalExact(null);
-            row.setArrivalEarliest(null);
-            row.setArrivalLatest(null);
-            row.setCommercialArrival(null);
-            // Reset user-entered flags; we set them back to true only for fields the user
-            // actually filled in this sync pass.
-            row.setUserEnteredArrivalExact(false);
-            row.setUserEnteredArrivalEarliest(false);
-            row.setUserEnteredArrivalLatest(false);
-            row.setUserEnteredCommercialArrival(false);
-        } else {
-            row.setDepartureMode(resolvedMode);
-            row.setDepartureExact(null);
-            row.setDepartureEarliest(null);
-            row.setDepartureLatest(null);
-            row.setCommercialDeparture(null);
-            row.setUserEnteredDepartureExact(false);
-            row.setUserEnteredDepartureEarliest(false);
-            row.setUserEnteredDepartureLatest(false);
-            row.setUserEnteredCommercialDeparture(false);
-        }
-
-        if (resolvedMode == TimeConstraintMode.NONE) {
-            return true;
-        }
-        if (resolvedMode == TimeConstraintMode.EXACT) {
-            if (exactField.getValue() == null) {
-                return invalidate(
-                        exactField, arrival, showNotifications, "timetable.editor.time.required");
-            }
-            String formatted = formatTime(exactField.getValue());
-            if (arrival) {
-                row.setArrivalExact(formatted);
-                row.setUserEnteredArrivalExact(true);
-            } else {
-                row.setDepartureExact(formatted);
-                row.setUserEnteredDepartureExact(true);
-            }
-            return true;
-        }
-        if (resolvedMode == TimeConstraintMode.COMMERCIAL) {
-            if (commercialField.getValue() == null) {
-                return invalidate(
-                        commercialField,
-                        arrival,
-                        showNotifications,
-                        "timetable.editor.time.required");
-            }
-            String formatted = formatTime(commercialField.getValue());
-            if (arrival) {
-                row.setCommercialArrival(formatted);
-                row.setUserEnteredCommercialArrival(true);
-            } else {
-                row.setCommercialDeparture(formatted);
-                row.setUserEnteredCommercialDeparture(true);
-            }
-            return true;
-        }
-
-        /* AFTER (≥) — only earliest needed */
-        if (resolvedMode == TimeConstraintMode.AFTER) {
-            if (earliestField.getValue() == null) {
-                return invalidate(
-                        earliestField,
-                        arrival,
-                        showNotifications,
-                        "timetable.editor.time.required");
-            }
-            String formatted = formatTime(earliestField.getValue());
-            if (arrival) {
-                row.setArrivalEarliest(formatted);
-                row.setUserEnteredArrivalEarliest(true);
-            } else {
-                row.setDepartureEarliest(formatted);
-                row.setUserEnteredDepartureEarliest(true);
-            }
-            return true;
-        }
-
-        /* BEFORE (≤) — only latest needed */
-        if (resolvedMode == TimeConstraintMode.BEFORE) {
-            if (latestField.getValue() == null) {
-                return invalidate(
-                        latestField, arrival, showNotifications, "timetable.editor.time.required");
-            }
-            String formatted = formatTime(latestField.getValue());
-            if (arrival) {
-                row.setArrivalLatest(formatted);
-                row.setUserEnteredArrivalLatest(true);
-            } else {
-                row.setDepartureLatest(formatted);
-                row.setUserEnteredDepartureLatest(true);
-            }
-            return true;
-        }
-
-        /* WINDOW mode — both bounds required */
-        if (earliestField.getValue() == null) {
-            return invalidate(
-                    earliestField, arrival, showNotifications, "timetable.editor.time.required");
-        }
-        if (latestField.getValue() == null) {
-            return invalidate(
-                    latestField, arrival, showNotifications, "timetable.editor.time.required");
-        }
-        if (latestField.getValue().isBefore(earliestField.getValue())) {
-            return invalidate(
-                    latestField, arrival, showNotifications, "timetable.editor.window.invalid");
-        }
-        if (arrival) {
-            row.setArrivalEarliest(formatTime(earliestField.getValue()));
-            row.setArrivalLatest(formatTime(latestField.getValue()));
-            row.setUserEnteredArrivalEarliest(true);
-            row.setUserEnteredArrivalLatest(true);
-        } else {
-            row.setDepartureEarliest(formatTime(earliestField.getValue()));
-            row.setDepartureLatest(formatTime(latestField.getValue()));
-            row.setUserEnteredDepartureEarliest(true);
-            row.setUserEnteredDepartureLatest(true);
-        }
-        return true;
-    }
-
-    private void clearInvalid(TimePicker... pickers) {
-        for (TimePicker p : pickers) {
-            p.setInvalid(false);
-            p.setErrorMessage(null);
-        }
-    }
-
-    private boolean invalidate(
-            TimePicker field, boolean arrival, boolean showNotifications, String key) {
-        field.setInvalid(true);
-        field.setErrorMessage(t(key));
-        if (showNotifications) {
-            String sideLabel =
-                    t(arrival ? "timetable.editor.arrival" : "timetable.editor.departure");
-            Notification.show(
-                            sideLabel + ": " + t(key),
-                            TIME_VALIDATION_NOTIFICATION_DURATION_MS,
-                            Position.BOTTOM_END)
-                    .addThemeVariants(NotificationVariant.LUMO_ERROR);
-        }
-        // Bring the offending field into view and focus it so the user sees what's missing.
-        field.focus();
-        return false;
-    }
 
     private void ensureStopTimes(TimetableRowData row, boolean isOrigin, boolean isDestination) {
         if (!isOrigin && row.getArrivalMode() == TimeConstraintMode.NONE) {
@@ -881,65 +435,10 @@ class TimetableRowEditorPanel extends Div {
         }
     }
 
-    private void updateModeVisibility() {
-        TimeConstraintMode arrMode = arrivalModeField.getValue();
-        arrivalExactWrapper.setVisible(arrMode == TimeConstraintMode.EXACT);
-        // Window wrapper holds both earliest+latest; AFTER and BEFORE reuse it but only show one.
-        arrivalWindowWrapper.setVisible(
-                arrMode == TimeConstraintMode.WINDOW
-                        || arrMode == TimeConstraintMode.AFTER
-                        || arrMode == TimeConstraintMode.BEFORE);
-        arrivalEarliestField.setVisible(
-                arrMode == TimeConstraintMode.WINDOW || arrMode == TimeConstraintMode.AFTER);
-        arrivalLatestField.setVisible(
-                arrMode == TimeConstraintMode.WINDOW || arrMode == TimeConstraintMode.BEFORE);
-        arrivalCommercialWrapper.setVisible(arrMode == TimeConstraintMode.COMMERCIAL);
-
-        TimeConstraintMode depMode = departureModeField.getValue();
-        departureExactWrapper.setVisible(depMode == TimeConstraintMode.EXACT);
-        departureWindowWrapper.setVisible(
-                depMode == TimeConstraintMode.WINDOW
-                        || depMode == TimeConstraintMode.AFTER
-                        || depMode == TimeConstraintMode.BEFORE);
-        departureEarliestField.setVisible(
-                depMode == TimeConstraintMode.WINDOW || depMode == TimeConstraintMode.AFTER);
-        departureLatestField.setVisible(
-                depMode == TimeConstraintMode.WINDOW || depMode == TimeConstraintMode.BEFORE);
-        departureCommercialWrapper.setVisible(depMode == TimeConstraintMode.COMMERCIAL);
-    }
-
-    private void populateEstimateLabel(Span label, TimetableRowData row, boolean isArrival) {
-        String estKey =
-                isArrival
-                        ? "timetable.editor.estimatedArrival"
-                        : "timetable.editor.estimatedDeparture";
-        String estVal = isArrival ? row.getEstimatedArrival() : row.getEstimatedDeparture();
-        String txt = t(estKey) + ": " + timeOrDash(estVal);
-        TimeConstraintMode mode = isArrival ? row.getArrivalMode() : row.getDepartureMode();
-        String qualifier = timingQualifierCode(mode, isArrival);
-        if (qualifier != null) {
-            txt += "  [" + qualifier + "]";
-        }
-        label.setText(txt);
-    }
-
     private Span sectionHeader(String text) {
         Span s = new Span(text);
         s.getStyle().set("font-weight", "600").set("color", "var(--rom-text-primary)");
         return s;
-    }
-
-    private void styleEstimateLabel(Span label) {
-        label.getStyle()
-                .set("display", "block")
-                .set("font-size", "11px")
-                .set("font-family", "'JetBrains Mono', monospace")
-                .set("color", "var(--rom-text-secondary)");
-    }
-
-    private void configureNamedTimePicker(TimePicker picker, String label) {
-        picker.setLabel(label);
-        picker.setClearButtonVisible(true);
     }
 
     private Set<TimetableActivityOption> activityOptionsForRow(TimetableRowData row) {
@@ -964,16 +463,6 @@ class TimetableRowEditorPanel extends Div {
 
     private String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.trim();
-    }
-
-    private TimePicker createTimePicker() {
-        TimePicker picker = new TimePicker();
-        picker.setStep(TIME_PICKER_STEP);
-        picker.setAllowedCharPattern("[0-9:]");
-        picker.setPlaceholder("HH:mm");
-        picker.setLocale(getLocale() != null ? getLocale() : Locale.GERMANY);
-        picker.setWidthFull();
-        return picker;
     }
 
     private String t(String key, Object... params) {

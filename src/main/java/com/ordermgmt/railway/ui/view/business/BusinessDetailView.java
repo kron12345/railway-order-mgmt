@@ -284,10 +284,10 @@ public class BusinessDetailView extends VerticalLayout {
                                 .map(
                                         d ->
                                                 new BusinessDocsCard.DocRow(
-                                                        d.getId(),
-                                                        d.getFilename(),
-                                                        d.getContentType(),
-                                                        d.getCreatedAt()))
+                                                        d.id(),
+                                                        d.filename(),
+                                                        d.contentType(),
+                                                        d.createdAt()))
                                 .toList(),
                 (filename, contentType, data) ->
                         businessService.addDocument(business.getId(), filename, contentType, data),

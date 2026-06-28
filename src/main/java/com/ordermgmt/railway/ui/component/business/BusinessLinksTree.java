@@ -50,6 +50,12 @@ public class BusinessLinksTree extends Div {
     private List<BusinessLinkNode> roots = List.of();
     private String filterText = "";
 
+    // The catalog (all order/purchase positions) is stable for this component's lifetime, so it is
+    // loaded once instead of re-running the two full-table queries on every link toggle. Only the
+    // (cheap, per-business) linked sets are re-read on refresh.
+    private List<OrderPosition> catalogOrderPositions;
+    private List<PurchasePosition> catalogPurchasePositions;
+
     public BusinessLinksTree(Spec spec) {
         this.spec = spec;
         addClassName("biz-links-tree");
@@ -88,10 +94,14 @@ public class BusinessLinksTree extends Div {
     }
 
     public void refresh() {
+        if (catalogOrderPositions == null) {
+            catalogOrderPositions = spec.allOrderPositions.get();
+            catalogPurchasePositions = spec.allPurchasePositions.get();
+        }
         roots =
                 buildTree(
-                        spec.allOrderPositions.get(),
-                        spec.allPurchasePositions.get(),
+                        catalogOrderPositions,
+                        catalogPurchasePositions,
                         spec.linkedOrderPositions.get(),
                         spec.linkedPurchasePositions.get());
         applyFilter();

@@ -30,25 +30,20 @@ import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.order.model.OrderPositionVersion;
 import com.ordermgmt.railway.domain.order.model.PositionChangeSource;
 import com.ordermgmt.railway.domain.order.model.PositionOtnHistory;
-import com.ordermgmt.railway.domain.order.model.PositionStatus;
 import com.ordermgmt.railway.domain.order.model.PositionType;
 import com.ordermgmt.railway.domain.order.model.PositionVariantType;
-import com.ordermgmt.railway.domain.order.model.PurchaseStatus;
 import com.ordermgmt.railway.domain.order.repository.ResourceCatalogItemRepository;
 import com.ordermgmt.railway.domain.order.service.AuditService;
+import com.ordermgmt.railway.domain.order.service.FristService;
 import com.ordermgmt.railway.domain.order.service.OrderService;
 import com.ordermgmt.railway.domain.order.service.PurchaseOrderService;
 import com.ordermgmt.railway.domain.order.service.ResourceNeedService;
-import com.ordermgmt.railway.domain.pathmanager.model.PathProcessState;
 import com.ordermgmt.railway.domain.pathmanager.model.PmReferenceTrain;
 import com.ordermgmt.railway.domain.pathmanager.service.PathManagerService;
 import com.ordermgmt.railway.domain.timetable.service.TimetableArchiveService;
 import com.ordermgmt.railway.infrastructure.keycloak.CurrentUserHelper;
 import com.ordermgmt.railway.ui.component.business.BusinessChips;
-import com.ordermgmt.railway.ui.component.masterdetail.filter.FilterField;
 import com.ordermgmt.railway.ui.component.masterdetail.filter.FilterPanel;
-import com.ordermgmt.railway.ui.component.masterdetail.filter.PredicateSelectFilterField;
-import com.ordermgmt.railway.ui.component.masterdetail.filter.SelectFilterField;
 
 /** Displays and manages the positions that belong to an order. */
 public class OrderPositionPanel extends Div {
@@ -63,8 +58,10 @@ public class OrderPositionPanel extends Div {
     private final ResourceCatalogItemRepository catalogItemRepository;
     private final AuditService auditService;
     private final BusinessService businessService;
+    private final FristService fristService;
     private final BiFunction<String, Object[], String> translator;
     private final VerticalLayout rowContainer = new VerticalLayout();
+    private Map<UUID, FristService.FristEntry> deadlinesByPosition = Map.of();
 
     /**
      * SOB §5.7: the content lock is against the Auftraggeber (the non-mutator). Mutators
@@ -97,6 +94,7 @@ public class OrderPositionPanel extends Div {
             ResourceCatalogItemRepository catalogItemRepository,
             AuditService auditService,
             BusinessService businessService,
+            FristService fristService,
             BiFunction<String, Object[], String> translator) {
         this.order = order;
         this.orderService = orderService;
@@ -108,6 +106,7 @@ public class OrderPositionPanel extends Div {
         this.catalogItemRepository = catalogItemRepository;
         this.auditService = auditService;
         this.businessService = businessService;
+        this.fristService = fristService;
         this.translator = translator;
 
         setWidthFull();
@@ -118,7 +117,13 @@ public class OrderPositionPanel extends Div {
                 .set("padding", "var(--lumo-space-m) var(--lumo-space-l)")
                 .set("box-sizing", "border-box");
 
-        filterPanel = buildFilterPanel();
+        filterPanel =
+                OrderPositionFilters.build(
+                        translator,
+                        predicate -> {
+                            positionFilter = predicate;
+                            refreshPositions();
+                        });
         bulkBar = new PositionBulkBar(orderService, translator, this::refreshPositions);
         actions =
                 new OrderPositionActions(
@@ -261,6 +266,7 @@ public class OrderPositionPanel extends Div {
         }
 
         Map<UUID, List<Business>> businessesByPosition = loadBusinessesByPosition(positions);
+        deadlinesByPosition = fristService.mostUrgentByPosition(positions);
         loadPositionHistory(positions);
 
         PositionGroups groups = groupPositions(positions);
@@ -361,6 +367,8 @@ public class OrderPositionPanel extends Div {
                         p -> actions.respondToAlteration(p, false),
                         auditService,
                         editable);
+        OrderPositionDeadlineBadge.apply(
+                row, deadlinesByPosition.get(position.getId()), translator);
         if (card) {
             // Expressions (and legacy flat positions) render as full-width cards, no indent.
             row.getStyle()
@@ -465,54 +473,6 @@ public class OrderPositionPanel extends Div {
         } catch (RuntimeException ex) {
             return null;
         }
-    }
-
-    /**
-     * Reusable, collapsible filter for this order's positions, by their Bestellpositions-status.
-     */
-    private FilterPanel<OrderPosition> buildFilterPanel() {
-        List<FilterField<OrderPosition>> fields =
-                List.of(
-                        new SelectFilterField<>(
-                                t("position.filter.internalStatus"),
-                                List.of(PositionStatus.values()),
-                                v -> t("position.status." + v.name()),
-                                OrderPosition::getInternalStatus),
-                        new PredicateSelectFilterField<OrderPosition, PathProcessState>(
-                                t("position.filter.tttStatus"),
-                                List.of(PathProcessState.values()),
-                                v -> t("pm.state." + v.name()),
-                                this::hasPurchaseWithTtt),
-                        new PredicateSelectFilterField<OrderPosition, PurchaseStatus>(
-                                t("position.filter.purchaseStatus"),
-                                List.of(PurchaseStatus.values()),
-                                v -> t("purchase.status." + v.name()),
-                                this::hasPurchaseWithStatus));
-        FilterPanel.Labels labels =
-                new FilterPanel.Labels(
-                        t("filter.toggle"),
-                        t("filter.clearAll"),
-                        t("filter.chip.clearAria"),
-                        t("filter.panel.aria"));
-        return new FilterPanel<>(
-                fields,
-                predicate -> {
-                    positionFilter = predicate;
-                    refreshPositions();
-                },
-                labels);
-    }
-
-    private boolean hasPurchaseWithTtt(OrderPosition position, PathProcessState state) {
-        return position.getPurchasePositions() != null
-                && position.getPurchasePositions().stream()
-                        .anyMatch(purchase -> state.name().equals(purchase.getPmProcessState()));
-    }
-
-    private boolean hasPurchaseWithStatus(OrderPosition position, PurchaseStatus status) {
-        return position.getPurchasePositions() != null
-                && position.getPurchasePositions().stream()
-                        .anyMatch(purchase -> purchase.getPurchaseStatus() == status);
     }
 
     private String t(String key) {

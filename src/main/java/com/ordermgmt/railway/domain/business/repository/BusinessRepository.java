@@ -29,7 +29,7 @@ public interface BusinessRepository extends JpaRepository<Business, UUID> {
             "select new com.ordermgmt.railway.dto.business.BusinessListItem("
                     + "b.id, b.title, b.status, b.validTo, b.dueDate, "
                     + "b.assignmentType, b.assignmentName, b.tags, "
-                    + "size(b.orderPositions), size(b.purchasePositions)) "
+                    + "size(b.orderPositions), size(b.purchasePositions), b.automatic) "
                     + "from Business b "
                     + "where (:text is null "
                     + "  or lower(b.title) like lower(concat('%', cast(:text as string), '%')) "
@@ -49,6 +49,9 @@ public interface BusinessRepository extends JpaRepository<Business, UUID> {
             @Param("tags") String tags,
             @Param("assignee") String assignee,
             Pageable pageable);
+
+    /** The automatic business driven by the given deadline rule, if it has been materialized. */
+    java.util.Optional<Business> findByFristRegelId(UUID fristRegelId);
 
     /** All businesses linked to the given OrderPosition via the M2M join table. */
     @Query("SELECT DISTINCT b FROM Business b JOIN b.orderPositions op WHERE op.id = :opId")

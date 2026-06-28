@@ -20,4 +20,5 @@ public record BusinessListItem(
         String assignmentName,
         String tags,
         int linkedOrderPositionCount,
-        int linkedPurchasePositionCount) {}
+        int linkedPurchasePositionCount,
+        boolean automatic) {}

@@ -77,7 +77,19 @@ public interface OrderRepository
                     + "and (:validToMax is null or o.validFrom <= :validToMax) "
                     + "and (:tags is null or lower(coalesce(o.tags, '')) like lower(concat('%', cast(:tags as string), '%'))) "
                     + "and (:assignee is null "
-                    + "  or (o.assignmentType = 'USER' and o.assignmentName = :assignee))")
+                    + "  or (o.assignmentType = 'USER' and o.assignmentName = :assignee)) "
+                    // B2 derived order type (no column): re-derive Jahres/Einzel from the lead time
+                    // between order date and first validity day, mirroring OrderType.ofDates.
+                    + "and (:orderType is null or (o.createdAt is not null and o.validFrom is not null "
+                    + "  and ((:orderType = 'EINZELBESTELLUNG' "
+                    + "         and cast(o.createdAt as LocalDate) > (o.validFrom - 2 month)) "
+                    + "    or (:orderType = 'JAHRESBESTELLUNG' "
+                    + "         and cast(o.createdAt as LocalDate) <= (o.validFrom - 2 month))))) "
+                    // B2 "order incomplete" (SOB §5.7): at least one purchase position not yet
+                    // BOOKED.
+                    + "and (:incompleteOnly = false or exists ("
+                    + "  select 1 from PurchasePosition pp where pp.orderPosition.order = o "
+                    + "  and (pp.pmProcessState is null or pp.pmProcessState <> 'BOOKED')))")
     Slice<OrderListItem> searchOrders(
             @Param("text") String text,
             @Param("processStatus") ProcessStatus processStatus,
@@ -86,5 +98,7 @@ public interface OrderRepository
             @Param("validToMax") LocalDate validToMax,
             @Param("tags") String tags,
             @Param("assignee") String assignee,
+            @Param("orderType") String orderType,
+            @Param("incompleteOnly") boolean incompleteOnly,
             Pageable pageable);
 }

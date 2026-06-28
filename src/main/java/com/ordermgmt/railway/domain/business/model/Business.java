@@ -25,6 +25,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 
 import org.hibernate.envers.Audited;
+import org.hibernate.envers.NotAudited;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -74,6 +75,18 @@ public class Business {
     private LocalDate dueDate;
 
     private String tags;
+
+    /**
+     * Marks a business that is auto-managed by a {@link
+     * com.ordermgmt.railway.domain.order.model.FristRegel} (membership + due date recomputed from
+     * the rule). Shown as "⚙ automatisch". Not audited (derived state, like the automation log).
+     */
+    @NotAudited
+    @Column(nullable = false)
+    private boolean automatic = false;
+
+    /** The deadline rule this automatic business mirrors; {@code null} for manual businesses. */
+    @NotAudited private UUID fristRegelId;
 
     @OneToMany(mappedBy = "business", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<BusinessDocument> documents = new ArrayList<>();

@@ -18,8 +18,14 @@ import org.springframework.test.context.ActiveProfiles;
 import com.ordermgmt.railway.domain.business.model.Business;
 import com.ordermgmt.railway.domain.business.model.BusinessStatus;
 import com.ordermgmt.railway.domain.business.repository.BusinessRepository;
+import com.ordermgmt.railway.domain.order.model.CoverageType;
 import com.ordermgmt.railway.domain.order.model.Order;
+import com.ordermgmt.railway.domain.order.model.OrderPosition;
+import com.ordermgmt.railway.domain.order.model.PositionType;
 import com.ordermgmt.railway.domain.order.model.ProcessStatus;
+import com.ordermgmt.railway.domain.order.model.PurchasePosition;
+import com.ordermgmt.railway.domain.order.model.ResourceNeed;
+import com.ordermgmt.railway.domain.order.model.ResourceType;
 import com.ordermgmt.railway.dto.business.BusinessListItem;
 import com.ordermgmt.railway.dto.order.OrderListItem;
 
@@ -59,6 +65,8 @@ class LazyListSearchQueryTest {
                                         null,
                                         null,
                                         null,
+                                        null,
+                                        false,
                                         PageRequest.of(0, 10, ORDER_SORT)));
 
         assertThat(slice.getContent())
@@ -81,6 +89,8 @@ class LazyListSearchQueryTest {
                         null,
                         null,
                         null,
+                        null,
+                        false,
                         PageRequest.of(0, 10, ORDER_SORT));
 
         assertThat(slice.getContent())
@@ -96,10 +106,28 @@ class LazyListSearchQueryTest {
 
         Slice<OrderListItem> page0 =
                 orderRepository.searchOrders(
-                        null, null, null, null, null, null, null, PageRequest.of(0, 2, ORDER_SORT));
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        false,
+                        PageRequest.of(0, 2, ORDER_SORT));
         Slice<OrderListItem> page1 =
                 orderRepository.searchOrders(
-                        null, null, null, null, null, null, null, PageRequest.of(1, 2, ORDER_SORT));
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        false,
+                        PageRequest.of(1, 2, ORDER_SORT));
 
         assertThat(page0.getContent()).hasSize(2);
         assertThat(page0.hasNext()).isTrue();
@@ -109,6 +137,73 @@ class LazyListSearchQueryTest {
                 .extracting(OrderListItem::orderNumber)
                 .doesNotContainAnyElementsOf(
                         page1.getContent().stream().map(OrderListItem::orderNumber).toList());
+    }
+
+    @Test
+    void searchOrders_orderTypeFilter_partitionsByLeadTime() {
+        // Ordered ~11 months ahead of the first operating day → annual (JAHRESBESTELLUNG).
+        persistOrder(
+                "ANN", "Annual", LocalDate.of(2026, 12, 13), Instant.parse("2026-01-10T12:00:00Z"));
+        // Ordered within two months of the operating day → single (EINZELBESTELLUNG).
+        persistOrder(
+                "SNG", "Single", LocalDate.of(2026, 3, 1), Instant.parse("2026-02-20T12:00:00Z"));
+
+        Slice<OrderListItem> annual =
+                orderRepository.searchOrders(
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        "JAHRESBESTELLUNG",
+                        false,
+                        PageRequest.of(0, 10, ORDER_SORT));
+        Slice<OrderListItem> single =
+                orderRepository.searchOrders(
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        "EINZELBESTELLUNG",
+                        false,
+                        PageRequest.of(0, 10, ORDER_SORT));
+
+        assertThat(annual.getContent())
+                .extracting(OrderListItem::orderNumber)
+                .containsExactly("ANN");
+        assertThat(single.getContent())
+                .extracting(OrderListItem::orderNumber)
+                .containsExactly("SNG");
+    }
+
+    @Test
+    void searchOrders_incompleteOnly_keepsOrdersWithUnbookedPurchase() {
+        Order complete = persistOrder("CMP", "Complete");
+        addPurchasePosition(complete, "PP-CMP", "BOOKED");
+        Order incomplete = persistOrder("INC", "Incomplete");
+        addPurchasePosition(incomplete, "PP-INC", "DRAFT_OFFERED");
+
+        Slice<OrderListItem> slice =
+                orderRepository.searchOrders(
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        true,
+                        PageRequest.of(0, 10, ORDER_SORT));
+
+        assertThat(slice.getContent())
+                .extracting(OrderListItem::orderNumber)
+                .containsExactly("INC");
     }
 
     @Test
@@ -156,16 +251,47 @@ class LazyListSearchQueryTest {
 
     // ─── seed helpers ──────────────────────────────────────────
 
-    private void persistOrder(String number, String name) {
-        Instant now = Instant.parse("2026-03-31T12:00:00Z");
+    private Order persistOrder(String number, String name) {
+        return persistOrder(
+                number, name, LocalDate.of(2026, 3, 1), Instant.parse("2026-03-31T12:00:00Z"));
+    }
+
+    private Order persistOrder(String number, String name, LocalDate validFrom, Instant createdAt) {
         Order order = new Order();
         order.setOrderNumber(number);
         order.setName(name);
-        order.setValidFrom(LocalDate.of(2026, 3, 1));
-        order.setValidTo(LocalDate.of(2026, 3, 31));
+        order.setValidFrom(validFrom);
+        order.setValidTo(validFrom.plusMonths(1));
         order.setProcessStatus(ProcessStatus.AUFTRAG);
-        order.setCreatedAt(now);
-        order.setUpdatedAt(now);
+        order.setCreatedAt(createdAt);
+        order.setUpdatedAt(createdAt);
+        return orderRepository.saveAndFlush(order);
+    }
+
+    /** Attaches a position + need + one purchase position with the given TTT process state. */
+    private void addPurchasePosition(Order order, String purchaseNumber, String tttState) {
+        Instant now = Instant.parse("2026-03-31T12:00:00Z");
+        OrderPosition position = new OrderPosition();
+        position.setOrder(order);
+        position.setName(purchaseNumber + "-pos");
+        position.setType(PositionType.FAHRPLAN);
+        position.setCreatedAt(now);
+        position.setUpdatedAt(now);
+
+        ResourceNeed need = new ResourceNeed();
+        need.setOrderPosition(position);
+        need.setResourceType(ResourceType.CAPACITY);
+        need.setCoverageType(CoverageType.EXTERNAL);
+        position.getResourceNeeds().add(need);
+
+        PurchasePosition purchase = new PurchasePosition();
+        purchase.setPositionNumber(purchaseNumber);
+        purchase.setOrderPosition(position);
+        purchase.setResourceNeed(need);
+        purchase.setPmProcessState(tttState);
+        position.getPurchasePositions().add(purchase);
+
+        order.getPositions().add(position);
         orderRepository.saveAndFlush(order);
     }
 

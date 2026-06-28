@@ -17,6 +17,8 @@ import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 
 import com.ordermgmt.railway.domain.business.model.Business;
+import com.ordermgmt.railway.domain.business.model.BusinessStatus;
+import com.ordermgmt.railway.domain.business.repository.BusinessRepository;
 import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.order.model.PositionStatus;
@@ -45,6 +47,7 @@ import com.ordermgmt.railway.domain.order.repository.PurchasePositionRepository;
 class BusinessServiceLinkPositionsTest {
 
     @Autowired private BusinessService businessService;
+    @Autowired private BusinessRepository businessRepository;
     @Autowired private OrderRepository orderRepository;
     @Autowired private OrderPositionRepository orderPositionRepository;
     // Required by BusinessService constructor; not exercised here but Spring needs the bean.
@@ -104,11 +107,21 @@ class BusinessServiceLinkPositionsTest {
     }
 
     @Test
-    void getDocumentsReturnsDetachedListEvenForBusinessWithoutDocuments() {
-        Business saved = businessService.create("Plain", "no docs", List.of(), List.of());
-        // Must not throw LazyInitializationException when iterated outside the tx.
-        assertThatCode(() -> businessService.getDocuments(saved.getId()).size())
+    void getDocumentsReturnsEmptyMetaListForBusinessWithoutDocuments() {
+        // Persist with timestamps set (JPA auditing is inactive in @DataJpaTest, and the
+        // metadata projection auto-flushes before the query — unlike the old PK-cache lookup).
+        Business business = new Business();
+        business.setTitle("Plain");
+        business.setDescription("no docs");
+        business.setStatus(BusinessStatus.IN_BEARBEITUNG);
+        business.setCreatedAt(Instant.now());
+        business.setUpdatedAt(Instant.now());
+        Business saved = businessRepository.saveAndFlush(business);
+
+        // getDocuments now returns a metadata projection (no blob, never lazy) — empty here.
+        assertThatCode(() -> businessService.getDocuments(saved.getId()))
                 .doesNotThrowAnyException();
+        assertThat(businessService.getDocuments(saved.getId())).isEmpty();
     }
 
     @Test
