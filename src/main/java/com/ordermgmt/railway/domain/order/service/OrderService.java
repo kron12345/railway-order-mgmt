@@ -1,11 +1,8 @@
 package com.ordermgmt.railway.domain.order.service;
 
-import java.time.DayOfWeek;
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.EnumMap;
-import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -24,7 +21,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.ordermgmt.railway.domain.order.model.OperatingDays;
+import com.ordermgmt.railway.domain.order.expression.OrderExpressionSupport;
 import com.ordermgmt.railway.domain.order.model.Order;
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.order.model.OrderPositionVersion;
@@ -45,19 +42,15 @@ import com.ordermgmt.railway.dto.order.OrderListQuery;
 
 import lombok.RequiredArgsConstructor;
 
-/** Coordinates order and position persistence for the UI layer. */
+/**
+ * Coordinates order and position persistence for the UI layer. The expression (Ausprägung) cloning
+ * and Verkehrstage date/text math live in {@link OrderExpressionSupport}; this service owns the
+ * repositories, transactions and authorization around them.
+ */
 @Service
 @RequiredArgsConstructor
 @Transactional
 public class OrderService {
-
-    private static final DateTimeFormatter DAY_FORMAT = DateTimeFormatter.ofPattern("dd.MM.yyyy");
-    private static final int COPIED_NAME_MAX_LENGTH = 255;
-    private static final String COPIED_NAME_SUFFIX = " (Kopie)";
-    private static final int SHORT_DAY_LIST_LIMIT = 8;
-
-    /** Max length of the persisted change summary (OrderPositionVersion.changeSummary column). */
-    private static final int CHANGE_SUMMARY_MAX_LENGTH = 500;
 
     /** Number of days within which an order's end of validity counts as a "critical deadline". */
     private static final int CRITICAL_DEADLINE_DAYS = 30;
@@ -237,19 +230,7 @@ public class OrderService {
     public OrderPosition addExpressionFromParent(UUID parentId) {
         OrderPosition parent = positionRepository.findById(parentId).orElseThrow();
         promoteFlatParent(parent);
-        return positionRepository.save(newExpression(parent));
-    }
-
-    /**
-     * Parent name + " (Kopie)" suffix, clamping the base so the suffix survives the 255-char limit.
-     */
-    private static String copyName(String parentName) {
-        String base = parentName == null ? "" : parentName;
-        int maxBase = COPIED_NAME_MAX_LENGTH - COPIED_NAME_SUFFIX.length();
-        if (base.length() > maxBase) {
-            base = base.substring(0, maxBase);
-        }
-        return base + COPIED_NAME_SUFFIX;
+        return positionRepository.save(OrderExpressionSupport.newExpression(parent));
     }
 
     private void promoteFlatParent(OrderPosition parent) {
@@ -263,25 +244,6 @@ public class OrderService {
         }
         parent.setVariantType(PositionVariantType.ZUG);
         positionRepository.save(parent);
-    }
-
-    private static OrderPosition newExpression(OrderPosition parent) {
-        OrderPosition expression = new OrderPosition();
-        expression.setOrder(parent.getOrder());
-        expression.setVariantOf(parent);
-        expression.setVariantType(PositionVariantType.AUSPRAEGUNG);
-        expression.setType(parent.getType());
-        expression.setName(copyName(parent.getName()));
-        expression.setOperationalTrainNumber(parent.getOperationalTrainNumber());
-        expression.setFromLocation(parent.getFromLocation());
-        expression.setToLocation(parent.getToLocation());
-        // New expressions start unscheduled; copying Verkehrstage would create overlapping
-        // siblings before the user assigns date-disjoint days.
-        expression.setServiceType(parent.getServiceType());
-        expression.setComment(parent.getComment());
-        expression.setTags(parent.getTags());
-        expression.setInternalStatus(PositionStatus.IN_BEARBEITUNG);
-        return expression;
     }
 
     /** Picker context for an expression's Verkehrstage: calendar bounds, occupied days, current. */
@@ -312,8 +274,8 @@ public class OrderService {
             windowSources.add(parent);
         }
         OrderPosition[] sources = windowSources.toArray(new OrderPosition[0]);
-        LocalDate min = earliestStart(sources);
-        LocalDate max = latestEnd(sources);
+        LocalDate min = OrderExpressionSupport.earliestStart(sources);
+        LocalDate max = OrderExpressionSupport.latestEnd(sources);
         if (min == null) {
             min = LocalDate.now();
         }
@@ -326,14 +288,15 @@ public class OrderService {
             if (sibling.getId().equals(expressionId)) {
                 continue;
             }
-            for (LocalDate day : effectiveDays(sibling)) {
+            for (LocalDate day : OrderExpressionSupport.effectiveDays(sibling)) {
                 occupied.putIfAbsent(day, sibling.getName());
             }
         }
         // Pre-fill the edited expression's own effective days (validity, or weekday-derived when
         // unset) — symmetric with the sibling occupancy above, so opening the picker never shows an
         // empty selection for a weekday-template expression and a save can't silently drop it.
-        return new VerkehrstageContext(min, max, occupied, effectiveDays(expression));
+        return new VerkehrstageContext(
+                min, max, occupied, OrderExpressionSupport.effectiveDays(expression));
     }
 
     /**
@@ -353,49 +316,8 @@ public class OrderService {
 
         List<LocalDate> sorted = days.stream().sorted().toList();
         expression.setValidity(sorted.isEmpty() ? null : ValidityJsonCodec.toJson(sorted));
-        expression.setWeekdays(Weekdays.format(weekdaysOf(sorted)));
+        expression.setWeekdays(Weekdays.format(OrderExpressionSupport.weekdaysOf(sorted)));
         positionRepository.save(expression);
-    }
-
-    private static LocalDate earliestStart(OrderPosition... positions) {
-        LocalDate min = null;
-        for (OrderPosition position : positions) {
-            if (position != null && position.getStart() != null) {
-                LocalDate startDate = position.getStart().toLocalDate();
-                if (min == null || startDate.isBefore(min)) {
-                    min = startDate;
-                }
-            }
-        }
-        return min;
-    }
-
-    private static LocalDate latestEnd(OrderPosition... positions) {
-        LocalDate max = null;
-        for (OrderPosition position : positions) {
-            if (position != null && position.getEnd() != null) {
-                LocalDate endDate = position.getEnd().toLocalDate();
-                if (max == null || endDate.isAfter(max)) {
-                    max = endDate;
-                }
-            }
-        }
-        return max;
-    }
-
-    private static Set<DayOfWeek> weekdaysOf(List<LocalDate> days) {
-        Set<DayOfWeek> weekdays = EnumSet.noneOf(DayOfWeek.class);
-        for (LocalDate day : days) {
-            weekdays.add(day.getDayOfWeek());
-        }
-        return weekdays;
-    }
-
-    /**
-     * Operating days a position actually occupies — delegates to the shared {@link OperatingDays}.
-     */
-    private static List<LocalDate> effectiveDays(OrderPosition position) {
-        return OperatingDays.of(position);
     }
 
     private void reassignClaimedSiblingDays(
@@ -404,7 +326,7 @@ public class OrderService {
             if (sibling.getId().equals(expression.getId())) {
                 continue;
             }
-            List<LocalDate> siblingDays = effectiveDays(sibling);
+            List<LocalDate> siblingDays = OrderExpressionSupport.effectiveDays(sibling);
             List<LocalDate> handedOverDays =
                     siblingDays.stream().filter(claimedDays::contains).sorted().toList();
             if (handedOverDays.isEmpty()) {
@@ -417,7 +339,7 @@ public class OrderService {
                             .toList();
             sibling.setValidity(
                     remainingDays.isEmpty() ? null : ValidityJsonCodec.toJson(remainingDays));
-            sibling.setWeekdays(Weekdays.format(weekdaysOf(remainingDays)));
+            sibling.setWeekdays(Weekdays.format(OrderExpressionSupport.weekdaysOf(remainingDays)));
             positionRepository.save(sibling);
             recordDayHandover(sibling, expression.getName(), handedOverDays);
         }
@@ -438,34 +360,9 @@ public class OrderService {
         version.setOrderPosition(sibling);
         version.setVersionNumber(next);
         version.setSource(PositionChangeSource.MODIFICATION);
-        version.setChangeSummary(dayHandoverSummary(claimant, handedOverDays));
+        version.setChangeSummary(
+                OrderExpressionSupport.dayHandoverSummary(claimant, handedOverDays));
         versionRepository.save(version);
-    }
-
-    private static String dayHandoverSummary(String claimant, List<LocalDate> handedOverDays) {
-        String summary =
-                "Verkehrstag(e) "
-                        + formatHandedOverDays(handedOverDays)
-                        + " abgegeben an "
-                        + claimant;
-        if (summary.length() <= CHANGE_SUMMARY_MAX_LENGTH) {
-            return summary;
-        }
-        return summary.substring(0, CHANGE_SUMMARY_MAX_LENGTH - 1) + "…";
-    }
-
-    private static String formatHandedOverDays(List<LocalDate> handedOverDays) {
-        if (handedOverDays.size() <= SHORT_DAY_LIST_LIMIT) {
-            return handedOverDays.stream()
-                    .map(DAY_FORMAT::format)
-                    .collect(Collectors.joining(", "));
-        }
-        return handedOverDays.size()
-                + " Tage ("
-                + DAY_FORMAT.format(handedOverDays.getFirst())
-                + "–"
-                + DAY_FORMAT.format(handedOverDays.getLast())
-                + ")";
     }
 
     /** Batched version trail per position (Map keyed by position id) — avoids one query per row. */
