@@ -106,14 +106,16 @@ public class OrderPositionRow extends Div {
         Div info = createInfoBlock(t);
 
         actionRow =
-                new HorizontalLayout(
-                        createCalendarButton(t),
-                        createViewButton(t),
-                        createHistoryButton(t),
-                        createEditButton(t, onEdit),
-                        createDeleteButton(t, onDelete));
-        actionRow.setSpacing(true);
-        actionRow.setAlignItems(FlexComponent.Alignment.START);
+                OrderPositionActionButtons.build(
+                        t,
+                        position,
+                        editable,
+                        countPurchases(),
+                        this::toggleCalendar,
+                        this::navigateToDetail,
+                        this::openPositionHistory,
+                        onEdit,
+                        onDelete);
 
         expandToggle.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
         expandToggle.addClassNames("op-action", "op-action--icon");
@@ -132,61 +134,6 @@ public class OrderPositionRow extends Div {
         row.expand(info);
 
         return row;
-    }
-
-    private Button createCalendarButton(BiFunction<String, Object[], String> t) {
-        long purchaseCount = countPurchases();
-        String calendarLabel = t.apply("position.action.calendar", new Object[0]);
-        Button button =
-                new Button(
-                        purchaseCount > 0 ? purchaseCount + " " + calendarLabel : calendarLabel,
-                        VaadinIcon.CALENDAR.create());
-        button.addThemeVariants(ButtonVariant.LUMO_SMALL);
-        button.addClassName("op-action");
-        if (purchaseCount > 0) {
-            button.addClassName("op-action--primary");
-        }
-        button.addClickListener(event -> toggleCalendar());
-        return button;
-    }
-
-    private Button createViewButton(BiFunction<String, Object[], String> t) {
-        Button button =
-                new Button(t.apply("position.action.view", new Object[0]), VaadinIcon.EYE.create());
-        button.addThemeVariants(ButtonVariant.LUMO_SMALL);
-        button.addClassNames("op-action", "op-action--info");
-        button.addClickListener(event -> navigateToDetail());
-        return button;
-    }
-
-    private Button createHistoryButton(BiFunction<String, Object[], String> t) {
-        Button button =
-                new Button(t.apply("audit.button", new Object[0]), VaadinIcon.CLOCK.create());
-        button.addThemeVariants(ButtonVariant.LUMO_SMALL);
-        button.addClassName("op-action");
-        button.addClickListener(event -> openPositionHistory());
-        return button;
-    }
-
-    private Button createEditButton(
-            BiFunction<String, Object[], String> t, Consumer<OrderPosition> onEdit) {
-        Button button = new Button(t.apply("common.edit", new Object[0]), VaadinIcon.EDIT.create());
-        button.addThemeVariants(ButtonVariant.LUMO_SMALL);
-        button.addClassName("op-action");
-        button.addClickListener(event -> onEdit.accept(position));
-        button.setVisible(editable);
-        return button;
-    }
-
-    private Button createDeleteButton(
-            BiFunction<String, Object[], String> t, Consumer<OrderPosition> onDelete) {
-        Button button = new Button(VaadinIcon.TRASH.create());
-        button.addThemeVariants(ButtonVariant.LUMO_SMALL);
-        button.addClassNames("op-action", "op-action--icon", "op-action--danger");
-        button.setTooltipText(t.apply("common.delete", new Object[0]));
-        button.addClickListener(event -> onDelete.accept(position));
-        button.setVisible(editable);
-        return button;
     }
 
     /** Adds a deadline chip (next due date + rule) to the position header. */
