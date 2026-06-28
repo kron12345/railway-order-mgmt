@@ -10,6 +10,11 @@ werden per UI wieder gelöscht).
 
 ## Abgedeckt (grün)
 - **Validierung**: leerer New Order / New Business / New rule / Add Vehicle.
+- **Order-Formular-Regeln** (`clicktest-order-form.spec.ts`): `validTo < validFrom` wird beim Save
+  abgelehnt (Feld invalid + Text „Valid To < Valid From", keine Navigation, `OrderFormPanel:168`);
+  **Kostenträger-Pflicht bei FREIGEGEBEN** (SOB §5.7, `OrderService:167`) — Wechsel der
+  Bearbeitungs-Status-Select auf „Approved" ohne Kostenträger → Fehler-Notification, Status nicht
+  persistiert (selbst-aufräumend per UI-Delete).
 - **CRUD pur per Klick**: Business create→read→edit→delete; Order create→read→delete.
 - **Navigation/Views**: jede View server- + konsolen-fehlerfrei, Sidenav-Klick, Dashboard,
   Order→Positionsdetail→zurück, Open Positions, Settings-Tabs, Profile, R2P-Simulate.
@@ -48,12 +53,22 @@ Schätzung **1–2 Tage**, stabil/nicht-flaky.
   → Status im DOM → Planning-Status/Train-Header speichern.
 - **Order-Filterpanel komplett**: Status, interner Status, Auftragstyp, Datumsbereich, Tags,
   „assigned to me", „incomplete" (bisher nur Freitext-Suche).
-- **Dialog-Validierungen Rest**: ResourceDialog (leere Verkehrstage bei beschränkten Betriebstagen),
-  PurchaseDialog→TttOrderDialog kompletter CAPACITY-Flow (Pflichtfelder Debitcode/TrainType/
-  TrafficType/Contact/Brake + ungültige E-Mail).
-- **`validTo < validFrom`** und **Kostenträger-Pflicht bei FREIGEGEBEN** (Status-Transition).
+- **PurchaseDialog→TttOrderDialog CAPACITY-Flow** (Pflichtfelder Debitcode/TrainType/TrafficType/
+  Contact/Brake + ungültige E-Mail). Scout-Befund: Validatoren real (`TttOrderDialog:223-235`), aber
+  **Fehler-Signal ist nur `[invalid]`-Attribut + offener Dialog (KEINE Notification)** → mit
+  `[invalid]`-Assertions testen, E-Mail-Feld vor Submit blurren. Braucht editierbaren Auftrag mit
+  FAHRPLAN-Position (sonst langer Setup) und mutiert die DB. **Bug nebenbei gefunden:** die
+  i18n-Keys `ttt.order.trainType`/`.trafficType` fehlen → Combos rendern als `!ttt.order.trainType!`.
+- **Fahrplan-Builder weitere Fehlerpfade** (Scout-empfohlen, billig, kein Grid-Magic): „Origin and
+  destination must be different" (gleicher OP), „Please complete every via point", „set only one
+  anchor time" — alle setzen die `routeError`-Span (`body.toContainText`, KEINE Notification).
 
 ### Klein
+- **ResourceDialog (leere Verkehrstage)**: Scout-Befund — als reiner Klicktest **nicht empfohlen**.
+  Der Dialog-Einstieg „Add Need" erscheint nur, wenn die Position bereits einen Resource-Need hat,
+  und es gibt keine geseedeten Needs → man müsste erst über den Fahrplan-Builder-Wizard einen Need
+  erzeugen (lang/fragil). Besser als Unit-Test auf `OperatingDays.of` / `ResourceDialog.saveResource`
+  oder angehängt an den bestehenden sbahn-Flow.
 - **`order-crud.spec.ts` / `debug-page.spec.ts`**: 0 Assertions → reparieren oder entfernen.
 - **TimetableArchiveView**: Eye-Button aus Positionszeile, Back/Edit, Guard für non-FAHRPLAN.
 - **ExpressionVerkehrstage- / UnassignedTrains-Dialog**.
