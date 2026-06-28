@@ -19,13 +19,16 @@ werden per UI wieder gelöscht).
 - **Fahrplan-Builder**: Route ohne Start/Ziel → Fehler.
 
 ## Gefundene Bugs (per Klicktest)
-- **Order-Übersicht: Validitäts-Datumsfilter (From/To) filtert die Liste nicht.** Beim Setzen
-  von „From" (auch `1/1/2030`) bleiben alle Aufträge sichtbar, obwohl die DB für
-  `valid_to >= Datum` weniger Treffer liefert; der Filter-Chip erscheint (Server hat den Wert) und
-  die Query enthält `o.validTo >= :validFromMin`, dennoch ist das Ergebnis ungefiltert. Test
-  `clicktest-order-filters.spec.ts` „Validity 'From' filter…" ist als `test.fixme` hinterlegt —
-  nach dem Fix das `fixme` entfernen. Andere Filter (Status, Auftragstyp, Tags, Bearb.-Status,
-  „assigned to me", „incomplete") funktionieren.
+- **(GEFIXT) Order-Übersicht: Validitäts-Datumsfilter (From/To) filterte die Liste nicht.**
+  Ursache war NICHT die UI: `searchOrders` enthielt `(:validFromMin is null or o.validTo >=
+  :validFromMin)`. Für den `LocalDate`-Bind erzeugte Hibernate ein nacktes `? is null` ohne
+  Typ-Kontext; PostgreSQL scheiterte beim Parse mit `42P18` („konnte Datentyp von Parameter $10
+  nicht ermitteln"). Die InvalidDataAccessResourceUsageException wurde vom Lazy-Loader
+  verschluckt → die Liste behielt den alten (ungefilterten) Inhalt, der Chip war aber gesetzt.
+  Fix: den Null-Guard casten — `cast(:validFromMin as LocalDate) is null` (analog zum bereits
+  vorhandenen `cast(:text as string)`), gleiches für `:validToMax`. Regressionsschutz:
+  `LazyListSearchQueryTest.searchOrders_validityRange_filtersAndDoesNotThrow` (echtes Postgres) +
+  Klicktest `clicktest-order-filters.spec.ts` „Validity 'From' filter…" (nicht mehr `fixme`).
 - (früher gefunden, bereits gefixt) Filter-Chip-✕ rief Record-Accessor `clear()` ohne `.run()`.
 
 ## Offen

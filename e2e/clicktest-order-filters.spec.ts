@@ -70,12 +70,11 @@ test.describe("Order filter panel (pure click)", () => {
     await expectNoServerError(page);
   });
 
-  // KNOWN BUG (found by this test): the validity From/To range filter does not narrow the lazy
-  // order list — From=1/1/2030 still returns all orders, though the DB shows only orders with
-  // valid_to >= the date should match. The chip renders (server has the value) and the query has
-  // the `valid_to >= :validFromMin` clause, yet the result is unfiltered. Tracked in
-  // docs/e2e-test-backlog.md; un-fixme once the date range actually filters.
-  test.fixme("Validity 'From' filter excludes orders ending before it", async ({ page }) => {
+  // Regression guard for the date-range filter bug: a bare `:validFromMin is null` check on a
+  // LocalDate param made PostgreSQL fail to infer the bind type (42P18), the lazy reload threw and
+  // was swallowed, so the list stayed unfiltered. Fixed by casting the param in the null-guard
+  // (cast(:validFromMin as LocalDate) is null) in OrderRepository.searchOrders.
+  test("Validity 'From' filter excludes orders ending before it", async ({ page }) => {
     const from = page.getByLabel("From", { exact: true });
     await from.click();
     await from.pressSequentially("9/15/2026", { delay: 30 }); // EN locale M/d/yyyy
