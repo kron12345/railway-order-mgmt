@@ -136,7 +136,7 @@ public class FilterPanel<T> extends Div {
                 ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY, ButtonVariant.LUMO_ICON);
         remove.addClassName("md-filter-chip__remove");
         remove.getElement().setAttribute("aria-label", labels.chipClearAria() + " " + chip.label());
-        remove.addClickListener(e -> chip.clear());
+        remove.addClickListener(e -> chip.clear().run());
         wrap.add(remove);
         return wrap;
     }
