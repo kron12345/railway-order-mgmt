@@ -2,7 +2,6 @@ package com.ordermgmt.railway.ui.view.business;
 
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -36,11 +35,9 @@ import com.vaadin.flow.component.textfield.TextFieldVariant;
 import com.ordermgmt.railway.domain.business.model.Business;
 import com.ordermgmt.railway.domain.business.model.BusinessStatus;
 import com.ordermgmt.railway.domain.business.service.BusinessService;
-import com.ordermgmt.railway.domain.order.model.OrderPosition;
-import com.ordermgmt.railway.domain.order.model.PurchasePosition;
 import com.ordermgmt.railway.domain.userprefs.service.UserViewPreferenceService;
 import com.ordermgmt.railway.ui.component.business.BusinessDocsCard;
-import com.ordermgmt.railway.ui.component.business.BusinessLinksTree;
+import com.ordermgmt.railway.ui.component.business.BusinessLinksTreeFactory;
 import com.ordermgmt.railway.ui.util.StringUtils;
 
 /**
@@ -366,72 +363,14 @@ public class BusinessDetailView extends VerticalLayout {
     // ─── Right column: unified links tree ─────────
 
     private Component buildRightColumn() {
-        var card = new Div();
-        card.addClassName("biz-card");
-        card.addClassName("biz-card--flex");
-
-        var tree =
-                BusinessLinksTree.spec()
-                        .translator(this::getTranslation)
-                        .linkedOrderPositions(
-                                isNew
-                                        ? this::draftOrderPositions
-                                        : () ->
-                                                businessService.getLinkedOrderPositions(
-                                                        business.getId()))
-                        .linkedPurchasePositions(
-                                isNew
-                                        ? this::draftPurchasePositions
-                                        : () ->
-                                                businessService.getLinkedPurchasePositions(
-                                                        business.getId()))
-                        .allOrderPositions(businessService::getAllOrderPositions)
-                        .allPurchasePositions(businessService::getAllPurchasePositions)
-                        .onLinkOrderPosition(
-                                isNew
-                                        ? draftOrderPositionIds::add
-                                        : id ->
-                                                businessService.linkOrderPosition(
-                                                        business.getId(), id))
-                        .onUnlinkOrderPosition(
-                                isNew
-                                        ? draftOrderPositionIds::remove
-                                        : id ->
-                                                businessService.unlinkOrderPosition(
-                                                        business.getId(), id))
-                        .onLinkPurchasePosition(
-                                isNew
-                                        ? draftPurchasePositionIds::add
-                                        : id ->
-                                                businessService.linkPurchasePosition(
-                                                        business.getId(), id))
-                        .onUnlinkPurchasePosition(
-                                isNew
-                                        ? draftPurchasePositionIds::remove
-                                        : id ->
-                                                businessService.unlinkPurchasePosition(
-                                                        business.getId(), id))
-                        .viewKey("grid.business.linksTree")
-                        .preferenceService(prefsService)
-                        .build();
-        card.add(tree);
-        return card;
-    }
-
-    private List<OrderPosition> draftOrderPositions() {
-        if (draftOrderPositionIds.isEmpty()) return List.of();
-        Set<UUID> ids = new HashSet<>(draftOrderPositionIds);
-        return businessService.getAllOrderPositions().stream()
-                .filter(p -> ids.contains(p.getId()))
-                .toList();
-    }
-
-    private List<PurchasePosition> draftPurchasePositions() {
-        if (draftPurchasePositionIds.isEmpty()) return List.of();
-        Set<UUID> ids = new HashSet<>(draftPurchasePositionIds);
-        return businessService.getAllPurchasePositions().stream()
-                .filter(p -> ids.contains(p.getId()))
-                .toList();
+        return BusinessLinksTreeFactory.build(
+                isNew,
+                business,
+                businessService,
+                prefsService,
+                draftOrderPositionIds,
+                draftPurchasePositionIds,
+                this);
     }
 
     // ─── Save ──────────────────────────
