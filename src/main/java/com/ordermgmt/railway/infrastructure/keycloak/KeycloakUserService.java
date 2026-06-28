@@ -128,8 +128,9 @@ public class KeycloakUserService {
                             JsonNode.class);
 
             List<String> roles = new ArrayList<>();
-            if (response.getBody() != null && response.getBody().isArray()) {
-                response.getBody().forEach(role -> roles.add(role.path("name").asText()));
+            JsonNode body = response.getBody();
+            if (body != null && body.isArray()) {
+                body.forEach(role -> roles.add(role.path("name").asText()));
             }
             return roles;
         } catch (Exception e) {
@@ -199,8 +200,9 @@ public class KeycloakUserService {
                             JsonNode[].class);
 
             List<Map<String, String>> users = new ArrayList<>();
-            if (response.getBody() != null) {
-                for (JsonNode user : response.getBody()) {
+            JsonNode[] body = response.getBody();
+            if (body != null) {
+                for (JsonNode user : body) {
                     users.add(toUserSearchResult(user));
                 }
             }
@@ -238,8 +240,9 @@ public class KeycloakUserService {
                             JsonNode[].class);
 
             List<Map<String, String>> groups = new ArrayList<>();
-            if (response.getBody() != null) {
-                for (JsonNode group : response.getBody()) {
+            JsonNode[] body = response.getBody();
+            if (body != null) {
+                for (JsonNode group : body) {
                     groups.add(toGroupSearchResult(group));
                 }
             }
@@ -269,7 +272,11 @@ public class KeycloakUserService {
                         new HttpEntity<>(params, headers),
                         JsonNode.class);
 
-        return response.getBody().path("access_token").asText();
+        JsonNode body = response.getBody();
+        if (body == null) {
+            throw new IllegalStateException("Keycloak admin token response had no body");
+        }
+        return body.path("access_token").asText();
     }
 
     private String userUrl(String keycloakUserId) {

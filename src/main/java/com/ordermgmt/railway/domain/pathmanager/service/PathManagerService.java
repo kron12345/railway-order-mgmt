@@ -7,6 +7,7 @@ import java.util.UUID;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 
+import org.hibernate.Hibernate;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -350,7 +351,8 @@ public class PathManagerService {
     @Transactional(readOnly = true)
     public PmReferenceTrain findByIdWithVersions(UUID id) {
         PmReferenceTrain train = findById(id);
-        train.getTrainVersions().forEach(version -> version.getJourneyLocations().size());
+        train.getTrainVersions()
+                .forEach(version -> Hibernate.initialize(version.getJourneyLocations()));
         return train;
     }
 

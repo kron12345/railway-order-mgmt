@@ -93,7 +93,7 @@ public class TimetableArchiveTable extends VerticalLayout {
                 .set("font-size", "12px")
                 .set("border-bottom", "1px solid var(--rom-border-subtle)");
 
-        if (index % 2 == 1) {
+        if (index % 2 != 0) {
             rowDiv.getStyle().set("background", "var(--rom-bg-secondary)");
         }
         if (Boolean.TRUE.equals(row.getDeleted())) {

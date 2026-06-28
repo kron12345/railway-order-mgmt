@@ -13,6 +13,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import org.hibernate.Hibernate;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -79,7 +80,7 @@ public class OrderService {
                 .findById(id)
                 .map(
                         position -> {
-                            position.getResourceNeeds().size();
+                            Hibernate.initialize(position.getResourceNeeds());
                             initializePurchasePositions(List.of(position));
                             return position;
                         });
@@ -453,7 +454,7 @@ public class OrderService {
     private void initializePositions(List<Order> orders) {
         orders.forEach(
                 order -> {
-                    order.getPositions().size();
+                    Hibernate.initialize(order.getPositions());
                     initializePurchasePositions(order.getPositions());
                 });
     }
@@ -461,8 +462,8 @@ public class OrderService {
     private void initializePurchasePositions(List<OrderPosition> positions) {
         positions.forEach(
                 position -> {
-                    position.getPurchasePositions().size();
-                    position.getResourceNeeds().size();
+                    Hibernate.initialize(position.getPurchasePositions());
+                    Hibernate.initialize(position.getResourceNeeds());
                 });
     }
 }

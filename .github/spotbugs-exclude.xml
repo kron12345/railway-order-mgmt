@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SpotBugs exclusions, scoped to the families that are systematic false positives for this
+  Vaadin Flow + Spring + JPA codebase. Every OTHER bug pattern stays enforced at the
+  Medium threshold (fail-on-Medium), so genuine defects (NPEs, bad logic, ignored returns,
+  etc.) still break the build.
+
+  Rationale:
+  - SE_* : Vaadin Components implement Serializable, but this app never serializes them
+    (no session-replication of component trees); they legitimately hold injected
+    services/repositories and non-serializable UI state. SE_BAD_FIELD / SE_NO_SERIALVERSIONID
+    / SE_TRANSIENT_FIELD_NOT_RESTORED are therefore pure noise here.
+  - EI_EXPOSE_REP / EI_EXPOSE_REP2 : JPA entities, DTO carriers and the UI intentionally
+    share mutable references (managed entity graphs, collections, LocalDate/Instant). Adding
+    defensive copies would break JPA dirty-checking and the Vaadin binding model. This is a
+    deliberate design choice across the domain/model, dto and ui layers.
+-->
+<FindBugsFilter>
+    <Match>
+        <Bug pattern="SE_BAD_FIELD" />
+    </Match>
+    <Match>
+        <Bug pattern="SE_BAD_FIELD_STORE" />
+    </Match>
+    <Match>
+        <Bug pattern="SE_NO_SERIALVERSIONID" />
+    </Match>
+    <Match>
+        <Bug pattern="SE_TRANSIENT_FIELD_NOT_RESTORED" />
+    </Match>
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP" />
+    </Match>
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP2" />
+    </Match>
+
+    <!-- Vaadin component constructors legitimately validate args and build the component tree, so
+         they can throw. The finalizer-attack vector CT warns about requires a finalize()/cleaner
+         override, which this codebase has none of. Scoped to the UI layer only. -->
+    <Match>
+        <Bug pattern="CT_CONSTRUCTOR_THROW" />
+        <Package name="~com\.ordermgmt\.railway\.ui\..*" />
+    </Match>
+
+    <!-- Pure micro-perf nit (unbox-then-rebox of Integer offsets/quantities); no correctness
+         impact. -->
+    <Match>
+        <Bug pattern="BX_UNBOXING_IMMEDIATELY_REBOXED" />
+    </Match>
+
+    <!-- Audit snapshot diffing reflects over arbitrary entity fields; a broad catch is deliberate
+         so a single field comparison can never break the audit history view. -->
+    <Match>
+        <Bug pattern="REC_CATCH_EXCEPTION" />
+        <Class name="com.ordermgmt.railway.domain.order.service.AuditService" />
+    </Match>
+</FindBugsFilter>
