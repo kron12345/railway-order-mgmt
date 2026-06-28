@@ -20,12 +20,13 @@ import java.util.function.Predicate;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.Span;
 
+/**
+ * Interactive month-by-month validity calendar. The stateless presentation + layout building blocks
+ * (buttons, header/empty cells, day-cell styles, month/week math) live in {@link
+ * ValidityCalendarLayout}; this widget keeps the selection state, cell registry and click wiring.
+ */
 public class ValidityCalendar extends Div {
 
-    private static final String[] WEEKDAY_SHORT = {"Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"};
-    private static final String[] WEEKDAY_FULL = {
-        "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"
-    };
     private static final int DAYS_PER_WEEK = 7;
     private static final int WORKDAYS_PER_WEEK = 5;
     private static final int DEFAULT_MAX_WEEKS = 5;
@@ -67,7 +68,7 @@ public class ValidityCalendar extends Div {
         removeAll();
         add(createToolbar());
         if (!compact) {
-            add(createWeekdayHeader());
+            add(ValidityCalendarLayout.weekdayHeader());
         }
         add(compact ? createCompactCalendarGrid() : createCalendarGrid());
         add(createFooter());
@@ -130,7 +131,10 @@ public class ValidityCalendar extends Div {
 
         for (int index = 0; index < DAYS_PER_WEEK; index++) {
             final DayOfWeek dayOfWeek = DayOfWeek.of(index + 1);
-            Div button = weekdayButton(WEEKDAY_SHORT[index], WEEKDAY_FULL[index]);
+            Div button =
+                    ValidityCalendarLayout.weekdayButton(
+                            ValidityCalendarLayout.WEEKDAY_SHORT[index],
+                            ValidityCalendarLayout.WEEKDAY_FULL[index]);
             button.addClickListener(event -> toggleWeekday(dayOfWeek));
             toolbar.add(button);
         }
@@ -139,77 +143,15 @@ public class ValidityCalendar extends Div {
         spacer.getStyle().set("flex", "1");
         toolbar.add(spacer);
 
-        Div selectAll = actionButton("Alle", "var(--rom-status-active)");
+        Div selectAll = ValidityCalendarLayout.actionButton("Alle", "var(--rom-status-active)");
         selectAll.addClickListener(e -> selectAll());
-        Div weekdays = actionButton("Mo–Fr", "var(--rom-status-info)");
+        Div weekdays = ValidityCalendarLayout.actionButton("Mo–Fr", "var(--rom-status-info)");
         weekdays.addClickListener(e -> selectWeekdays());
-        Div clear = actionButton("Keine", "var(--rom-status-danger)");
+        Div clear = ValidityCalendarLayout.actionButton("Keine", "var(--rom-status-danger)");
         clear.addClickListener(e -> clearAll());
 
         toolbar.add(selectAll, weekdays, clear);
         return toolbar;
-    }
-
-    private Div weekdayButton(String label, String tooltip) {
-        Div button = new Div();
-        button.setText(label);
-        button.getElement().setAttribute("title", "Alle " + tooltip + " auswählen/abwählen");
-        button.getStyle()
-                .set("padding", "3px 8px")
-                .set("border-radius", "4px")
-                .set("font-family", "'JetBrains Mono', monospace")
-                .set("font-size", "11px")
-                .set("font-weight", "600")
-                .set("cursor", "pointer")
-                .set("color", "var(--rom-text-secondary)")
-                .set("background", "var(--rom-bg-primary)")
-                .set("border", "1px solid var(--rom-border)")
-                .set("transition", "all 0.15s");
-        return button;
-    }
-
-    private Div actionButton(String label, String color) {
-        Div button = new Div();
-        button.setText(label);
-        button.getStyle()
-                .set("padding", "3px 8px")
-                .set("border-radius", "4px")
-                .set("font-family", "'JetBrains Mono', monospace")
-                .set("font-size", "10px")
-                .set("font-weight", "600")
-                .set("cursor", "pointer")
-                .set("color", color)
-                .set("background", "color-mix(in srgb, " + color + " 10%, transparent)")
-                .set("border", "1px solid " + color);
-        return button;
-    }
-
-    private Div createWeekdayHeader() {
-        Div header = new Div();
-        header.getStyle()
-                .set("display", "grid")
-                .set("grid-template-columns", "80px repeat(7, 1fr)")
-                .set("gap", "2px")
-                .set("margin-bottom", "2px");
-
-        Div corner = new Div();
-        corner.getStyle().set("background", "transparent");
-        header.add(corner);
-
-        for (String day : WEEKDAY_SHORT) {
-            Div headerCell = new Div();
-            headerCell.setText(day);
-            headerCell
-                    .getStyle()
-                    .set("text-align", "center")
-                    .set("font-family", "'JetBrains Mono', monospace")
-                    .set("font-size", "10px")
-                    .set("font-weight", "600")
-                    .set("color", "var(--rom-text-muted)")
-                    .set("padding", "4px 0");
-            header.add(headerCell);
-        }
-        return header;
     }
 
     private Div createCalendarGrid() {
@@ -228,9 +170,13 @@ public class ValidityCalendar extends Div {
     }
 
     private Div createCompactCalendarGrid() {
-        List<YearMonth> months = monthsInRange();
+        List<YearMonth> months = ValidityCalendarLayout.monthsInRange(minDate, maxDate);
 
-        int maxWeeks = months.stream().mapToInt(this::weeksInMonth).max().orElse(DEFAULT_MAX_WEEKS);
+        int maxWeeks =
+                months.stream()
+                        .mapToInt(ValidityCalendarLayout::weeksInMonth)
+                        .max()
+                        .orElse(DEFAULT_MAX_WEEKS);
         int dayColumns = maxWeeks * DAYS_PER_WEEK;
 
         Div table = new Div();
@@ -241,7 +187,7 @@ public class ValidityCalendar extends Div {
                 .set("font-family", "'JetBrains Mono', monospace")
                 .set("font-size", "9px");
 
-        Div corner = compactHeaderCell("");
+        Div corner = ValidityCalendarLayout.compactHeaderCell("");
         corner.getStyle()
                 .set("position", "sticky")
                 .set("left", "0")
@@ -250,7 +196,9 @@ public class ValidityCalendar extends Div {
         table.add(corner);
         for (int week = 0; week < maxWeeks; week++) {
             for (int weekday = 0; weekday < DAYS_PER_WEEK; weekday++) {
-                Div headerCell = compactHeaderCell(WEEKDAY_SHORT[weekday]);
+                Div headerCell =
+                        ValidityCalendarLayout.compactHeaderCell(
+                                ValidityCalendarLayout.WEEKDAY_SHORT[weekday]);
                 if (weekday >= WORKDAYS_PER_WEEK) {
                     headerCell.getStyle().set("color", "rgba(148,163,184,0.3)");
                 }
@@ -263,17 +211,6 @@ public class ValidityCalendar extends Div {
         }
 
         return table;
-    }
-
-    private List<YearMonth> monthsInRange() {
-        List<YearMonth> months = new ArrayList<>();
-        YearMonth current = YearMonth.from(minDate);
-        YearMonth end = YearMonth.from(maxDate);
-        while (!current.isAfter(end)) {
-            months.add(current);
-            current = current.plusMonths(1);
-        }
-        return months;
     }
 
     private void addCompactMonthRow(Div table, YearMonth yearMonth, int maxWeeks) {
@@ -301,9 +238,9 @@ public class ValidityCalendar extends Div {
         for (int week = 0; week < maxWeeks; week++) {
             for (int weekday = 0; weekday < DAYS_PER_WEEK; weekday++) {
                 if (week == 0 && weekday < firstDayOfWeek - 1) {
-                    table.add(compactEmptyCell());
+                    table.add(ValidityCalendarLayout.compactEmptyCell());
                 } else if (dayCounter > daysInMonth) {
-                    table.add(compactEmptyCell());
+                    table.add(ValidityCalendarLayout.compactEmptyCell());
                 } else {
                     LocalDate date = yearMonth.atDay(dayCounter);
                     boolean inRange = isSelectable(date);
@@ -316,31 +253,6 @@ public class ValidityCalendar extends Div {
                 }
             }
         }
-    }
-
-    private int weeksInMonth(YearMonth yearMonth) {
-        int firstDayOfWeek = yearMonth.atDay(1).getDayOfWeek().getValue();
-        int totalSlots = firstDayOfWeek - 1 + yearMonth.lengthOfMonth();
-        return (totalSlots + DAYS_PER_WEEK - 1) / DAYS_PER_WEEK;
-    }
-
-    private Div compactHeaderCell(String text) {
-        Div headerCell = new Div();
-        headerCell.setText(text);
-        headerCell
-                .getStyle()
-                .set("text-align", "center")
-                .set("font-weight", "600")
-                .set("color", "var(--rom-text-muted)")
-                .set("line-height", "20px")
-                .set("border-bottom", "1px solid var(--rom-border)");
-        return headerCell;
-    }
-
-    private Div compactEmptyCell() {
-        Div cell = new Div();
-        cell.getStyle().set("width", "20px").set("height", "20px");
-        return cell;
     }
 
     private Div compactDayCell(LocalDate date, int day, boolean selectable) {
@@ -396,7 +308,7 @@ public class ValidityCalendar extends Div {
                 .set("grid-column", "2 / -1");
 
         for (int column = 0; column < startColumn; column++) {
-            daysGrid.add(emptyCell());
+            daysGrid.add(ValidityCalendarLayout.emptyCell());
         }
 
         for (int day = 1; day <= daysInMonth; day++) {
@@ -443,22 +355,12 @@ public class ValidityCalendar extends Div {
 
     private void configureSelectableCell(Div cell, LocalDate date, boolean selectable) {
         if (!selectable) {
-            applyDisabledStyle(cell);
+            ValidityCalendarLayout.applyDisabled(cell);
             return;
         }
 
-        applyUnselectedStyle(cell);
+        ValidityCalendarLayout.applyUnselected(cell);
         cell.addClickListener(event -> toggleDate(date));
-    }
-
-    private void applyDisabledStyle(Div cell) {
-        cell.getStyle().set("color", "rgba(148,163,184,0.15)").set("background", "transparent");
-    }
-
-    private Div emptyCell() {
-        Div cell = new Div();
-        cell.getStyle().set("min-height", "26px");
-        return cell;
     }
 
     private Div createFooter() {
@@ -558,11 +460,11 @@ public class ValidityCalendar extends Div {
 
     private void styleCell(LocalDate date, Div cell) {
         if (selectedDates.contains(date)) {
-            applySelectedStyle(cell);
+            ValidityCalendarLayout.applySelected(cell);
         } else if (occupiedDates.containsKey(date)) {
-            applyOccupiedStyle(cell);
+            ValidityCalendarLayout.applyOccupied(cell);
         } else {
-            applyUnselectedStyle(cell);
+            ValidityCalendarLayout.applyUnselected(cell);
         }
         String owner = occupiedDates.get(date);
         if (owner != null) {
@@ -570,30 +472,6 @@ public class ValidityCalendar extends Div {
         } else {
             cell.getElement().removeAttribute("title");
         }
-    }
-
-    private void applySelectedStyle(Div cell) {
-        cell.getStyle()
-                .set("color", "var(--rom-bg-primary)")
-                .set("background", "var(--rom-accent)")
-                .set("border", "1px solid transparent")
-                .set("font-weight", "700");
-    }
-
-    private void applyUnselectedStyle(Div cell) {
-        cell.getStyle()
-                .set("color", "var(--rom-text-secondary)")
-                .set("background", "var(--rom-bg-primary)")
-                .set("border", "1px solid transparent")
-                .set("font-weight", "600");
-    }
-
-    private void applyOccupiedStyle(Div cell) {
-        cell.getStyle()
-                .set("color", "#b45309")
-                .set("background", "rgba(245, 158, 11, 0.18)")
-                .set("border", "1px dashed #f59e0b")
-                .set("font-weight", "700");
     }
 
     private void updateCount() {

@@ -21,7 +21,6 @@ import com.vaadin.flow.data.value.ValueChangeMode;
 
 import com.ordermgmt.railway.ui.component.DataReadout;
 import com.ordermgmt.railway.ui.component.a11y.AriaLive;
-import com.ordermgmt.railway.ui.component.masterdetail.filter.FilterField;
 import com.ordermgmt.railway.ui.component.masterdetail.filter.FilterPanel;
 
 /**
@@ -414,28 +413,12 @@ public class MasterDetailLayout<T> extends Div {
         if (!lazyMode) {
             return;
         }
-        int loadedCount = lazyController.loadedCount();
-        StringBuilder statusText = new StringBuilder(spec.readoutLoadedLabel);
-        statusText.append(' ').append(loadedCount == 0 ? "0" : "1–" + loadedCount);
-        if (lazyController.hasMore()) {
-            statusText.append(" / ").append(spec.readoutMoreLabel);
-        }
-        if (isFilterActive()) {
-            statusText.append(" · ").append(spec.readoutFilteredLabel);
-        }
-        readout.setStatus(statusText.toString());
-    }
-
-    private boolean isFilterActive() {
-        if (!filterText.isBlank()) {
-            return true;
-        }
-        for (FilterField<T> field : spec.filterFields) {
-            if (!field.chips().isEmpty()) {
-                return true;
-            }
-        }
-        return false;
+        readout.setStatus(
+                MasterDetailReadout.statusText(
+                        spec,
+                        lazyController.loadedCount(),
+                        lazyController.hasMore(),
+                        MasterDetailReadout.isFilterActive(filterText, spec)));
     }
 
     private void onListKey(String key) {
@@ -491,28 +474,6 @@ public class MasterDetailLayout<T> extends Div {
             }
         }
         return null;
-    }
-
-    private static class MasterCardWrapper {
-        final UUID id;
-        final Div wrapper;
-
-        MasterCardWrapper(UUID id, Div wrapper) {
-            this.id = id;
-            this.wrapper = wrapper;
-        }
-
-        void applySelection(boolean selected) {
-            if (selected) {
-                wrapper.addClassName("md-card-wrapper--selected");
-                wrapper.getElement().setAttribute("aria-selected", "true");
-                wrapper.getElement()
-                        .executeJs("$0.scrollIntoView({block:'nearest', behavior:'auto'})");
-            } else {
-                wrapper.removeClassName("md-card-wrapper--selected");
-                wrapper.getElement().setAttribute("aria-selected", "false");
-            }
-        }
     }
 
     public static <T> MasterDetailSpec<T> spec() {

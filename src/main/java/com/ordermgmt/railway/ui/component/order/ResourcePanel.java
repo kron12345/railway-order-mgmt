@@ -1,8 +1,6 @@
 package com.ordermgmt.railway.ui.component.order;
 
 import java.time.LocalDate;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -25,7 +23,6 @@ import com.ordermgmt.railway.domain.infrastructure.repository.OperationalPointRe
 import com.ordermgmt.railway.domain.order.model.CoverageType;
 import com.ordermgmt.railway.domain.order.model.OrderPosition;
 import com.ordermgmt.railway.domain.order.model.PurchasePosition;
-import com.ordermgmt.railway.domain.order.model.PurchaseStatus;
 import com.ordermgmt.railway.domain.order.model.ResourceNeed;
 import com.ordermgmt.railway.domain.order.model.ResourceType;
 import com.ordermgmt.railway.domain.order.model.ValidityJsonCodec;
@@ -34,16 +31,12 @@ import com.ordermgmt.railway.domain.order.service.AuditService;
 import com.ordermgmt.railway.domain.order.service.PurchaseOrderService;
 import com.ordermgmt.railway.domain.order.service.ResourceNeedService;
 import com.ordermgmt.railway.ui.component.AuditHistoryDialog;
-import com.ordermgmt.railway.ui.component.business.BusinessChips;
 
 /**
  * Collapsible panel showing all resources and their purchases for one OrderPosition. Displays
  * resource type badges, coverage/origin info, and nested purchase positions with TTT status.
  */
 public class ResourcePanel extends Div {
-
-    private static final DateTimeFormatter DT_FMT =
-            DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm").withZone(ZoneId.systemDefault());
 
     private final OrderPosition position;
     private final ResourceNeedService resourceNeedService;
@@ -239,7 +232,17 @@ public class ResourcePanel extends Div {
             row.add(intern);
         } else {
             for (PurchasePosition purchase : purchases) {
-                row.add(createPurchaseRow(purchase, resourceNeed));
+                row.add(
+                        ResourcePurchaseRow.build(
+                                purchase,
+                                resourceNeed,
+                                editable,
+                                position.getOperationalTrainNumber(),
+                                buildRouteLabel(),
+                                purchaseBizMap.getOrDefault(purchase.getId(), List.of()),
+                                purchaseOrderService,
+                                translator,
+                                this::reloadAll));
             }
         }
 
@@ -262,101 +265,6 @@ public class ResourcePanel extends Div {
         historyButton.setTooltipText(tr("audit.button"));
         historyButton.addClickListener(event -> openResourceHistory(resourceNeed));
         return historyButton;
-    }
-
-    private Div createPurchaseRow(PurchasePosition purchase, ResourceNeed need) {
-        Div row = new Div();
-        row.getStyle()
-                .set("display", "flex")
-                .set("align-items", "center")
-                .set("gap", "6px")
-                .set("padding", "2px 0 2px 12px")
-                .set("flex-wrap", "wrap");
-
-        // Position number
-        Span number = new Span(purchase.getPositionNumber());
-        number.getStyle()
-                .set("font-family", "'JetBrains Mono', monospace")
-                .set("font-size", "10px")
-                .set("font-weight", "600")
-                .set("color", "var(--rom-accent)");
-        row.add(number);
-
-        // Free-text description (entered in the purchase dialog) — shown muted next to the number.
-        if (purchase.getDescription() != null && !purchase.getDescription().isBlank()) {
-            Span desc = new Span(purchase.getDescription());
-            desc.getStyle().set("font-size", "11px").set("color", "var(--rom-text-secondary)");
-            row.add(desc);
-        }
-
-        // Status badge
-        row.add(createPurchaseStatusBadge(purchase));
-
-        // TTT status for CAPACITY purchases
-        if (purchase.getPmPathRequestId() != null) {
-            if (purchase.getPmProcessState() != null) {
-                row.add(
-                        ResourceBadges.small(
-                                "TTT: " + purchase.getPmProcessState(), "var(--rom-status-info)"));
-            }
-            if (purchase.getPmTtrPhase() != null) {
-                row.add(
-                        ResourceBadges.small(
-                                purchase.getPmTtrPhase(), "var(--rom-text-secondary)"));
-            }
-
-            // Sync button (mutators on an unlocked order only)
-            if (editable) {
-                row.add(
-                        PurchaseOrderButtons.sync(
-                                purchase, purchaseOrderService, translator, this::reloadAll));
-            }
-        }
-
-        // TTT order button for unordered CAPACITY purchases (mutators on an unlocked order only)
-        if (editable
-                && purchase.getPmPathRequestId() == null
-                && need.getResourceType() == ResourceType.CAPACITY) {
-            row.add(
-                    PurchaseOrderButtons.ttt(
-                            purchase,
-                            position.getOperationalTrainNumber(),
-                            buildRouteLabel(),
-                            purchaseOrderService,
-                            translator,
-                            this::reloadAll));
-        }
-
-        // R²P channel for non-capacity external needs (e.g. Lokführer): mock "Bestellen" →
-        // BESTELLT,
-        // shown like the TTT flow so it reads the same way.
-        if (isR2pPurchase(need)) {
-            row.add(ResourceBadges.small("R²P", "var(--rom-status-info)"));
-            if (editable && purchase.getPurchaseStatus() == PurchaseStatus.OFFEN) {
-                row.add(
-                        PurchaseOrderButtons.r2p(
-                                purchase, purchaseOrderService, translator, this::reloadAll));
-            }
-        }
-
-        // Ordered-at timestamp
-        if (purchase.getOrderedAt() != null) {
-            Span orderedAt = new Span(DT_FMT.format(purchase.getOrderedAt()));
-            orderedAt
-                    .getStyle()
-                    .set("font-size", "9px")
-                    .set("color", "var(--rom-text-muted)")
-                    .set("font-family", "'JetBrains Mono', monospace");
-            row.add(orderedAt);
-        }
-
-        // Linked businesses for this purchase position (clickable chips → business detail).
-        var linkedBusinesses = purchaseBizMap.getOrDefault(purchase.getId(), List.of());
-        if (!linkedBusinesses.isEmpty()) {
-            row.add(new BusinessChips(linkedBusinesses, this::tr));
-        }
-
-        return row;
     }
 
     private Div createFooterButtons() {
@@ -456,12 +364,6 @@ public class ResourcePanel extends Div {
         return button;
     }
 
-    /** A non-capacity external purchase is ordered via the (mock) R²P channel, not TTT. */
-    private boolean isR2pPurchase(ResourceNeed need) {
-        return need.getCoverageType() == CoverageType.EXTERNAL
-                && need.getResourceType() != ResourceType.CAPACITY;
-    }
-
     private List<PurchasePosition> findPurchasesForNeed(ResourceNeed resourceNeed) {
         return purchasesByNeed.getOrDefault(resourceNeed.getId(), List.of());
     }
@@ -531,12 +433,6 @@ public class ResourcePanel extends Div {
     private Span createOriginBadge(ResourceNeed resourceNeed) {
         String label = tr("resource.origin." + resourceNeed.getOrigin().name());
         return ResourceBadges.small(label, "var(--rom-text-muted)");
-    }
-
-    private Span createPurchaseStatusBadge(PurchasePosition purchase) {
-        String label = tr("purchase.status." + purchase.getPurchaseStatus().name());
-        String color = ResourceBadges.purchaseStatusColor(purchase.getPurchaseStatus());
-        return ResourceBadges.small(label, color);
     }
 
     private String buildRouteLabel() {

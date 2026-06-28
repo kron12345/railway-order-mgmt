@@ -1,17 +1,13 @@
 package com.ordermgmt.railway.ui.component.timetable;
 
 import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.createCard;
-import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.distanceLabel;
-import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.firstNonBlank;
 import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.helperSpan;
-import static com.ordermgmt.railway.ui.component.timetable.TimetableFormatUtils.timeOrDash;
 
 import java.time.Duration;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.Optional;
 import java.util.function.Consumer;
 
 import org.springframework.data.domain.PageRequest;
@@ -20,22 +16,17 @@ import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.Key;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
-import com.vaadin.flow.component.checkbox.Checkbox;
 import com.vaadin.flow.component.combobox.ComboBox;
 import com.vaadin.flow.component.formlayout.FormLayout;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.icon.VaadinIcon;
-import com.vaadin.flow.component.orderedlayout.FlexComponent;
-import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.splitlayout.SplitLayout;
 import com.vaadin.flow.component.timepicker.TimePicker;
 
 import com.ordermgmt.railway.domain.infrastructure.model.OperationalPoint;
 import com.ordermgmt.railway.domain.infrastructure.repository.OperationalPointRepository;
-import com.ordermgmt.railway.domain.timetable.model.RoutePointRole;
-import com.ordermgmt.railway.domain.timetable.model.TimeConstraintMode;
 import com.ordermgmt.railway.domain.timetable.model.TimetableActivityOption;
 import com.ordermgmt.railway.domain.timetable.model.TimetableRouteResult;
 import com.ordermgmt.railway.domain.timetable.model.TimetableRowData;
@@ -45,7 +36,9 @@ import com.ordermgmt.railway.domain.timetable.service.TimetableRoutingService;
  * Route-definition step for the timetable builder.
  *
  * <p>Allows the user to select origin, destination, and optional via points, then calculates a
- * route with estimated travel times. The result is displayed on an interactive map.
+ * route with estimated travel times. The result is displayed on an interactive map. The via-point
+ * editors live in {@link ViaPointList}; the point-list preview + summary in {@link
+ * TimetableRoutePreview}.
  */
 public class TimetableRouteStep extends Div {
 
@@ -63,13 +56,11 @@ public class TimetableRouteStep extends Div {
     private static final int MAX_BACKGROUND_OPS = 600;
 
     private final OperationalPointRepository opRepo;
-    private final List<TimetableActivityOption> activityOptions;
     private final TimetableRoutingService routingService;
 
     private final ComboBox<OperationalPoint> fromField = new ComboBox<>();
     private final ComboBox<OperationalPoint> toField = new ComboBox<>();
-    private final VerticalLayout viaList = new VerticalLayout();
-    private final List<ViaPointEditor> viaEditors = new ArrayList<>();
+    private final ViaPointList viaPointList;
     private final TimePicker departureAnchorField = buildTimePicker();
     private final TimePicker arrivalAnchorField = buildTimePicker();
     private final Span routeSummary = new Span();
@@ -87,8 +78,8 @@ public class TimetableRouteStep extends Div {
             List<TimetableActivityOption> activityOptions,
             TimetableRoutingService timetableRoutingService) {
         this.opRepo = opRepo;
-        this.activityOptions = activityOptions;
         this.routingService = timetableRoutingService;
+        this.viaPointList = new ViaPointList(opRepo, activityOptions, this);
         configureRouteInputs();
     }
 
@@ -96,7 +87,7 @@ public class TimetableRouteStep extends Div {
     public Component createContent() {
         Button addViaBtn = new Button(t("timetable.route.addVia"), VaadinIcon.PLUS.create());
         addViaBtn.addThemeVariants(ButtonVariant.LUMO_SMALL);
-        addViaBtn.addClickListener(e -> addViaEditor(null, false, null));
+        addViaBtn.addClickListener(e -> viaPointList.addEditor(null, false, null));
 
         Button reverseBtn = new Button(VaadinIcon.EXCHANGE.create());
         reverseBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY_INLINE);
@@ -157,7 +148,7 @@ public class TimetableRouteStep extends Div {
                         routeForm,
                         helperSpan(t("timetable.route.anchor.help")),
                         viaHeader,
-                        viaList,
+                        viaPointList,
                         routeSummary,
                         routePreview,
                         routeError,
@@ -211,9 +202,10 @@ public class TimetableRouteStep extends Div {
     public void prefillFrom(OperationalPoint from, OperationalPoint to, List<ViaData> vias) {
         fromField.setValue(from);
         toField.setValue(to);
-        clearViaEditors();
+        viaPointList.clear();
         if (vias != null) {
-            vias.forEach(via -> addViaEditor(via.point(), via.halt(), via.activityCode()));
+            vias.forEach(
+                    via -> viaPointList.addEditor(via.point(), via.halt(), via.activityCode()));
         }
     }
 
@@ -249,12 +241,21 @@ public class TimetableRouteStep extends Div {
         return routeError;
     }
 
+    public List<ViaData> getViaValues() {
+        return viaPointList.getValues();
+    }
+
     public void setOnRouteCalculated(Consumer<RouteCalculationResult> callback) {
         this.onRouteCalculated = callback;
     }
 
     public void setOnRouteDirty(Runnable callback) {
         this.onRouteDirty = callback;
+    }
+
+    /** Registers a callback for when an operational point is clicked on the map. */
+    public void addOpSelectedListener(Consumer<String> callback) {
+        routeMap.addOpSelectedListener(callback);
     }
 
     // ── Route manipulation ─────────────────────────────────────────────
@@ -268,41 +269,7 @@ public class TimetableRouteStep extends Div {
         LocalTime arr = arrivalAnchorField.getValue();
         departureAnchorField.setValue(arr);
         arrivalAnchorField.setValue(dep);
-        // Reverse via editors order
-        List<ViaData> reversedVias = new ArrayList<>();
-        for (int i = viaEditors.size() - 1; i >= 0; i--) {
-            ViaPointEditor editor = viaEditors.get(i);
-            reversedVias.add(
-                    new ViaData(
-                            editor.pointField.getValue(),
-                            Boolean.TRUE.equals(editor.haltField.getValue()),
-                            editor.activityField.getValue() != null
-                                    ? editor.activityField.getValue().code()
-                                    : null));
-        }
-        clearViaEditors();
-        for (ViaData via : reversedVias) {
-            addViaEditor(via.point(), via.halt(), via.activityCode());
-        }
-    }
-
-    public List<ViaData> getViaValues() {
-        List<ViaData> result = new ArrayList<>();
-        for (ViaPointEditor editor : viaEditors) {
-            result.add(
-                    new ViaData(
-                            editor.pointField.getValue(),
-                            Boolean.TRUE.equals(editor.haltField.getValue()),
-                            editor.activityField.getValue() != null
-                                    ? editor.activityField.getValue().code()
-                                    : null));
-        }
-        return result;
-    }
-
-    /** Registers a callback for when an operational point is clicked on the map. */
-    public void addOpSelectedListener(Consumer<String> callback) {
-        routeMap.addOpSelectedListener(callback);
+        viaPointList.reverse();
     }
 
     private void markCalcButtonSuccess() {
@@ -348,9 +315,6 @@ public class TimetableRouteStep extends Div {
         departureAnchorField.setHelperText(t("timetable.route.departureAnchor.help"));
         arrivalAnchorField.setLabel(t("timetable.route.arrivalAnchor"));
         arrivalAnchorField.setHelperText(t("timetable.route.arrivalAnchor.help"));
-        viaList.setPadding(false);
-        viaList.setSpacing(true);
-        viaList.setWidthFull();
         routeSummary
                 .getStyle()
                 .set("display", "block")
@@ -387,7 +351,7 @@ public class TimetableRouteStep extends Div {
                     } else if (toField.getValue() == null) {
                         toField.setValue(operationalPoint);
                     } else {
-                        addViaEditor(operationalPoint, false, null);
+                        viaPointList.addEditor(operationalPoint, false, null);
                     }
                 });
     }
@@ -399,64 +363,6 @@ public class TimetableRouteStep extends Div {
         combo.setWidthFull();
         combo.setClearButtonVisible(true);
         combo.setHelperText(helper);
-    }
-
-    // ── Via point editors ──────────────────────────────────────────────
-
-    private void addViaEditor(OperationalPoint point, boolean halt, String activityCode) {
-        ViaPointEditor editor = new ViaPointEditor();
-        com.ordermgmt.railway.ui.component.OperationalPointComboBox.bindLazySearch(
-                editor.pointField, opRepo);
-        editor.pointField.setItemLabelGenerator(TimetableFormatUtils::opLabel);
-        editor.pointField.setWidthFull();
-        editor.pointField.setClearButtonVisible(true);
-        editor.pointField.setValue(point);
-        editor.haltField.setLabel(t("timetable.route.viaStop"));
-        editor.haltField.setValue(halt);
-        editor.haltField.addValueChangeListener(e -> editor.updateActivityVisibility());
-        editor.activityField.setItems(activityOptions);
-        editor.activityField.setItemLabelGenerator(this::activityOptionLabel);
-        editor.activityField.setWidthFull();
-        editor.activityField.setLabel(t("timetable.editor.activity"));
-        editor.activityField.setValue(findActivityOption(activityCode).orElse(null));
-        editor.removeButton.setText(t("common.delete"));
-        editor.removeButton.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
-        editor.removeButton.getStyle().set("color", "var(--rom-status-danger)");
-        editor.removeButton.addClickListener(
-                e -> {
-                    viaEditors.remove(editor);
-                    viaList.remove(editor.container);
-                    renumberViaEditors();
-                });
-        HorizontalLayout actions = new HorizontalLayout(editor.haltField, editor.removeButton);
-        actions.setWidthFull();
-        actions.setJustifyContentMode(FlexComponent.JustifyContentMode.BETWEEN);
-        actions.setAlignItems(FlexComponent.Alignment.CENTER);
-        editor.container
-                .getStyle()
-                .set("border", "1px solid var(--rom-border)")
-                .set("border-radius", "6px")
-                .set("padding", "10px")
-                .set("background", "rgba(148,163,184,0.04)")
-                .set("display", "flex")
-                .set("flex-direction", "column")
-                .set("gap", "10px");
-        editor.container.add(editor.label, editor.pointField, actions, editor.activityField);
-        editor.updateActivityVisibility();
-        viaEditors.add(editor);
-        viaList.add(editor.container);
-        renumberViaEditors();
-    }
-
-    private void clearViaEditors() {
-        viaEditors.clear();
-        viaList.removeAll();
-    }
-
-    private void renumberViaEditors() {
-        for (int i = 0; i < viaEditors.size(); i++) {
-            viaEditors.get(i).label.setText(t("timetable.route.viaPoint", i + 1));
-        }
     }
 
     // ── Route calculation ──────────────────────────────────────────────
@@ -489,20 +395,14 @@ public class TimetableRouteStep extends Div {
             routeError.setText(t("timetable.route.anchorExclusive"));
             return null;
         }
+        ViaPointList.ViaValidation via = viaPointList.validatePoints();
+        if (via.errorKey() != null) {
+            routeError.setText(t(via.errorKey()));
+            return null;
+        }
         List<OperationalPoint> waypoints = new ArrayList<>();
         waypoints.add(fromField.getValue());
-        for (ViaPointEditor viaEditor : viaEditors) {
-            if (viaEditor.pointField.getValue() == null) {
-                routeError.setText(t("timetable.route.viaRequired"));
-                return null;
-            }
-            if (Boolean.TRUE.equals(viaEditor.haltField.getValue())
-                    && viaEditor.activityField.getValue() == null) {
-                routeError.setText(t("timetable.route.viaActivityRequired"));
-                return null;
-            }
-            waypoints.add(viaEditor.pointField.getValue());
-        }
+        waypoints.addAll(via.points());
         waypoints.add(toField.getValue());
         return waypoints;
     }
@@ -530,10 +430,10 @@ public class TimetableRouteStep extends Div {
             currentRoute = routingService.calculateRoute(waypoints);
             List<TimetableRowData> rows =
                     routingService.estimateRows(currentRoute, depAnchor, arrAnchor);
-            applyViaPreferences(rows);
+            viaPointList.applyPreferences(rows);
             routeMap.setRoute(currentRoute.points());
-            routeSummary.setText(routeSummaryText(rows, currentRoute));
-            buildRoutePreview(rows);
+            routeSummary.setText(TimetableRoutePreview.summary(rows, currentRoute, this));
+            TimetableRoutePreview.render(routePreview, rows, this);
             routeError.setText("");
             markCalcButtonSuccess();
             if (notifyCallback && onRouteCalculated != null) {
@@ -548,105 +448,7 @@ public class TimetableRouteStep extends Div {
         }
     }
 
-    private void applyViaPreferences(List<TimetableRowData> rows) {
-        List<TimetableRowData> viaRows =
-                rows.stream().filter(r -> r.getRoutePointRole() == RoutePointRole.VIA).toList();
-        for (int i = 0; i < Math.min(viaEditors.size(), viaRows.size()); i++) {
-            ViaPointEditor editor = viaEditors.get(i);
-            TimetableRowData row = viaRows.get(i);
-            if (!Boolean.TRUE.equals(editor.haltField.getValue())) {
-                continue;
-            }
-            row.setHalt(true);
-            row.setActivityCode(
-                    editor.activityField.getValue() != null
-                            ? editor.activityField.getValue().code()
-                            : null);
-            if (row != rows.getFirst()) {
-                row.setArrivalMode(TimeConstraintMode.EXACT);
-                row.setArrivalExact(
-                        firstNonBlank(row.getArrivalExact(), row.getEstimatedArrival()));
-            }
-            if (row != rows.getLast()) {
-                row.setDepartureMode(TimeConstraintMode.EXACT);
-                row.setDepartureExact(
-                        firstNonBlank(row.getDepartureExact(), row.getEstimatedDeparture()));
-            }
-        }
-    }
-
-    // ── Route preview ──────────────────────────────────────────────────
-
-    private void buildRoutePreview(List<TimetableRowData> rows) {
-        routePreview.removeAll();
-        if (rows == null || rows.isEmpty()) {
-            routePreview.setVisible(false);
-            return;
-        }
-        routePreview.setVisible(true);
-        routePreview
-                .getStyle()
-                .set("display", "flex")
-                .set("flex-direction", "column")
-                .set("gap", "0")
-                .set("padding", "12px 0");
-        Span header = new Span(t("timetable.route.preview"));
-        header.getStyle()
-                .set("font-weight", "600")
-                .set("font-size", "11px")
-                .set("color", "var(--rom-text-primary)")
-                .set("margin-bottom", "6px");
-        routePreview.add(header);
-        for (TimetableRowData row : rows) {
-            Div line = new Div();
-            line.getStyle()
-                    .set("display", "flex")
-                    .set("align-items", "center")
-                    .set("gap", "8px")
-                    .set("padding", "2px 0")
-                    .set("font-size", "11px");
-            Span dot = new Span("\u25cf");
-            dot.getStyle().set("color", getDotColor(row)).set("font-size", "8px");
-            Span name = new Span(row.getName());
-            name.getStyle().set("color", "var(--rom-text-primary)");
-            Span km = new Span(distanceLabel(row.getDistanceFromStartMeters()));
-            km.getStyle()
-                    .set("color", "var(--rom-text-muted)")
-                    .set("font-family", "'JetBrains Mono', monospace")
-                    .set("font-size", "10px");
-            line.add(dot, name, km);
-            routePreview.add(line);
-        }
-    }
-
-    private String getDotColor(TimetableRowData row) {
-        if (row.getRoutePointRole() == null) {
-            return "var(--rom-text-muted)";
-        }
-        return switch (row.getRoutePointRole()) {
-            case ORIGIN, DESTINATION -> "var(--rom-accent)";
-            case VIA -> "var(--rom-status-info, #3b82f6)";
-            default -> "var(--rom-text-muted)";
-        };
-    }
-
     // ── Formatting helpers ─────────────────────────────────────────────
-
-    private String activityOptionLabel(TimetableActivityOption o) {
-        return o.code() + " \u00b7 " + o.label();
-    }
-
-    private String routeSummaryText(List<TimetableRowData> rows, TimetableRouteResult route) {
-        if (rows == null || rows.isEmpty()) {
-            return t("timetable.route.empty");
-        }
-        return t(
-                "timetable.route.summary",
-                rows.size(),
-                distanceLabel(route.totalLengthMeters()),
-                timeOrDash(rows.getFirst().getEstimatedDeparture()),
-                timeOrDash(rows.getLast().getEstimatedArrival()));
-    }
 
     private TimePicker buildTimePicker() {
         TimePicker picker = new TimePicker();
@@ -662,27 +464,7 @@ public class TimetableRouteStep extends Div {
         return getLocale() != null ? getLocale() : Locale.GERMANY;
     }
 
-    private Optional<TimetableActivityOption> findActivityOption(String code) {
-        if (code == null || code.isBlank()) {
-            return Optional.empty();
-        }
-        return activityOptions.stream().filter(option -> code.equals(option.code())).findFirst();
-    }
-
     private String t(String key, Object... params) {
         return getTranslation(key, params);
-    }
-
-    private static final class ViaPointEditor {
-        final Div container = new Div();
-        final Span label = new Span();
-        final ComboBox<OperationalPoint> pointField = new ComboBox<>();
-        final Checkbox haltField = new Checkbox();
-        final ComboBox<TimetableActivityOption> activityField = new ComboBox<>();
-        final Button removeButton = new Button();
-
-        void updateActivityVisibility() {
-            activityField.setVisible(Boolean.TRUE.equals(haltField.getValue()));
-        }
     }
 }
