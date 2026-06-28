@@ -117,6 +117,15 @@ export async function fillField(page: Page, label: string | RegExp, value: strin
   await input.fill(value);
 }
 
+/** Type into a vaadin-date-picker located by label (real keyboard input + Enter to commit). */
+export async function fillDate(page: Page, label: string | RegExp, value: string): Promise<void> {
+  const picker = page.locator("vaadin-date-picker").filter({ hasText: label }).first();
+  const input = picker.locator("input").first();
+  await input.click();
+  await input.fill(value);
+  await input.press("Enter");
+}
+
 /**
  * Click a button by its accessible name. getByRole matches the a11y name (robust against the
  * icon/whitespace that breaks an anchored hasText regex) and excludes hidden dialog templates.
