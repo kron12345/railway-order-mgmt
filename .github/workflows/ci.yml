@@ -109,8 +109,14 @@ jobs:
           cache: maven
 
       - name: OWASP Dependency Check
+        # Requires the NVD_API_KEY repo secret (free from https://nvd.nist.gov/developers/request-an-api-key).
+        # Without it the NVD feed rate-limits keyless requests and the DB update fails before any
+        # CVE is even evaluated. The key is passed through only when the secret is configured.
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         run: |
           mvn org.owasp:dependency-check-maven:check -B \
+            -DnvdApiKey="$NVD_API_KEY" \
             -DfailBuildOnCVSS=7 \
             -DsuppressionFile=.github/owasp-suppressions.xml
 
