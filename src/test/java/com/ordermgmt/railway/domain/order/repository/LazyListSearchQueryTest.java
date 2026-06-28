@@ -182,6 +182,62 @@ class LazyListSearchQueryTest {
     }
 
     @Test
+    void searchOrders_validityRange_filtersAndDoesNotThrow() {
+        // Seed helper sets validTo = validFrom + 1 month.
+        persistOrder(
+                "EARLY",
+                "Ends in Feb",
+                LocalDate.of(2026, 1, 1),
+                Instant.parse("2026-01-01T12:00:00Z")); // validTo 2026-02-01
+        persistOrder(
+                "LATE",
+                "Ends in Jan 2027",
+                LocalDate.of(2026, 12, 1),
+                Instant.parse("2026-12-01T12:00:00Z")); // validTo 2027-01-01
+
+        // validFromMin keeps orders whose validity ends on/after the bound. A bare `? is null` on
+        // this LocalDate bind used to fail on Postgres with 42P18 ("could not determine data
+        // type");
+        // assertNoThrow guards that the cast(:validFromMin as LocalDate) fix holds.
+        Slice<OrderListItem> fromMin =
+                assertNoThrow(
+                        () ->
+                                orderRepository.searchOrders(
+                                        null,
+                                        null,
+                                        null,
+                                        LocalDate.of(2026, 6, 1),
+                                        null,
+                                        null,
+                                        null,
+                                        null,
+                                        false,
+                                        PageRequest.of(0, 10, ORDER_SORT)));
+        assertThat(fromMin.getContent())
+                .extracting(OrderListItem::orderNumber)
+                .containsExactly("LATE");
+
+        // validToMax keeps orders whose validity starts on/before the bound.
+        Slice<OrderListItem> toMax =
+                assertNoThrow(
+                        () ->
+                                orderRepository.searchOrders(
+                                        null,
+                                        null,
+                                        null,
+                                        null,
+                                        LocalDate.of(2026, 6, 1),
+                                        null,
+                                        null,
+                                        null,
+                                        false,
+                                        PageRequest.of(0, 10, ORDER_SORT)));
+        assertThat(toMax.getContent())
+                .extracting(OrderListItem::orderNumber)
+                .containsExactly("EARLY");
+    }
+
+    @Test
     void searchOrders_incompleteOnly_keepsOrdersWithUnbookedPurchase() {
         Order complete = persistOrder("CMP", "Complete");
         addPurchasePosition(complete, "PP-CMP", "BOOKED");
