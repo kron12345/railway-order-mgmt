@@ -73,8 +73,11 @@ public interface OrderRepository
                     + "  or lower(coalesce(c.name, '')) like lower(concat('%', cast(:text as string), '%'))) "
                     + "and (:processStatus is null or o.processStatus = :processStatus) "
                     + "and (:internalStatus is null or o.internalStatus = :internalStatus) "
-                    + "and (:validFromMin is null or o.validTo >= :validFromMin) "
-                    + "and (:validToMax is null or o.validFrom <= :validToMax) "
+                    // Cast the null-guard occurrence so PostgreSQL can infer the bind type: a bare
+                    // `? is null` for a date param has no type context and fails parse with 42P18
+                    // ("could not determine data type"). Mirrors the cast(:text as string) above.
+                    + "and (cast(:validFromMin as LocalDate) is null or o.validTo >= :validFromMin) "
+                    + "and (cast(:validToMax as LocalDate) is null or o.validFrom <= :validToMax) "
                     + "and (:tags is null or lower(coalesce(o.tags, '')) like lower(concat('%', cast(:tags as string), '%'))) "
                     + "and (:assignee is null "
                     + "  or (o.assignmentType = 'USER' and o.assignmentName = :assignee)) "
