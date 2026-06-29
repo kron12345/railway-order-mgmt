@@ -15,6 +15,12 @@ werden per UI wieder gelöscht).
   **Kostenträger-Pflicht bei FREIGEGEBEN** (SOB §5.7, `OrderService:167`) — Wechsel der
   Bearbeitungs-Status-Select auf „Approved" ohne Kostenträger → Fehler-Notification, Status nicht
   persistiert (selbst-aufräumend per UI-Delete).
+- **CAPACITY-Einkauf → TttOrderDialog** (`clicktest-ttt-order.spec.ts`): auf Seed-Auftrag 3234
+  (FAHRPLAN/CAPACITY-Position) „+ Add Purchase Position" → Save (TTT vorausgewählt) → TttOrderDialog;
+  leerer Submit flaggt alle 6 Pflichtfelder (`[invalid]`, KEINE Notification), ungültige E-Mail wird
+  beim Blur abgelehnt, gültige löscht den Fehler (`TttOrderDialog.validateRequired`). Hinweis: legt
+  eine OFFENE CAPACITY-Bestellung auf 3234 an (kein UI-Delete für Einkäufe) → DB-Teardown:
+  `delete … purchase_positions … 3234 … resource_type='CAPACITY' and pm_path_request_id is null`.
 - **CRUD pur per Klick**: Business create→read→edit→delete; Order create→read→delete.
 - **Navigation/Views**: jede View server- + konsolen-fehlerfrei, Sidenav-Klick, Dashboard,
   Order→Positionsdetail→zurück, Open Positions, Settings-Tabs, Profile, R2P-Simulate.
@@ -40,6 +46,10 @@ werden per UI wieder gelöscht).
   vorhandenen `cast(:text as string)`), gleiches für `:validToMax`. Regressionsschutz:
   `LazyListSearchQueryTest.searchOrders_validityRange_filtersAndDoesNotThrow` (echtes Postgres) +
   Klicktest `clicktest-order-filters.spec.ts` „Validity 'From' filter…" (nicht mehr `fixme`).
+- **(GEFIXT) TttOrderDialog: fehlende i18n-Keys** `ttt.order.trainType`/`.trafficType` (+ `.help`)
+  in EN/IT/FR → die Combo-Labels rendern als `!ttt.order.trainType!` / `!ttt.order.trafficType!`
+  (DE hatte die Keys). Fix: Keys in messages_en/it/fr ergänzt (Parität zu DE). Guard:
+  `clicktest-ttt-order.spec.ts` prüft, dass die Marker fehlen und „Train type"/„Traffic type" da sind.
 - (früher gefunden, bereits gefixt) Filter-Chip-✕ rief Record-Accessor `clear()` ohne `.run()`.
 
 ## Offen
@@ -57,14 +67,6 @@ Schätzung **1–2 Tage**, stabil/nicht-flaky.
 ### Mittel
 - **`path-manager.spec.ts`** von REST auf echte Tree-UI: expandieren → Train wählen → Prozess-Button
   → Status im DOM → Planning-Status/Train-Header speichern.
-- **Order-Filterpanel komplett**: Status, interner Status, Auftragstyp, Datumsbereich, Tags,
-  „assigned to me", „incomplete" (bisher nur Freitext-Suche).
-- **PurchaseDialog→TttOrderDialog CAPACITY-Flow** (Pflichtfelder Debitcode/TrainType/TrafficType/
-  Contact/Brake + ungültige E-Mail). Scout-Befund: Validatoren real (`TttOrderDialog:223-235`), aber
-  **Fehler-Signal ist nur `[invalid]`-Attribut + offener Dialog (KEINE Notification)** → mit
-  `[invalid]`-Assertions testen, E-Mail-Feld vor Submit blurren. Braucht editierbaren Auftrag mit
-  FAHRPLAN-Position (sonst langer Setup) und mutiert die DB. **Bug nebenbei gefunden:** die
-  i18n-Keys `ttt.order.trainType`/`.trafficType` fehlen → Combos rendern als `!ttt.order.trainType!`.
 
 ### Klein
 - **ResourceDialog (leere Verkehrstage)**: Scout-Befund — als reiner Klicktest **nicht empfohlen**.
