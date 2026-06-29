@@ -76,3 +76,4 @@ test-playwright.cjs
 
 # Stray Maven/Vaadin metadata folder that sometimes lands in project root
 /META-INF/
+e2e-screenshots/
