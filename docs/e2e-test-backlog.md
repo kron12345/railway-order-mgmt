@@ -21,11 +21,13 @@ werden per UI wieder gelöscht).
 - **Filter**: Order-Übersichts-Suche.
 - **Dialoge**: AuditHistory öffnen/schließen; ServicePosition leerer Name; (R2P-Accept, TttOrder,
   Resource — siehe Fortschritt unten).
-- **Fahrplan-Builder Route-Validierung** (`clicktest-timetable.spec.ts`, 4 grün): Route ohne
+- **Fahrplan-Builder Route-Validierung** (`clicktest-timetable.spec.ts`, 5 grün): Route ohne
   Start/Ziel, gleicher OP („Origin and destination must be different"), beide Anker gesetzt („set
-  only one anchor time, not both"), unvollständiger Via-Punkt („complete every via point") — alle
-  über die `routeError`-Span (`body.toContainText`, KEINE Notification), OP-Auswahl per
-  getByLabel-Combo + `vaadin-combo-box-item` (Olten/Aarau, RINF-Seed).
+  only one anchor time, not both"), unvollständiger Via-Punkt („complete every via point"), Via als
+  „Stop" ohne Aktivität („Each intermediate stop requires an activity") — alle über die
+  `routeError`-Span (`body.toContainText`, KEINE Notification), OP-Auswahl per getByLabel-Combo +
+  `vaadin-combo-box-item` (Olten/Aarau, RINF-Seed); der label-lose Via-Combo wird über den
+  `<div>`-Container der „Stop"-Checkbox gescopt.
 
 ## Gefundene Bugs (per Klicktest)
 - **(GEFIXT) Order-Übersicht: Validitäts-Datumsfilter (From/To) filterte die Liste nicht.**
@@ -63,9 +65,6 @@ Schätzung **1–2 Tage**, stabil/nicht-flaky.
   `[invalid]`-Assertions testen, E-Mail-Feld vor Submit blurren. Braucht editierbaren Auftrag mit
   FAHRPLAN-Position (sonst langer Setup) und mutiert die DB. **Bug nebenbei gefunden:** die
   i18n-Keys `ttt.order.trainType`/`.trafficType` fehlen → Combos rendern als `!ttt.order.trainType!`.
-- **Fahrplan-Builder Via-Aktivität**: noch offen ist `viaActivityRequired` („Each intermediate stop
-  requires an activity") — Via + „Stop"-Checkbox aktiviert + keine Aktivität (3 OPs, Checkbox-Reveal,
-  medium). Die übrigen Route-Validierungen sind jetzt abgedeckt (siehe oben).
 
 ### Klein
 - **ResourceDialog (leere Verkehrstage)**: Scout-Befund — als reiner Klicktest **nicht empfohlen**.

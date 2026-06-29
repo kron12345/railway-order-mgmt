@@ -100,4 +100,35 @@ test.describe("Timetable builder route validation (pure click)", () => {
     await expectNoServerError(page);
     await shot(page, "timetable-route-via-required");
   });
+
+  test("A via marked as 'Stop' without an activity is rejected", async ({ page }) => {
+    await selectOp(page, "From", OLTEN.search, OLTEN.option);
+    await selectOp(page, "To", AARAU.search, AARAU.option);
+    await clickButton(page, /Add via|Zwischenhalt/);
+
+    // The via editor is the innermost <div> holding the "Stop" checkbox + the label-less point combo.
+    const viaCard = page
+      .locator("div")
+      .filter({ has: page.getByLabel("Stop", { exact: true }) })
+      .last();
+    await expect(viaCard).toBeVisible({ timeout: 6_000 });
+
+    // Give the via a real operational point — otherwise "via required" fires before the activity rule.
+    const viaPoint = viaCard.locator("vaadin-combo-box").first();
+    await viaPoint.click();
+    await viaPoint.locator("input").fill(OLTEN.search);
+    const item = page.locator("vaadin-combo-box-item").filter({ hasText: OLTEN.option }).first();
+    await expect(item).toBeVisible({ timeout: 10_000 });
+    await item.click();
+
+    // Mark it as a Stop (reveals the activity field) but leave the activity empty.
+    await viaCard.locator("vaadin-checkbox").first().click();
+
+    await clickButton(page, /Calculate route|Route berechnen/);
+    await expect(page.locator("body")).toContainText(/Each intermediate stop requires an activity/i, {
+      timeout: 6_000,
+    });
+    await expectNoServerError(page);
+    await shot(page, "timetable-route-via-activity");
+  });
 });
